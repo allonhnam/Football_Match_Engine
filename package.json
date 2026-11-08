@@ -1,0 +1,35 @@
+{
+  "name": "match-engine",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Football match engine for a management game, with a Next.js front end",
+  "author": "Hyun",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "simulate": "node tools/simulate.mjs",
+    "calibrate": "node tools/calibrate.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
