@@ -35,7 +35,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
       const e = evs[i];
       if (BANNER_TYPES[e.type] && !quiet && settingsRef.current.banners) setBanner({ ...e, id: i, until: performance.now() + (speedRef.current >= 2 ? 1500 : 3400) });
       if (e.type === 'goal') st.current.flash = quiet ? 0 : 1;
-      if (e.type === 'halftime' && settingsRef.current.htPause) { setPlaying(false); setOverlay('halftime'); }
+      if ((e.type === 'halftime' || (e.type === 'extratime' && !/penalties/.test(e.text))) && settingsRef.current.htPause) { setPlaying(false); setOverlay('halftime'); }
       if (e.type === 'fulltime' || e.type === 'abandoned') { setPlaying(false); setOverlay('fulltime'); }
     }
     st.current.lastEv = evs.length;
@@ -91,7 +91,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
   const evList = m.events.filter(e => e.type !== 'kickoff' || e.half === 2 || e.tick <= 1).filter(e => !keyOnly || e.key || e.type === 'kickoff' || e.type === 'tactic' || (e.type === 'shot' && e.xg > 0.15)).slice().reverse();
   const reds = s => m.players.filter(q => q.side === s && q.red).length;
   const restart = m.phase === 'dead' && m.restart && !overlay ? (m.restart.type === 'freekick' && !m.restart.direct ? 'Indirect free kick' : RESTART_LABEL[m.restart.type]) : null;
-  const half = m.finished ? 'FULL TIME' : m.phase === 'halftime' ? 'HALF-TIME' : m.half === 1 ? '1ST HALF' : '2ND HALF';
+  const half = m.finished ? 'FULL TIME' : m.phase === 'shootout' ? 'PENALTIES' : m.phase === 'halftime' ? (m.half === 2 ? 'BEFORE EXTRA TIME' : 'HALF-TIME') : ['', '1ST HALF', '2ND HALF', 'EXTRA TIME · 1ST', 'EXTRA TIME · 2ND'][m.half];
   const ratings = tab === 'players' ? new Map<string, any>(m.result().playerStats.map(p => [p.id, p] as [string, any])) : null;
   const teamHead = (t, s, right = false) => (
     <div className={`flex items-center gap-3 min-w-0 ${right ? 'flex-row-reverse text-right' : ''}`}>
@@ -120,7 +120,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
         <div className="relative w-full aspect-[113/76] lg:aspect-auto lg:flex-1 lg:min-h-[320px] rounded-lg overflow-hidden border border-line" style={{ background: 'var(--pitch-a)' }}>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" aria-label="Live 2D match view" />
           {restart && <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-[3px] text-white text-[10.5px] px-2.5 py-1 font-bold tracking-[.14em] uppercase" style={{ background: 'var(--chip)' }}>{restart}</div>}
-          {banner ? <div key={banner.id}>{card(`${{ goal: banner.ownGoal ? 'OWN GOAL' : 'GOAL', yellow: 'YELLOW CARD', red: 'RED CARD', sub: 'SUBSTITUTION', injury: 'INJURY', penalty: 'PENALTY', disallowed: 'NO GOAL' }[banner.type]} · ${banner.minute}`, bannerParts(banner)[0], bannerParts(banner)[1], bannerColor(banner))}</div>
+          {banner ? <div key={banner.id}>{card(`${{ shootoutkick: 'PENALTY SHOOTOUT', goal: banner.ownGoal ? 'OWN GOAL' : 'GOAL', yellow: 'YELLOW CARD', red: 'RED CARD', sub: 'SUBSTITUTION', injury: 'INJURY', penalty: 'PENALTY', disallowed: 'NO GOAL' }[banner.type]} · ${banner.minute}`, bannerParts(banner)[0], bannerParts(banner)[1], bannerColor(banner))}</div>
             : insight && settings.insights && !overlay ? <div key={insight.at}>{card(`LIVE INSIGHT · ${insight.range}`, insight.title, insight.body)}</div> : null}
           {overlay && (
             <div className="absolute inset-0 grid place-items-center bg-black/45 backdrop-blur-[2px] p-2 sm:p-4 overflow-y-auto">
@@ -128,10 +128,11 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
                 {overlay === 'prematch' && <><div className="eyebrow-accent">{replay ? 'Replay · same seed, same decisions' : 'Ready for kick-off'}</div><div className="font-display font-bold text-[34px] mt-1 uppercase">{h.short} v {a.short}</div><p className="text-dim text-[12.5px] mt-1">Seed {hexSeed(session.config.seed)} · {session.config.neutral ? 'neutral venue' : `at ${h.name}`}</p>
                   <div className="flex gap-2 justify-center mt-5"><Btn kind="primary" size="lg" onClick={kick}>{replay ? 'Play replay' : 'Kick off'} <Icon n="play" s={14} /></Btn><Btn size="lg" onClick={onNewMatch}>Back to setup</Btn></div>
                   <p className="text-[11px] text-dim mt-4 font-mono">SPACE play · 1–4 speed · N next event · E skip · F follow ball · M manager</p></>}
-                {overlay === 'halftime' && <><div className="eyebrow-accent">Half-time</div><div className="font-display font-bold text-[48px] tnum leading-none mt-2">{h.score} – {a.score}</div>
+                {overlay === 'halftime' && <><div className="eyebrow-accent">{m.half === 2 ? 'Level: extra time' : m.half === 3 ? 'Half-time in extra time' : 'Half-time'}</div><div className="font-display font-bold text-[48px] tnum leading-none mt-2">{h.score} – {a.score}</div>
                   <div className="grid grid-cols-3 text-[12px] gap-y-1.5 mt-4">{[[fx(ts[0].xg, 2), 'xG', fx(ts[1].xg, 2)], [ts[0].shots, 'Shots', ts[1].shots], [ts[0].possessionPct + '%', 'Possession', ts[1].possessionPct + '%']].map(([x, l, y]) => <React.Fragment key={l}><b className="tnum">{x}</b><span className="text-dim">{l}</span><b className="tnum">{y}</b></React.Fragment>)}</div>
-                  <div className="flex gap-2 justify-center mt-5">{!replay && control !== 'none' && <Btn onClick={() => setTab('manager')}>Make changes</Btn>}<Btn kind="primary" onClick={startSecond}>Start second half</Btn></div></>}
+                  <div className="flex gap-2 justify-center mt-5">{!replay && control !== 'none' && <Btn onClick={() => setTab('manager')}>Make changes</Btn>}<Btn kind="primary" onClick={startSecond}>{m.half === 2 ? 'Start extra time' : 'Start second half'}</Btn></div></>}
                 {overlay === 'fulltime' && <><div className="eyebrow-accent">{m.abandoned ? 'Abandoned' : 'Full time'}</div><div className="font-display font-bold text-[52px] tnum leading-none mt-2">{h.score} – {a.score}</div>
+                  {m.shootout && <p className="font-mono text-[13px] mt-1">{m.shootout.score[0]} – {m.shootout.score[1]} on penalties</p>}
                   {m.abandoned && <p className="text-bad text-[12.5px] mt-1">{m.abandoned.reason} ({m.abandoned.minute}′)</p>}<p className="text-dim text-[12.5px] mt-3">{m.explain().verdict}</p>
                   <div className="flex gap-2 justify-center mt-5"><Btn kind="primary" onClick={() => onFinished(m, replay, true)}>Match report</Btn><Btn onClick={onNewMatch}>New match</Btn></div></>}
               </div>

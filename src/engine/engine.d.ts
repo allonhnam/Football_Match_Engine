@@ -68,6 +68,10 @@ export interface MatchConfig {
   /** Which side(s) a human manages; the AI manager runs the others. */
   control?: 'home' | 'away' | 'both' | 'none';
   neutral?: boolean;
+  /** A knockout tie: if level after 90 minutes, two halves of 15 minutes of extra time (a sixth substitute and a
+   * fourth window), then a penalty shootout. For the second leg of a two-legged tie pass the goals each side
+   * scored in earlier legs; the tie is then decided on aggregate. */
+  knockout?: boolean | { aggregate: [number, number] };
 }
 
 export type EventType =
@@ -80,7 +84,11 @@ export type EventType =
   /** Goalkeeper held the ball in his hands for more than 8 seconds: corner to the opponents. */
   | 'keeperholding'
   /** A goal ruled out (handball by the scorer). */
-  | 'disallowed';
+  | 'disallowed'
+  /** The match goes to extra time, or (after extra time) to penalties. */
+  | 'extratime'
+  /** One kick of a penalty shootout: scored, and the shootout score so far. */
+  | 'shootoutkick';
 
 /** What kind of offence a 'foul' event is: 'challenge' and 'handball' give a direct free kick or penalty,
  * 'dangerous' (playing in a dangerous manner) and 'backpass' (keeper handles a back-pass) an indirect free kick. */
@@ -92,7 +100,7 @@ export interface MatchEvent {
   t: number;
   tick: number;
   minute: string;
-  half: 1 | 2;
+  half: 1 | 2 | 3 | 4;
   /** True for events worth stopping at: goals, cards, subs, injuries, half-time and so on. */
   key: boolean;
   side?: Side;
@@ -156,7 +164,12 @@ export type ManagerCommand =
 export interface MatchResult {
   engineVersion: string;
   seed: number;
+  /** Goals in this match, including extra time but not the shootout. */
   score: [number, number];
+  /** Who won: 0 home, 1 away, null for a draw (never null in a knockout tie). */
+  winner: Side | null;
+  extraTime: boolean;
+  shootout: { score: [number, number]; first: Side; kicks: { side: Side; player: string; scored: boolean }[] } | null;
   abandoned: { reason: string; minute: number } | null;
   events: MatchEvent[];
   teamStats: TeamStats[];
@@ -188,8 +201,11 @@ export class Match {
   config: MatchConfig;
   seed: number;
   tick: number;
-  half: 1 | 2;
-  phase: 'dead' | 'play' | 'halftime' | 'fulltime';
+  /** 1 and 2 are the halves, 3 and 4 the halves of extra time. */
+  half: 1 | 2 | 3 | 4;
+  phase: 'dead' | 'play' | 'halftime' | 'shootout' | 'fulltime';
+  winner: Side | null;
+  shootout: { score: [number, number]; first: Side; kicks: { side: Side; player: string; scored: boolean }[] } | null;
   finished: boolean;
   abandoned: { reason: string; minute: number } | null;
   events: MatchEvent[];

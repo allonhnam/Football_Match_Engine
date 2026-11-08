@@ -21,7 +21,7 @@ export const TACTIC_META = {
   passing: { label: 'Passing', sub: 'Pass length and risk', opts: ['Short', 'Mixed', 'Direct'], hints: ['Safe and short', 'Mixed', 'Long balls, more risk, more reward'] },
 };
 export const SPEEDS = [{ k: '1×', gps: 12 }, { k: '2×', gps: 24 }, { k: '4×', gps: 48 }, { k: '16×', gps: 192 }];
-export const BANNER_TYPES = { goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, penalty: 1, disallowed: 1 };
+export const BANNER_TYPES = { goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, penalty: 1, disallowed: 1, shootoutkick: 1 };
 export const RESTART_LABEL = { kickoff: 'Kick-off', freekick: 'Free kick', corner: 'Corner', throwin: 'Throw-in', goalkick: 'Goal kick', penalty: 'Penalty', dropball: 'Dropped ball' };
 export function posLabel(formation, slot) {
   const s = E.FORMATIONS[formation][slot]; if (!s) return '';
