@@ -6,6 +6,7 @@ import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
+import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
 import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, compareCount, compareRate, compareRatio, histogram, lineFromEngine } from '@/lib/metrics';
 
@@ -96,9 +97,8 @@ export function Lab() {
   useEffect(() => { const t = setTimeout(() => { const cfg = { ...teamsFor(0, 0), seed: 4242 }; const a = E.simulateMatch(cfg), b = E.simulateMatch(cfg); const m = new E.Match(cfg); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd(); setDet({ ok: hash(a) === hash(b) && hash(a) === hash(c), h: hash(a) }); }, 300); return () => clearTimeout(t); }, []);
   const realism = async () => {
     setRes(null); setProg(0.01);
-    // A fresh pair of squads for every match, like the many different teams of a real league.
-    const leagueTeams = (i) => ({ home: E.makeTeam({ name: 'Home', seed: 1000 + 2 * i, strength: 12 + Math.ceil(gap / 2) }), away: E.makeTeam({ name: 'Away', seed: 1001 + 2 * i, strength: 12 - Math.floor(gap / 2) }) });
-    const out = (await runBatch(Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i), seed: 1 + i, control: 'none' })), setProg)).filter(r => r && !r.errors);
+    // A fresh, varied pair of squads for every match, like the many teams of a real league.
+    const out = (await runBatch(Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i, gap), seed: 1 + i, control: 'none' })), setProg)).filter(r => r && !r.errors);
     const tiles = buildTiles(out);
     const byBlock = Array(6).fill(0); out.forEach(r => r.goalTimes.forEach(t => byBlock[Math.min(5, Math.floor(t / 900))]++));
     setRes({ n: out.length, tiles, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap }); setProg(0);
