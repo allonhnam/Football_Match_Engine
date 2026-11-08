@@ -10,7 +10,8 @@ export function eventTitle(e, m) {
   const T = e.side != null ? club(m.teams[e.side]) : '';
   const P = id => { const q = m.players.find(x => x.id === id); if (q) return q.p.name; for (const t of m.teams) { const b = (t.sheet.players || []).find(p => p.id === id); if (b) return b.name; } return ''; };
   switch (e.type) {
-    case 'goal': return [`Goal · ${T}`, `${P(e.player)}${e.assist ? ' · Assisted by ' + P(e.assist) : ''} · ${fx(e.xg, 2)} xG`];
+    case 'goal': if (e.ownGoal) return [`Own goal · ${T}`, `${P(e.player)} turns it into his own net`];
+      return [`Goal · ${T}`, `${P(e.player)}${e.assist ? ' · Assisted by ' + P(e.assist) : ''} · ${fx(e.xg, 2)} xG`];
     case 'yellow': return [`Yellow card · ${T}`, e.text.replace('Yellow card: ', '')];
     case 'red': return [`Red card · ${T}`, e.text.replace('RED CARD: ', '')];
     case 'sub': return [`Substitution · ${T}`, `${P(e.player)} on, ${P(e.off)} off`];
@@ -19,7 +20,11 @@ export function eventTitle(e, m) {
     case 'penalty': return [`Penalty · ${T}`, e.text];
     case 'corner': return [`Corner · ${T}`, e.text];
     case 'offside': return [`Offside · ${T}`, e.text];
-    case 'foul': return [`Foul · ${T}`, e.text];
+    case 'foul': return [`${({ handball: 'Handball', dangerous: 'Dangerous play', backpass: 'Back-pass handled' } as any)[e.offence as string] || 'Foul'} · ${T}`, e.text];
+    case 'advantage': return [`Advantage · ${T}`, e.text];
+    case 'stoppage': return ['Play stopped', e.text];
+    case 'keeperholding': return [`8-second rule · ${T}`, e.text];
+    case 'disallowed': return [`Goal disallowed · ${T}`, e.text];
     case 'tactic': return [`Tactical change · ${T}`, e.text.replace(m.teams[e.side].name + ' ', '')];
     case 'halftime': return ['Half-time', e.text.replace('Half-time: ', '')];
     case 'fulltime': return ['Full time', e.text.replace('Full time: ', '')];
@@ -29,7 +34,7 @@ export function eventTitle(e, m) {
     default: return [e.type, e.text];
   }
 }
-export const DOT = { goal: 'bg-accent', yellow: 'bg-card', red: 'bg-bad', injury: 'bg-bad', penalty: 'bg-accent' };
+export const DOT = { goal: 'bg-accent', yellow: 'bg-card', red: 'bg-bad', injury: 'bg-bad', penalty: 'bg-accent', disallowed: 'bg-bad' };
 export function buildInsight(m, now) {
   const mi = Math.floor(now / 60), from = Math.max(0, mi - 7);
   const sum = (arr, s) => { let v = 0; for (let k = from; k < Math.min(arr.length, mi + 1); k++) v += (arr[k] || [0, 0])[s]; return v; };
