@@ -6,9 +6,18 @@ import os from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { simulateMatch } from '../src/engine/engine.js';
+import { simulateMatch, makeTeam } from '../src/engine/engine.js';
+import { fitOrderedLogit, outcomeProbs, spreadOfD } from '../src/lib/predictability.js';
 import { leagueTeams } from '../src/lib/league.js';
 import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, compareCount, compareRate, compareRatio, lineFromEngine } from '../src/lib/metrics.js';
+
+// Worker side, for the odds check: matches at fixed strength gaps, to fit how results depend on the gap.
+function simulateGaps(jobs) {
+  return jobs.map(({ g, i }) => {
+    const r = simulateMatch({ home: makeTeam({ name: 'H', seed: 7 + 2 * i, strength: 12 + g / 2 }), away: makeTeam({ name: 'A', seed: 8 + 2 * i, strength: 12 - g / 2 }), seed: 900 + i, control: 'none' });
+    return { g, res: r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0 };
+  });
+}
 
 // Worker side: simulate matches number `from` up to (not including) `to` and send back what the comparison needs.
 function simulateRange(from, to) {
@@ -17,7 +26,7 @@ function simulateRange(from, to) {
     const { home, away } = leagueTeams(s);
     const r = simulateMatch({ home, away, seed: s + 1, control: 'none' });
     const [h, a] = r.teamStats;
-    out.push({ line: lineFromEngine(r.score, r.teamStats), offsides: h.offsides + a.offsides, passes: h.passes + a.passes, passesOk: h.passesOk + a.passesOk });
+    out.push({ gap: home.strength - away.strength, res: r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0, line: lineFromEngine(r.score, r.teamStats), offsides: h.offsides + a.offsides, passes: h.passes + a.passes, passesOk: h.passesOk + a.passesOk });
   }
   return out;
 }
@@ -42,10 +51,21 @@ async function main() {
   const results = (await Promise.all(Array.from({ length: threads }, (_, w) => new Promise((resolve, reject) => {
     const from = w * chunk, to = Math.min(N, from + chunk);
     if (from >= to) return resolve([]);
-    const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { from, to } });
+    const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { kind: 'range', from, to } });
     worker.once('message', resolve);
     worker.once('error', reject);
   })))).flat();
+  // Fixed-gap matches for the odds check: 25 gaps from -6 to +6, at least 60 matches each.
+  const per = Math.max(60, Math.round(N / 25)), gapJobs = [];
+  for (let k = 0; k <= 24; k++) for (let i = 0; i < per; i++) gapJobs.push({ g: -6 + k * 0.5, i });
+  const gc = Math.ceil(gapJobs.length / threads);
+  const gapResults = reference.odds ? (await Promise.all(Array.from({ length: threads }, (_, w) => new Promise((resolve, reject) => {
+    const part = gapJobs.slice(w * gc, (w + 1) * gc);
+    if (!part.length) return resolve([]);
+    const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { kind: 'gaps', jobs: part } });
+    worker.once('message', resolve);
+    worker.once('error', reject);
+  })))).flat() : [];
   const secs = (performance.now() - t0) / 1000;
 
   const lines = results.map(r => r.line);
@@ -85,6 +105,20 @@ async function main() {
   console.log(`${'Offsides / match'.padEnd(26)}${pad(fmt(off, 2), 9)}${pad('~' + fmt(est.offsides.mean, 1), 9)}   expected range ${est.offsides.lo}-${est.offsides.hi}${off >= est.offsides.lo && off <= est.offsides.hi ? '  ok' : '  CHECK'}`);
   console.log(`${'Pass completion %'.padEnd(26)}${pad(fmt(100 * pc, 1), 9)}${pad('~' + fmt(100 * est.passCompletion.mean, 0), 9)}   expected range ${100 * est.passCompletion.lo}-${100 * est.passCompletion.hi}${pc >= est.passCompletion.lo && pc <= est.passCompletion.hi ? '  ok' : '  CHECK'}`);
 
+  // How much squad quality decides results, against bookmaker odds for the same real matches.
+  if (reference.odds) {
+    const fit = fitOrderedLogit(gapResults);
+    const sp = spreadOfD(fit, results.map(r => r.gap));
+    const fav = results.filter(r => { const p = outcomeProbs(fit, r.gap); return p[0] >= p[2] ? r.res === 2 : r.res === 0; }).length / results.length;
+    const o = reference.odds;
+    console.log('\nPredictability, against bookmaker odds for the same ' + o.matches + ' real matches:');
+    row('Spread of win chances', sp.sdD, o.sdD, 0.015, null, Math.abs(sp.sdD - o.sdD) <= 0.015, 3);
+    const favTol = Math.max(0.015, 2.5 * Math.sqrt(o.favouriteWin * (1 - o.favouriteWin) / N));
+    row('Favourite wins %', 100 * fav, 100 * o.favouriteWin, 100 * favTol, null, Math.abs(fav - o.favouriteWin) <= favTol, 1);
+    const p1 = outcomeProbs(fit, 1), p0 = outcomeProbs(fit, 0);
+    console.log(`(a squad-strength gap of 1 point at home: ${(100 * p0[0]).toFixed(0)}% → ${(100 * p1[0]).toFixed(0)}% home wins)`);
+  }
+
   console.log(`\n${total - failures} of ${total} data-backed metrics within tolerance`);
   console.log('Shape gap is the total variation distance between the engine and real distributions (0 identical, 1 unrelated).');
 
@@ -105,4 +139,4 @@ async function main() {
 }
 
 if (isMainThread) await main();
-else parentPort.postMessage(simulateRange(workerData.from, workerData.to));
+else parentPort.postMessage(workerData.kind === 'gaps' ? simulateGaps(workerData.jobs) : simulateRange(workerData.from, workerData.to));
