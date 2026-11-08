@@ -21,9 +21,23 @@ npm run dev        # http://localhost:3000
 | `npm test` | Run the test suite (Vitest) |
 | `npm run typecheck` | Type-check the project |
 | `npm run simulate -- --seed 42` | Play one match headless and print the result |
-| `npm run calibrate -- 500` | Run 500 matches and compare the numbers with reference ranges |
+| `npm run fetch-data` | Download real league results (about 8,900 matches) into `data/football-data/` |
+| `npm run build-reference` | Turn the downloaded results into `src/data/reference.json` |
+| `npm run calibrate -- 500` | Simulate 500 matches and compare them with the real data |
 
-`npm run simulate` also takes `--home-strength`, `--away-strength`, `--home-formation`, `--away-formation`, `--neutral` and `--events` (print every event, not just the key ones).
+`npm run simulate` also takes `--home-strength`, `--away-strength`, `--home-formation`, `--away-formation`, `--neutral` and `--events` (print every event, not just the key ones). `npm run calibrate` takes `--hist` to print the distributions.
+
+## Checking the engine against real football
+
+The engine is calibrated against real results from the top five European leagues (England, Germany, Spain, Italy, France), seasons 2021/22 to 2025/26, from [football-data.co.uk](https://www.football-data.co.uk/data.php): 8,907 matches with goals, shots, shots on target, corners, fouls and cards.
+
+`src/data/reference.json` holds the numbers computed from that data: means, spreads and full distributions for each count per match, plus home/draw/away rates and shot ratios. It is committed, so `npm run calibrate` and the Engine Lab work without downloading anything. The raw CSV files are not committed; `npm run fetch-data` and `npm run build-reference` rebuild the reference from scratch.
+
+Both the real data and the simulated matches go through the same code (`src/lib/metrics.js`), so every statistic is defined and binned identically. A metric passes when the engine's average is within 7% of the real one, or within 2.5 standard errors of its own batch, whichever is larger. The shape gap is the total variation distance between the engine's distribution and the real one (0 identical, 1 unrelated).
+
+The dataset has no offsides or passing data. Those two numbers are rough estimates, marked as such in the Lab and in the calibrate output.
+
+Latest result with 600 matches between freshly generated equal squads: 7 of 14 data-backed metrics within tolerance. The engine runs low on goals (2.5 against 2.8), fouls (21.5 against 23.8), cards (3.6 against 4.3) and goals per shot, and it draws too often (30% against 25%). Shots, shots on target, corners, red cards and home win rate are in range.
 
 ## Using the engine in code
 
@@ -82,15 +96,16 @@ Illegal lineups are reported as typed errors (`validateLineup`, and `errors` on 
 | `src/engine/` | The match engine and its type declarations |
 | `src/app/` | Next.js routes: `/` matchday and live match, `/tactics`, `/report`, `/lab` |
 | `src/components/` | Screens and UI components |
-| `src/lib/` | Shared helpers, pitch drawing, and the background batch runner (Web Workers) |
-| `tests/` | Determinism, save/load, validation, substitution, fuzz and realism tests |
-| `tools/` | Command-line scripts for headless play and calibration |
+| `src/lib/` | Shared helpers, pitch drawing, the statistics shared by all calibration tools (`metrics.js`), and the background batch runner (Web Workers) |
+| `src/data/` | `reference.json`: real-football numbers built from the league data |
+| `tests/` | Determinism, save/load, validation, substitution, fuzz, realism and metrics tests |
+| `tools/` | Command-line scripts for headless play, downloading data and calibration |
 
 ## Status
 
 Working prototype. Not done yet:
 
-- Reference ranges in the Engine Lab and `calibrate` are approximate top-league figures, not yet computed from real league data.
+- Tuning the engine to the real-data gaps listed above (goals, fouls, cards, draw rate, offsides).
 - Laws still to add: advantage, handball, the goalkeeper holding-time rule, indirect free kicks beyond offsides.
 - Tactic balance: low pressing, cautious mentality and wide play are weaker than the other options.
 - Speed: about 100 ms per match, which is fine for a season but slow for thousands of clubs.

@@ -6,21 +6,88 @@ import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
+import reference from '@/data/reference.json';
+import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, compareCount, compareRate, compareRatio, histogram, lineFromEngine } from '@/lib/metrics';
 
-export const REF = [
-  { k: 'goals', label: 'Goals / match', real: 2.7, lo: 2.45, hi: 3.0, fmt: v => fx(v, 2), per: r => r.score[0] + r.score[1], bins: [0, 1, 2, 3, 4, 5, 6] },
-  { k: 'home', label: 'Home win rate', real: 0.44, lo: 0.38, hi: 0.5, fmt: v => fx(v * 100, 1) + '%', rate: r => r.score[0] > r.score[1] },
-  { k: 'shots', label: 'Shots / match', real: 24.7, lo: 22, hi: 27.5, fmt: v => fx(v, 1), per: r => r.ts[0].shots + r.ts[1].shots, bins: [14, 18, 22, 26, 30, 34] },
-  { k: 'cards', label: 'Cards / match', real: 3.92, lo: 3.3, hi: 4.7, fmt: v => fx(v, 2), per: r => r.ts[0].yellows + r.ts[1].yellows + r.ts[0].reds + r.ts[1].reds, bins: [0, 2, 3, 4, 5, 6, 8] },
-  { k: 'xgshot', label: 'xG / shot', real: 0.109, lo: 0.09, hi: 0.125, fmt: v => fx(v, 3), ratio: [r => r.ts[0].xg + r.ts[1].xg, r => r.ts[0].shots + r.ts[1].shots] },
-  { k: 'draw', label: 'Draw rate', real: 0.252, lo: 0.2, hi: 0.31, fmt: v => fx(v * 100, 1) + '%', rate: r => r.score[0] === r.score[1] },
-  { k: 'zero', label: '0–0 draws', real: 0.075, lo: 0.05, hi: 0.11, fmt: v => fx(v * 100, 1) + '%', rate: r => r.score[0] + r.score[1] === 0 },
-  { k: 'ontarget', label: 'Shots on target', real: 0.34, lo: 0.31, hi: 0.37, fmt: v => pct(v), ratio: [r => r.ts[0].onTarget + r.ts[1].onTarget, r => r.ts[0].shots + r.ts[1].shots] },
-  { k: 'corners', label: 'Corners / match', real: 9.8, lo: 8.5, hi: 11, fmt: v => fx(v, 1), per: r => r.ts[0].corners + r.ts[1].corners, bins: [4, 6, 8, 10, 12, 14] },
-  { k: 'fouls', label: 'Fouls / match', real: 22, lo: 19, hi: 25, fmt: v => fx(v, 1), per: r => r.ts[0].fouls + r.ts[1].fouls, bins: [12, 16, 20, 24, 28, 32] },
-  { k: 'offsides', label: 'Offsides / match', real: 4.0, lo: 3.2, hi: 4.8, fmt: v => fx(v, 1), per: r => r.ts[0].offsides + r.ts[1].offsides, bins: [0, 2, 3, 4, 5, 6, 8] },
-  { k: 'pass', label: 'Pass completion', real: 0.82, lo: 0.78, hi: 0.86, fmt: v => pct(v), ratio: [r => r.ts[0].passesOk + r.ts[1].passesOk, r => r.ts[0].passes + r.ts[1].passes] },
-];
+const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const pctFmt = (v) => fx(v * 100, 1) + '%';
+const mean = (a) => a.reduce((s, v) => s + v, 0) / (a.length || 1);
+const TILE_ORDER = ['goals', 'homeWin', 'draw', 'zeroZero', 'shots', 'onTargetPct', 'goalsPerShot', 'corners', 'fouls', 'cards'];
+
+/** Compare a batch of simulated matches with the real-data reference. */
+export function buildTiles(out) {
+  const lines = out.map(r => lineFromEngine(r.score, r.ts));
+  const tiles: any[] = TILE_ORDER.map((k): any => {
+    const cm = COUNT_METRICS.find(m => m.key === k);
+    if (cm) {
+      const real = reference.counts[k];
+      const values = lines.map(cm.value);
+      const c = compareCount(real, values);
+      return { k, label: cm.label, kind: 'count', engine: c.mean, real: real.mean, tol: c.tol, ok: c.ok, tv: c.tv, hist: histogram(values, real.edges), realHist: real.hist, fmt: v => fx(v, cm.decimals) };
+    }
+    const rm = RATE_METRICS.find(m => m.key === k);
+    if (rm) {
+      const c = compareRate(reference.rates[k], lines.filter(rm.hit).length, lines.length);
+      return { k, label: rm.label, kind: 'share', engine: c.mean, real: reference.rates[k], tol: c.tol, ok: c.ok, fmt: pctFmt };
+    }
+    const tm = RATIO_METRICS.find(m => m.key === k);
+    const c = compareRatio(reference.ratios[k], lines.reduce((s, l) => s + tm.num(l), 0) / lines.reduce((s, l) => s + tm.den(l), 0));
+    return { k, label: tm.label, kind: 'share', engine: c.mean, real: reference.ratios[k], tol: c.tol, ok: c.ok, fmt: k === 'goalsPerShot' ? v => fx(v, 3) : pctFmt };
+  });
+  // The dataset has no offsides or passing data, so these two are checked against rough estimates and labelled as such.
+  const est = reference.estimates;
+  const offsides = mean(out.map(r => r.ts[0].offsides + r.ts[1].offsides));
+  const passRate = out.reduce((s, r) => s + r.ts[0].passesOk + r.ts[1].passesOk, 0) / out.reduce((s, r) => s + r.ts[0].passes + r.ts[1].passes, 0);
+  tiles.push(
+    { k: 'offsides', label: 'Offsides / match', kind: 'estimate', engine: offsides, real: est.offsides.mean, lo: est.offsides.lo, hi: est.offsides.hi, ok: offsides >= est.offsides.lo && offsides <= est.offsides.hi, fmt: v => fx(v, 1) },
+    { k: 'pass', label: 'Pass completion', kind: 'estimate', engine: passRate, real: est.passCompletion.mean, lo: est.passCompletion.lo, hi: est.passCompletion.hi, ok: passRate >= est.passCompletion.lo && passRate <= est.passCompletion.hi, fmt: pctFmt },
+  );
+  return tiles;
+}
+
+function Tile({ t }: any) {
+  const isEst = t.kind === 'estimate';
+  const lo = t.lo ?? t.real - t.tol, hi = t.hi ?? t.real + t.tol;
+  const mx = t.hist ? Math.max(...t.hist, ...t.realHist, 0.0001) : 1;
+  const top = Math.max(t.engine, t.real, hi) * 1.35 || 1;
+  const at = (v) => `${Math.max(0, Math.min(100, (v / top) * 100))}%`;
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">{t.label}</span>
+        <span className="flex items-center gap-1.5">
+          {isEst && <span className="text-[9px] font-bold tracking-[.12em] text-dim">ESTIMATE</span>}
+          <span className={`text-[9.5px] font-bold tracking-[.12em] rounded-[3px] px-1.5 py-0.5 border ${t.ok ? 'text-good border-good/50' : 'text-warn border-warn/50'}`}>{t.ok ? 'PASS' : 'CHECK'}</span>
+        </span>
+      </div>
+      <div className="grid grid-cols-2 mt-3">
+        <div><div className="font-display font-bold text-[26px] tnum leading-none">{t.fmt(t.engine)}</div><div className="eyebrow !text-[9px] mt-1">Engine</div></div>
+        <div><div className="font-display font-bold text-[26px] tnum leading-none text-dim">{isEst ? '~' : ''}{t.fmt(t.real)}</div><div className="eyebrow !text-[9px] mt-1">{isEst ? 'Estimate' : 'Real data'}</div></div>
+      </div>
+      {t.hist ? (
+        <div className="flex items-end gap-1 h-16 mt-3">
+          {t.hist.map((v, i) => (
+            <div key={i} className="relative flex-1 h-full flex items-end">
+              <div className="w-full rounded-t-[2px]" style={{ height: `${Math.max(3, (v / mx) * 100)}%`, background: 'rgb(var(--c-accent) / .55)' }} />
+              <div className="absolute left-0 right-0 h-[2px] bg-ink/80" style={{ bottom: `${(t.realHist[i] / mx) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="relative h-2 rounded-full bg-surface2 mt-5">
+          <div className="absolute h-2 rounded-full bg-good/35" style={{ left: at(lo), width: `calc(${at(hi)} - ${at(lo)})` }} />
+          <div className="absolute -top-1 w-0.5 h-4 bg-ink/60" style={{ left: at(t.real) }} title="Real" />
+          <div className="absolute -top-1.5 w-1 h-5 rounded bg-accent" style={{ left: at(t.engine) }} title="Engine" />
+        </div>
+      )}
+      <div className="text-[10.5px] text-dim mt-1.5">
+        {t.kind === 'count' && `Shape gap ${fx(t.tv, 2)} · allowed ±${t.fmt(t.tol)}`}
+        {t.kind === 'share' && `Allowed ±${t.fmt(t.tol)}`}
+        {isEst && `Not in the dataset · expected ${t.fmt(t.lo)} to ${t.fmt(t.hi)}`}
+      </div>
+    </div>
+  );
+}
 export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(500), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
@@ -29,14 +96,10 @@ export function Lab() {
   useEffect(() => { const t = setTimeout(() => { const cfg = { ...teamsFor(0, 0), seed: 4242 }; const a = E.simulateMatch(cfg), b = E.simulateMatch(cfg); const m = new E.Match(cfg); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd(); setDet({ ok: hash(a) === hash(b) && hash(a) === hash(c), h: hash(a) }); }, 300); return () => clearTimeout(t); }, []);
   const realism = async () => {
     setRes(null); setProg(0.01);
-    const out = (await runBatch(Array.from({ length: n }, (_, i) => ({ ...teamsFor(i, gap), seed: 1 + i, control: 'none' })), setProg)).filter(r => r && !r.errors);
-    const tiles = REF.map(t => {
-      let v, hist;
-      if (t.per) { const vals = out.map(t.per); v = vals.reduce((a, b) => a + b, 0) / vals.length; hist = t.bins.map((b, i) => vals.filter(x => x >= b && (i === t.bins.length - 1 || x < t.bins[i + 1])).length / vals.length); }
-      else if (t.rate) { v = out.filter(t.rate).length / out.length; const k = 8, sz = Math.floor(out.length / k); hist = Array.from({ length: k }, (_, i) => { const sl = out.slice(i * sz, (i + 1) * sz); return sl.filter(t.rate).length / (sl.length || 1); }); }
-      else { v = out.reduce((s, r) => s + t.ratio[0](r), 0) / out.reduce((s, r) => s + t.ratio[1](r), 0); const k = 8, sz = Math.floor(out.length / k); hist = Array.from({ length: k }, (_, i) => { const sl = out.slice(i * sz, (i + 1) * sz); return sl.reduce((s, r) => s + t.ratio[0](r), 0) / (sl.reduce((s, r) => s + t.ratio[1](r), 0) || 1); }); }
-      return { ...t, v, hist, pass: v >= t.lo && v <= t.hi };
-    });
+    // A fresh pair of squads for every match, like the many different teams of a real league.
+    const leagueTeams = (i) => ({ home: E.makeTeam({ name: 'Home', seed: 1000 + 2 * i, strength: 12 + Math.ceil(gap / 2) }), away: E.makeTeam({ name: 'Away', seed: 1001 + 2 * i, strength: 12 - Math.floor(gap / 2) }) });
+    const out = (await runBatch(Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i), seed: 1 + i, control: 'none' })), setProg)).filter(r => r && !r.errors);
+    const tiles = buildTiles(out);
     const byBlock = Array(6).fill(0); out.forEach(r => r.goalTimes.forEach(t => byBlock[Math.min(5, Math.floor(t / 900))]++));
     setRes({ n: out.length, tiles, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap }); setProg(0);
   };
@@ -58,7 +121,7 @@ export function Lab() {
   return (
     <div className="glow-bg min-h-[calc(100vh-56px)]">
       <div className="gutter mx-auto max-w-[1320px] py-8 flex flex-col gap-6">
-        <PageHead eyebrow="Engine calibration" title="Engine Lab" sub="Test realism, tactical balance and simulation performance without leaving the browser. Batches run in background workers; real-football values are approximate top-league references."
+        <PageHead eyebrow="Engine calibration" title="Engine Lab" sub={`Test realism, tactical balance and simulation performance without leaving the browser. Realism is checked against ${thousands(reference.source.matches)} real matches from the top five European leagues (${reference.source.seasons.length} seasons, football-data.co.uk). Batches run in background workers.`}
           right={<div className={`rounded-md border px-4 py-3 flex items-center gap-3 ${det ? (det.ok ? 'border-good/50 bg-good/10' : 'border-bad/50 bg-bad/10') : 'border-line'}`}><span className={det && det.ok ? 'text-good' : 'text-dim'}><Icon n="check" s={18} /></span><div><div className="eyebrow !text-[9.5px]">Determinism check</div><div className={`text-[12px] font-bold tracking-[.1em] ${det ? (det.ok ? 'text-good' : 'text-bad') : 'text-dim'}`}>{det ? (det.ok ? 'SEEDS MATCH' : 'MISMATCH') : 'CHECKING…'}</div></div></div>} />
         <Tabs value={tab} onChange={setTab} items={[['realism', 'Realism'], ['balance', 'Balance'], ['perf', 'Performance']]} />
         <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)] items-start">
@@ -73,13 +136,10 @@ export function Lab() {
           </div>
           <div className="min-w-0">
             {tab === 'realism' && (!res ? <Empty text="Run the realism test to simulate a batch of matches and compare every number with real football." /> :
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{res.tiles.map(t => { const mx = Math.max(...t.hist, 0.0001); return (
-                <div key={t.k} className="rounded-lg border border-line bg-surface p-4">
-                  <div className="flex items-center justify-between"><span className="text-[12.5px] font-semibold">{t.label}</span><span className={`text-[9.5px] font-bold tracking-[.12em] rounded-[3px] px-1.5 py-0.5 border ${t.pass ? 'text-good border-good/50' : 'text-warn border-warn/50'}`}>{t.pass ? 'PASS' : 'CHECK'}</span></div>
-                  <div className="grid grid-cols-2 mt-3"><div><div className="font-display font-bold text-[26px] tnum leading-none">{t.fmt(t.v)}</div><div className="eyebrow !text-[9px] mt-1">Engine</div></div><div><div className="font-display font-bold text-[26px] tnum leading-none text-dim">{t.fmt(t.real)}</div><div className="eyebrow !text-[9px] mt-1">Real</div></div></div>
-                  <div className="flex items-end gap-1 h-16 mt-3">{t.hist.map((v, i) => <div key={i} className="flex-1 rounded-t-[2px]" style={{ height: `${Math.max(4, v / mx * 100)}%`, background: 'rgb(var(--c-accent) / .55)' }} />)}</div>
-                  <div className="text-[10.5px] text-dim mt-1.5">{t.per ? 'Distribution per match' : 'Spread across batches'} · range {t.fmt(t.lo)}–{t.fmt(t.hi)}</div>
-                </div>); })}</div>)}
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{res.tiles.map(t => <Tile key={t.k} t={t} />)}</div>
+                <p className="text-[11.5px] text-dim">Bars show how often the engine produced each value per match; the white line marks real football. "Allowed" is how far the engine's average may sit from the real one: 7% or 2.5 standard errors of the batch, whichever is larger. Shape gap is the total variation distance between the two distributions (0 identical, 1 unrelated).</p>
+              </div>)}
             {tab === 'balance' && (!bal ? <Empty text="Pick a tactic and run. Each option plays the same balanced opponent at a neutral venue, so differences come from the tactic alone." /> :
               <div className="rounded-lg border border-line bg-surface p-5">
                 <div className="eyebrow">{bal.per} matches per option · neutral venue</div><h2 className="font-display font-bold text-[26px] mt-1">{TACTIC_META[bal.dim].label}: does every option matter?</h2>
