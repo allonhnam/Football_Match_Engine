@@ -7,7 +7,7 @@ import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
-export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control, setControl, onKickoff, onSimulate, history, onReplay, onEditTactics }: any) {
+export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control, setControl, competition, setCompetition, onKickoff, onSimulate, history, onReplay, onEditTactics }: any) {
   const errs = { home: E.validateLineup(teams.home), away: E.validateLineup(teams.away) };
   const ok = !errs.home.length && !errs.away.length;
   const [busy, setBusy] = useState(false);
@@ -42,9 +42,10 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
       <div className="gutter mx-auto max-w-[1280px] py-8 flex flex-col gap-6">
         <PageHead eyebrow="Match setup" title="Matchday" sub="Pick two squads and a seed, then kick off live or simulate instantly. The same seed and the same manager decisions always produce the same match." />
         <div className="flex flex-col md:flex-row items-stretch gap-3">{teamCard('home')}<div className="grid place-items-center"><span className="font-display font-bold text-dim text-[20px] px-1">VS</span></div>{teamCard('away')}</div>
-        <div className="rounded-lg border border-line bg-surface p-4 grid gap-4 lg:grid-cols-[0.9fr_1fr_1.3fr_auto] items-end">
+        <div className="rounded-lg border border-line bg-surface p-4 grid gap-4 lg:grid-cols-[0.8fr_0.9fr_0.9fr_1.2fr_auto] items-end">
           <div><div className="eyebrow mb-1.5">Seed</div><div className="flex gap-2"><input id="seed" type="number" value={seed} onChange={e => setSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setSeed(Math.floor(Math.random() * 16777215))} title="Random seed">Random</Btn></div></div>
           <div><div className="eyebrow mb-1.5">Venue</div><Seg id="venue" value={venue === 'home' ? 0 : 1} options={['Home ground', 'Neutral']} onChange={i => setVenue(i ? 'neutral' : 'home')} /></div>
+          <div><div className="eyebrow mb-1.5">Competition</div><Seg id="competition" value={competition === 'cup' ? 1 : 0} options={['League', 'Cup tie']} onChange={i => setCompetition(i ? 'cup' : 'league')} /></div>
           <div><div className="eyebrow mb-1.5">You manage</div><Seg id="control" value={['home', 'away', 'both', 'none'].indexOf(control)} options={['Home', 'Away', 'Both', 'Watch']} onChange={i => setControl(['home', 'away', 'both', 'none'][i])} /></div>
           <div className="flex gap-2 flex-wrap"><Btn kind="primary" size="lg" disabled={!ok} onClick={onKickoff}>Kick off <Icon n="play" s={14} /></Btn><Btn size="lg" disabled={!ok || busy} onClick={async () => { setBusy(true); await new Promise(r => setTimeout(r, 20)); onSimulate(); setBusy(false); }}>{busy ? 'Simulating…' : 'Simulate instantly'}</Btn></div>
         </div>

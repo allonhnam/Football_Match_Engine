@@ -6,7 +6,7 @@ Author: Hyun
 
 ## Quick start
 
-Requires Node 20 or newer. Works the same on Windows, macOS and Linux.
+Requires Node 20 or newer. Works the same on Windows, macOS and Linux: CI runs the typecheck, the tests, a headless match and the production build on all three, with Node 20 and 22 (`.github/workflows/ci.yml`).
 
 ```bash
 npm install
@@ -23,7 +23,7 @@ npm run dev        # http://localhost:3000
 | `npm run simulate -- --seed 42` | Play one match headless and print the result |
 | `npm run fetch-data` | Download real league results (about 8,900 matches) into `data/football-data/` |
 | `npm run build-reference` | Turn the downloaded results into `src/data/reference.json` |
-| `npm run calibrate -- 500` | Simulate 500 matches and compare them with the real data |
+| `npm run calibrate -- 500` | Simulate 500 matches and compare them with the real data, including how predictable results are against bookmaker odds |
 | `npm run balance -- 200` | Play every tactic option and formation against a balanced side, plus the style match-ups, and show win rates and what each option changes |
 
 `npm run simulate` also takes `--home-strength`, `--away-strength`, `--home-formation`, `--away-formation`, `--neutral` and `--events` (print every event, not just the key ones). `npm run calibrate` takes `--hist` to print the distributions.
@@ -38,22 +38,26 @@ Both the real data and the simulated matches go through the same code (`src/lib/
 
 The dataset has no offsides or passing data. Those two numbers are rough estimates, marked as such in the Lab and in the calibrate output.
 
-Every simulated match uses a fresh pair of squads, with team quality varying like a real league (`src/lib/league.js`). The spread of quality cannot be read from match results, so it is a calibration setting: a spread of about 1 point reproduces the real draw rate and the real home, draw and away split. Calibrating on two fixed squads gave misleading, squad-dependent results.
+Every simulated match uses a fresh pair of squads, with team quality varying like a real league (`src/lib/league.js`). Calibrating on two fixed squads gave misleading, squad-dependent results.
 
-Latest result, 6,000 matches: all 14 data-backed metrics are within tolerance, and the distributions closely follow the real ones.
+How much squad quality decides results is checked against bookmaker odds for the same real matches. The odds (market average, margin removed) give every match's home-win and away-win probability. The spread of their difference over a league measures how predictable football is: 0.337 in the real data, where the favourite wins 53.8%. The engine fits how its results depend on the squad-strength gap, using matches at fixed gaps (`src/lib/predictability.js`), then reads the same spread off the league matchups. The quality spread in `league.js` is set so the two agree: the engine gives 0.339, and the favourite wins 54.0%. On that scale, a one-point stronger squad at home wins 61% of the time instead of 45%.
+
+Latest result, 6,000 matches: all 16 data-backed metrics are within tolerance (the 14 match statistics plus the two odds checks), and the distributions closely follow the real ones.
 
 | Metric | Engine | Real |
 | --- | --- | --- |
-| Goals per match | 2.77 | 2.81 |
+| Goals per match | 2.76 | 2.81 |
 | Shots per match | 26.2 | 25.2 |
-| Shots on target | 34.8% | 34.9% |
+| Shots on target | 34.5% | 34.9% |
 | Goals per shot | 10.6% | 11.2% |
-| Corners per match | 9.7 | 9.7 |
+| Corners per match | 9.6 | 9.7 |
 | Fouls per match | 23.2 | 23.8 |
-| Cards per match | 4.07 | 4.29 |
-| Home / draw / away | 45% / 24% / 31% | 44% / 25% / 31% |
+| Cards per match | 4.31 | 4.29 |
+| Home / draw / away | 46% / 23% / 31% | 44% / 25% / 31% |
+| Spread of win chances (odds) | 0.339 | 0.337 |
+| Favourite wins | 54.0% | 53.8% |
 
-Rarer events, per match (no reference in the dataset, checked against published league averages): penalties 0.27, own goals 0.06, red cards 0.19.
+Rarer events, per match (no reference in the dataset, checked against published league averages): penalties 0.25, own goals 0.05, red cards 0.20.
 
 The numbers that were adjusted to get there (shot volume, accuracy, finishing, fouls, bookings, offside timing and home advantage) sit together in the `TUNING` block at the top of `src/engine/engine.js`. A regression test fails if a change to the engine pulls the headline statistics away from the real data.
 
@@ -93,13 +97,18 @@ Following the IFAB Laws of the Game:
   - The referee plays advantage, then goes back to the free kick if the advantage does not follow within a few seconds. Cards held back for advantage are shown at the next stoppage.
   - Yellow and red cards; a second yellow is a red. Denying an obvious goal-scoring chance is a red card outside the area and a yellow inside it when the challenge was a genuine attempt at the ball.
 - **Players (Law 3):**
-  - 5 substitutes in 3 windows, plus half-time.
+  - 5 substitutes in 3 windows, plus half-time. In extra time a sixth substitute and a fourth window, and the breaks before and during extra time are free.
   - Players sent off are not replaced.
   - When the keeper is sent off, an outfield player makes way for the substitute keeper, or an outfield player goes in goal.
   - A match with fewer than 7 players on a side is abandoned.
 - **Goals (Law 10):** includes own goals.
 
-Not modelled: VAR, concussion substitutes, goal-line technology, and the extra-time and penalty-shootout rules of cup competitions.
+- **Knockout ties (Law 10.3):**
+  - A level tie goes to two halves of 15 minutes of extra time, with ends changed and a new toss, then a penalty shootout.
+  - The shootout uses only players on the pitch at the end, with both teams reduced to the same number. Kicks alternate, five each, and stop as soon as one side cannot catch up; then sudden death. Nobody kicks twice until every eligible team-mate has kicked.
+  - Second legs are decided on aggregate.
+
+Not modelled: VAR, concussion substitutes and goal-line technology.
 
 ## Using the engine in code
 
@@ -130,13 +139,16 @@ const again = Match.load(saved).runToEnd();
 
 Illegal lineups are reported as typed errors (`validateLineup`, and `errors` on a `Match` or `simulateMatch` result) rather than thrown. Illegal manager commands return `{ ok: false, error }`.
 
+Cup ties: pass `knockout: true` in the match config, or `knockout: { aggregate: [2, 1] }` for a second leg where the home side scored 2 and the away side 1 in earlier legs. The result then always has a `winner`, plus `extraTime` and `shootout` (score and every kick).
+
 For a live view, call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(...)` from a timer at whatever speed you like, and draw `m.snapshot()`. Listen to events with `m.on(e => ...)`. Background matches run headless with `simulateMatch`: about 100 ms per match on one core. The front end spreads them over Web Workers (`src/lib/batch.ts`), and the Node tools use worker threads. In the browser a 380-match season takes about 13 s.
 
 ### Result object
 
 | Field | Contents |
 | --- | --- |
-| `score` | `[home, away]` |
+| `score` | `[home, away]`, including extra time but not a shootout |
+| `winner`, `extraTime`, `shootout` | Who won (null for a league draw), whether extra time was played, and the shootout score and kicks |
 | `events` | Every event with tick, clock, minute label, side, players, position and extra data (xG, shot result, own goal, kind of offence) |
 | `teamStats` | Possession, xG, shots, on target, passes, pass accuracy, box and final-third entries, corners, fouls, offsides, cards, saves |
 | `playerStats` | Minutes, rating, goals, own goals, assists, xG, passes, tackles, distance, end condition, cards, why sent off, injury |
@@ -167,10 +179,9 @@ For a live view, call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(
 
 ## Status
 
-Complete first version. All deliverables work: the engine, the library API, the visualizer, the calibration and balance tools, and this README. There are 41 tests covering determinism, save and load, lineup validation, substitutions, a fuzz test, realism, the laws above and tactic effects. On top of that, 2,000 fuzzed matches with random squads, tactics and manager commands finished without a crash, a hang or a broken invariant.
+Complete first version. All deliverables work: the engine, the library API, the visualizer, the calibration and balance tools, and this README. There are 48 tests covering determinism, save and load, lineup validation, substitutions, a fuzz test, realism, the laws above, knockout ties and tactic effects. On top of that, 2,000 fuzzed matches with random squads, tactics and manager commands finished without a crash, a hang or a broken invariant.
 
 Known limits:
 
-- Squad quality is decisive. At a neutral venue a one-point gap in squad rating lifts the stronger side's win rate from about 37% to about 49%, and a three-point gap to about 82%.
 - Offsides and pass completion have no real-data reference; they are checked against rough estimates.
 - Suspensions are reported per match. Yellow-card accumulation across matches is left to the game, which gets every player's yellows in `carryOver`.

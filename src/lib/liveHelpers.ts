@@ -30,11 +30,13 @@ export function eventTitle(e, m) {
     case 'fulltime': return ['Full time', e.text.replace('Full time: ', '')];
     case 'addedtime': return ['Added time', e.text];
     case 'abandoned': return ['Match abandoned', e.text];
+    case 'extratime': return [/penalties/.test(e.text) ? 'Penalty shootout' : 'Extra time', e.text];
+    case 'shootoutkick': return [`${e.scored ? 'Scored' : 'Missed'} · ${T}`, e.text];
     case 'kickoff': return e.half === 2 ? ['Second half', `${m.teams[e.side].name} get us underway.`] : ['Kick-off', `${m.teams[0].name} v ${m.teams[1].name}`];
     default: return [e.type, e.text];
   }
 }
-export const DOT = { goal: 'bg-accent', yellow: 'bg-card', red: 'bg-bad', injury: 'bg-bad', penalty: 'bg-accent', disallowed: 'bg-bad' };
+export const DOT = { goal: 'bg-accent', yellow: 'bg-card', red: 'bg-bad', injury: 'bg-bad', penalty: 'bg-accent', disallowed: 'bg-bad', extratime: 'bg-accent' };
 export function buildInsight(m, now) {
   const mi = Math.floor(now / 60), from = Math.max(0, mi - 7);
   const sum = (arr, s) => { let v = 0; for (let k = from; k < Math.min(arr.length, mi + 1); k++) v += (arr[k] || [0, 0])[s]; return v; };

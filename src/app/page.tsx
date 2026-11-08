@@ -21,6 +21,7 @@ export default function MatchdayPage() {
     <Setup
       teams={app.teams} setTeams={app.setTeams} seed={app.seed} setSeed={app.setSeed}
       venue={app.venue} setVenue={app.setVenue} control={app.control} setControl={app.setControl}
+      competition={app.competition} setCompetition={app.setCompetition}
       onKickoff={app.kickoff} onSimulate={app.simulate} history={app.history}
       onReplay={(h: any) => app.replay(h.config, h.commands)} onEditTactics={app.editTactics}
     />

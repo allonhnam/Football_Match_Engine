@@ -39,6 +39,9 @@ const files = (await readdir(DATA).catch(() => [])).filter(f => f.endsWith('.csv
 if (!files.length) { console.error('No CSV files in data/football-data/. Run `npm run fetch-data` first.'); process.exit(1); }
 
 const lines = [];
+// Bookmaker odds (market average, else Bet365), turned into probabilities with the margin removed. They say how
+// predictable real matches are, which is what the engine's squad-quality effect is calibrated against.
+const oddsRows = [];
 const seasons = new Set(), leagues = new Set();
 let skipped = 0;
 for (const file of files) {
@@ -55,6 +58,13 @@ for (const file of files) {
       cornersH: v.HC, cornersA: v.AC, foulsH: v.HF, foulsA: v.AF, yellowsH: v.HY, yellowsA: v.AY, redsH: v.HR, redsA: v.AR,
     });
     seasons.add(season); leagues.add(league);
+    const pick = keys => keys.map(k => Number(r[col[k]]));
+    let odds = pick(['AvgH', 'AvgD', 'AvgA']);
+    if (!odds.every(o => o > 1)) odds = pick(['B365H', 'B365D', 'B365A']);
+    if (odds.every(o => o > 1)) {
+      const inv = odds.map(o => 1 / o), sum = inv[0] + inv[1] + inv[2];
+      oddsRows.push({ p: inv.map(v => v / sum), res: v.FTHG > v.FTAG ? 'H' : v.FTHG < v.FTAG ? 'A' : 'D' });
+    }
   }
 }
 
@@ -68,12 +78,29 @@ const reference = {
     skippedRows: skipped,
   },
   ...analyse(lines),
+  odds: summariseOdds(oddsRows),
   // Not in the dataset. Rough top-league values kept so the Lab can still show them, clearly marked as estimates.
   estimates: {
     offsides: { mean: 4.0, lo: 3.2, hi: 4.8, note: 'Typical top-league offsides per match (both teams); not in the dataset' },
     passCompletion: { mean: 0.82, lo: 0.78, hi: 0.86, note: 'Typical top-league pass completion; not in the dataset' },
   },
 };
+
+function summariseOdds(rows) {
+  if (!rows.length) return null;
+  const n = rows.length, d = rows.map(r => r.p[0] - r.p[2]);
+  const mean = d.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(d.reduce((a, x) => a + (x - mean) ** 2, 0) / n);
+  const fav = rows.map(r => Math.max(r.p[0], r.p[2])).sort((a, b) => a - b);
+  const q = x => Math.round(fav[Math.floor(x * (n - 1))] * 1000) / 1000;
+  return {
+    matches: n,
+    note: 'd = home-win minus away-win probability implied by the odds (margin removed)',
+    meanD: mean, sdD: sd,
+    favouriteWin: rows.filter(r => (r.p[0] >= r.p[2] ? r.res === 'H' : r.res === 'A')).length / n,
+    favouriteP: { p10: q(0.1), p25: q(0.25), p50: q(0.5), p75: q(0.75), p90: q(0.9) },
+  };
+}
 
 await mkdir(path.dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(reference, null, 2) + '\n');
@@ -82,4 +109,5 @@ const c = reference.counts;
 console.log(`${lines.length} matches from ${leagues.size} leagues, ${seasons.size} seasons (${skipped} incomplete rows skipped)`);
 console.log(`goals ${c.goals.mean.toFixed(2)}  shots ${c.shots.mean.toFixed(1)}  on target ${(100 * reference.ratios.onTargetPct).toFixed(1)}%  corners ${c.corners.mean.toFixed(1)}  fouls ${c.fouls.mean.toFixed(1)}  cards ${c.cards.mean.toFixed(2)}`);
 console.log(`home ${(100 * reference.rates.homeWin).toFixed(1)}%  draw ${(100 * reference.rates.draw).toFixed(1)}%  away ${(100 * reference.rates.awayWin).toFixed(1)}%  0-0 ${(100 * reference.rates.zeroZero).toFixed(1)}%`);
+if (reference.odds) console.log(`odds: ${reference.odds.matches} matches, spread of home-minus-away win chance ${reference.odds.sdD.toFixed(3)}, favourite wins ${(100 * reference.odds.favouriteWin).toFixed(1)}%`);
 console.log(`Wrote ${path.relative(root, OUT)}`);

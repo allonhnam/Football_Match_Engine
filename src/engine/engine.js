@@ -2,6 +2,8 @@
  Pitch: x 0..105 (length), y 0..68 (width), metres. One tick = 0.25 s of game time.
  Same inputs + seed + command log => identical match. */
 const L = 105, W = 68, DT = 0.25, HALF = 2700;
+// Periods: two halves of 45 minutes, then (knockout matches only) two halves of 15 minutes of extra time.
+const PERIOD_LEN = [0, 2700, 2700, 900, 900], PERIOD_START = [0, 0, 2700, 5400, 6300], PERIOD_END_MIN = [0, 45, 90, 105, 120];
 const GOAL_HALF = 3.66, BOX_D = 16.5, BOX_HALF = 20.16;
 
 // Numbers adjusted by tools/calibrate.mjs so the engine matches real league data (see README).
@@ -11,7 +13,7 @@ const TUNING = {
   finishing: 1.09,      // multiplier on the chance an on-target shot scores
   foulBase: 0.08,      // chance a tackle attempt is a foul
   foulPress: 0.02,     // extra foul chance per level of pressing
-  yellowBase: 0.172,     // chance a foul is booked
+  yellowBase: 0.186,     // chance a foul is booked
   homeAdvantage: 0.55,   // attribute points the home side gains on every skill
   onTarget: 0.25,        // base chance a shot is on target, before skill and shot quality
   offsideTiming: 7.8,   // how badly forwards mistime runs (bigger means more offsides)
@@ -57,7 +59,7 @@ const TACTIC_LABELS = {
 const DEFAULT_TACTICS = { mentality: 1, pressing: 1, line: 1, width: 1, tempo: 1, passing: 1 };
 const ATTRS = ['pace', 'stamina', 'passing', 'vision', 'dribbling', 'shooting', 'heading', 'tackling', 'positioning', 'keeping'];
 const ENGINE_VERSION = '0.3.0';
-const KEY_EVENTS = { goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
+const KEY_EVENTS = { shootoutkick: 1, extratime: 1, goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
 
 // ---------- RNG (mulberry32, serialisable) ----------
 function makeRng(seed) {
@@ -171,7 +173,10 @@ function Match(config) {
   this.seed = config.seed >>> 0;
   this.rng = makeRng(this.seed);
   this.control = config.control || 'home'; // which side(s) the human manages; others use the AI manager
-  this.tick = 0; this.half = 1; this.t = 0; this.added = [0, 0];
+  this.tick = 0; this.half = 1; this.t = 0; this.added = [0, 0, 0, 0];
+  // Knockout ties: true, or { aggregate: [home, away] } with the goals each side scored in earlier legs.
+  this.knockout = config.knockout ? { aggregate: (config.knockout.aggregate || [0, 0]).slice(0, 2) } : null;
+  this.shootout = null; this.winner = null;
   this.phase = 'dead'; this.finished = false; this.abandoned = null;
   // Every field the match uses is created here, so the object keeps one shape (much faster in V8).
   this.stoppage = 0; this.goalsThisHalf = 0; this.injuries = 0; this.addedAnnounced = false; this.restartType = null;
@@ -208,14 +213,14 @@ P._mkRuntime = function (p, side, slot, onPitch) {
   return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, tackleImmune: 0, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, tackleCd: 0, runOff: 0,
     st: { ownGoals: 0, claims: 0, minutes: 0, passes: 0, passesOk: 0, shots: 0, goals: 0, assists: 0, xg: 0, tackles: 0, fouls: 0, saves: 0, dist: 0, onAt: onPitch ? 0 : null, offAt: null } };
 };
-P.dir = function (side) { return (side === 0) === (this.half === 1) ? 1 : -1; };
-P.clockSec = function () { return (this.half - 1) * HALF + this.t; };
-P.minute = function () { return Math.min(this.half * 45, Math.floor(this.clockSec() / 60) + 1); };
+P.dir = function (side) { return (side === 0) === (this.half % 2 === 1) ? 1 : -1; }; // teams change ends every period
+P.clockSec = function () { return PERIOD_START[this.half] + this.t; };
+P.minute = function () { return Math.min(PERIOD_END_MIN[this.half], Math.floor(this.clockSec() / 60) + 1); };
 P.clockLabel = function () {
-  if (this.t >= HALF) { const ex = Math.floor((this.t - HALF) / 60) + 1; return (this.half * 45) + '+' + ex; }
+  if (this.t >= PERIOD_LEN[this.half]) { const ex = Math.floor((this.t - PERIOD_LEN[this.half]) / 60) + 1; return PERIOD_END_MIN[this.half] + '+' + ex; }
   const s = Math.floor(this.clockSec()); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 };
-P.minuteLabel = function () { return this.t >= HALF ? (this.half * 45) + '+' + (Math.floor((this.t - HALF) / 60) + 1) + '′' : this.minute() + '′'; };
+P.minuteLabel = function () { const len = PERIOD_LEN[this.half]; return this.t >= len ? PERIOD_END_MIN[this.half] + '+' + (Math.floor((this.t - len) / 60) + 1) + '′' : this.minute() + '′'; };
 P.on = function (fn) { this.listeners.push(fn); return () => { this.listeners = this.listeners.filter(f => f !== fn); }; };
 P._emit = function (e) {
   e.t = this.clockSec(); e.tick = this.tick; e.minute = this.minuteLabel(); e.half = this.half; e.key = !!KEY_EVENTS[e.type];
@@ -629,12 +634,13 @@ P.substitute = function (side, outId, inId, _replay) {
   if (out.red) return { ok: false, error: 'Sent-off players cannot be replaced' };
   if (!out.onPitch) return { ok: false, error: out.p.name + ' is not on the pitch' };
   if (!inn) return { ok: false, error: 'That player is not on the bench' };
-  if (tm.subsUsed + queuedOut >= 5) return { ok: false, error: 'No substitutions left (5 used)' };
+  const maxSubs = this._maxSubs();
+  if (tm.subsUsed + queuedOut >= maxSubs) return { ok: false, error: 'No substitutions left (' + maxSubs + ' used)' };
   if (tm.pending.some(c => c.kind === 'sub' && (c.outId === outId || c.inId === inId))) return { ok: false, error: 'Already queued' };
   // Substitutions made during the same stoppage share one window.
   const sameStoppage = this.phase === 'dead' && tm.windowStoppage === this.stoppage;
   const newWindow = !tm.pending.some(c => c.kind === 'sub') && this.phase !== 'halftime' && !sameStoppage;
-  if (newWindow && tm.windowsUsed >= 3) return { ok: false, error: 'All 3 substitution windows used' };
+  if (newWindow && tm.windowsUsed >= this._maxWindows()) return { ok: false, error: 'All ' + this._maxWindows() + ' substitution windows used' };
   tm.pending.push({ kind: 'sub', outId, inId });
   this._cmd({ kind: 'sub', side, outId, inId }, _replay);
   if (this.phase === 'halftime' || this.phase === 'dead') this._applyPending();
@@ -662,7 +668,7 @@ P._applyPending = function () {
   for (const tm of this.teams) {
     if (!tm.pending.length) continue;
     const subs = tm.pending.filter(c => c.kind === 'sub');
-    if (subs.length && this.phase !== 'halftime' && !(this.t === 0 && this.half === 2) && tm.windowStoppage !== this.stoppage) {
+    if (subs.length && this.phase !== 'halftime' && !(this.t === 0 && this.half > 1) && tm.windowStoppage !== this.stoppage) {
       tm.windowsUsed++;
       tm.windowStoppage = this.stoppage;
     }
@@ -731,12 +737,13 @@ P._ai = function (side) {
   if (m > 80 && diff > 0 && tm.tactics.mentality > 0 && !tm.aiProtect) { tm.aiProtect = true; this.setTactics(side, { mentality: 0 }, true); }
   // injured player first
   const inj = this.onPitch(side).find(q => q.injured);
-  if (inj && tm.subsUsed < 5) this._aiSub(side, inj);
-  if (m < 57 || tm.subsUsed >= 5 || tm.pending.length) return;
-  const windowAt = [58, 68, 79][tm.windowsUsed];
+  const maxSubs = this._maxSubs();
+  if (inj && tm.subsUsed < maxSubs) this._aiSub(side, inj);
+  if (m < 57 || tm.subsUsed >= maxSubs || tm.pending.length) return;
+  const windowAt = [58, 68, 79, 96][tm.windowsUsed];
   if (windowAt == null || m < windowAt) return;
   const tired = this.onPitch(side).filter(q => q.slot !== 0 && q.cond < 0.84).sort((a, b) => a.cond - b.cond);
-  const n = Math.min(5 - tm.subsUsed, tm.windowsUsed === 2 ? 5 : 2);
+  const n = Math.min(maxSubs - tm.subsUsed, tm.windowsUsed >= 2 && this.half <= 2 ? 5 : 2);
   tired.slice(0, n).forEach(q => this._aiSub(side, q));
 };
 P._aiSub = function (side, out) {
@@ -878,17 +885,19 @@ P.step = function () {
   this.tick++;
   const b = this.ball; b.px = b.x; b.py = b.y; b.pz = b.z;
   if (this.phase === 'halftime') { this._startSecondHalf(); return; }
+  if (this.phase === 'shootout') { this._shootoutTick(); return; }
+  const plen = PERIOD_LEN[this.half];
   this.t += DT;
   this._sides();
   // added time + half end
-  if (this.t >= HALF && !this.addedAnnounced) {
+  if (this.t >= plen && !this.addedAnnounced) {
     this.addedAnnounced = true;
-    const base = this.half === 1 ? 1 : 3;
+    const base = [0, 1, 3, 0, 1][this.half];
     const extra = (this.goalsThisHalf || 0) * 0.5 + this.teams.reduce((s, tm) => s + tm.stats.reds, 0) * 0.5 + (this.injuries || 0) * 0.8 + (this.half === 2 ? 0.4 * this.teams.reduce((s, tm) => s + tm.subsUsed, 0) : 0);
-    this.added[this.half - 1] = clamp(Math.round(base + extra + this.rng() * 2), 1, this.half === 1 ? 6 : 12);
+    this.added[this.half - 1] = clamp(Math.round(base + extra * (this.half > 2 ? 0.5 : 1) + this.rng() * 2), this.half > 2 ? 0 : 1, [0, 6, 12, 3, 4][this.half]);
     this._emit({ type: 'addedtime', text: '+' + this.added[this.half - 1] + ' minutes added' });
   }
-  if (this.t >= HALF + this.added[this.half - 1] * 60 && !(b.flight && b.flight.kind === 'shot')) { this._endHalf(); return; }
+  if (this.t >= plen + this.added[this.half - 1] * 60 && !(b.flight && b.flight.kind === 'shot')) { this._endHalf(); return; }
   // possession time + minutes
   const os = b.owner >= 0 ? this.players[b.owner].side : b.lastSide;
   if (this.phase === 'play') { this.teams[os].stats.possession += DT; this._edgeSum[0] += this._edge[0]; this._edgeSum[1] += this._edge[1]; this._edgeN++; }
@@ -969,7 +978,7 @@ P._aiAll = function () {
   for (const s of [0, 1]) {
     const human = this.control === 'both' || (this.control === 'home' && s === 0) || (this.control === 'away' && s === 1);
     if (!human) this._ai(s);
-    else { const inj = this.onPitch(s).find(q => q.injured && !this.teams[s].pending.some(c => c.outId === q.id)); if (inj && this.teams[s].subsUsed < 5 && this.teams[s].windowsUsed < 3) this._aiSub(s, inj); }
+    else { const inj = this.onPitch(s).find(q => q.injured && !this.teams[s].pending.some(c => c.outId === q.id)); if (inj && this.teams[s].subsUsed < this._maxSubs() && this.teams[s].windowsUsed < this._maxWindows()) this._aiSub(s, inj); }
   }
 };
 P._tackles = function () {
@@ -1088,23 +1097,98 @@ P._resume = function () {
     if (best >= 0) { const m = this.players[best]; this._pass(r.taker, best, m.x, m.y, rt === 'throwin'); }
   }
 };
+P._maxSubs = function () { return this.half > 2 ? 6 : 5; };
+P._maxWindows = function () { return this.half > 2 ? 4 : 3; };
+// Is a knockout tie still level (on aggregate over both legs, if there were two)?
+P._tieLevel = function () { const a = this.knockout.aggregate; return this.teams[0].score + a[0] === this.teams[1].score + a[1]; };
 P._endHalf = function () {
-  if (this.half === 1) {
+  const sc = this.teams[0].name + ' ' + this.teams[0].score + '–' + this.teams[1].score + ' ' + this.teams[1].name;
+  this.ball.flight = null; this.ball.owner = -1;
+  if (this.half === 1 || this.half === 3) {
     this.phase = 'halftime';
-    this.ball.flight = null; this.ball.owner = -1;
-    this._emit({ type: 'halftime', text: 'Half-time: ' + this.teams[0].name + ' ' + this.teams[0].score + '–' + this.teams[1].score + ' ' + this.teams[1].name });
+    this._emit({ type: 'halftime', text: (this.half === 3 ? 'Half-time in extra time: ' : 'Half-time: ') + sc });
     return;
   }
-  this.finished = true; this.phase = 'fulltime';
-  for (const q of this.players) if (q.onPitch) q.st.offAt = this.clockSec();
-  this._emit({ type: 'fulltime', text: 'Full time: ' + this.teams[0].name + ' ' + this.teams[0].score + '–' + this.teams[1].score + ' ' + this.teams[1].name });
+  if (this.half === 2 && this.knockout && this._tieLevel()) {
+    this.phase = 'halftime';
+    this._emit({ type: 'extratime', text: 'Level after 90 minutes (' + sc + '): extra time' });
+    return;
+  }
+  if (this.half === 4 && this._tieLevel()) { this._startShootout(sc); return; }
+  this._finish('Full time' + (this.half === 4 ? ' after extra time' : '') + ': ' + sc);
 };
-P._startSecondHalf = function () {
+P._finish = function (text) {
+  this.finished = true; this.phase = 'fulltime';
+  for (const q of this.players) if (q.onPitch && q.st.offAt == null) q.st.offAt = this.clockSec();
+  if (this.knockout) {
+    const a = this.knockout.aggregate, t0 = this.teams[0].score + a[0], t1 = this.teams[1].score + a[1];
+    this.winner = this.shootout ? (this.shootout.score[0] > this.shootout.score[1] ? 0 : 1) : t0 > t1 ? 0 : 1;
+  } else this.winner = this.teams[0].score > this.teams[1].score ? 0 : this.teams[1].score > this.teams[0].score ? 1 : null;
+  this._emit({ type: 'fulltime', text });
+};
+P._startSecondHalf = function () { // starts the next period: second half, or either half of extra time
   this._applyPending();
-  this.half = 2; this.t = 0; this.addedAnnounced = false; this.goalsThisHalf = 0; this.injuries = 0;
-  for (const q of this.players) { if (q.onPitch) { q.cond = Math.min(1, q.cond + 0.07); q.x = L - q.x; q.y = W - q.y; q.px = q.x; q.py = q.y; } }
-  this._emit({ type: 'kickoff', side: 1 - this.firstKick, text: 'Second half under way' });
-  this._setRestart('kickoff', 1 - this.firstKick, L / 2, W / 2, 2);
+  const next = this.half + 1;
+  const recover = next === 2 ? 0.07 : next === 3 ? 0.03 : 0.01;
+  this.half = next; this.t = 0; this.addedAnnounced = false; this.goalsThisHalf = 0; this.injuries = 0;
+  for (const q of this.players) { if (q.onPitch) { q.cond = Math.min(1, q.cond + recover); q.x = L - q.x; q.y = W - q.y; q.px = q.x; q.py = q.y; } }
+  if (next === 3) this.etFirstKick = this.rng() < 0.5 ? 0 : 1; // a new toss of the coin for extra time
+  const side = next === 2 ? 1 - this.firstKick : next === 3 ? this.etFirstKick : 1 - this.etFirstKick;
+  this._emit({ type: 'kickoff', side, text: ['', '', 'Second half under way', 'Extra time under way', 'Second half of extra time under way'][next] });
+  this._setRestart('kickoff', side, L / 2, W / 2, 2);
+};
+
+// ---------- penalty shootout (Law 10.3) ----------
+// Only players on the pitch at the end of extra time take part, both teams with the same number. Kicks alternate,
+// five each, stopping as soon as one side cannot catch up, then sudden death; nobody kicks twice before every
+// eligible team-mate (keeper included) has kicked once. One kick every 6 seconds so a live view can show it.
+P._startShootout = function (sc) {
+  this.phase = 'shootout'; this.restart = null;
+  const takers = [0, 1].map(s => this.onPitch(s).slice().sort((a, b) => (a.slot === 0) - (b.slot === 0) || this.eff(b, 'shooting') - this.eff(a, 'shooting')));
+  const n = Math.min(takers[0].length, takers[1].length);
+  // the side with more players leaves out its weakest outfield takers (the list is best first, keeper last)
+  for (const s of [0, 1]) while (takers[s].length > n) { let j = takers[s].length - 1; while (j > 0 && takers[s][j].slot === 0) j--; takers[s].splice(j, 1); }
+  const first = this.rng() < 0.5 ? 0 : 1;
+  this.shootout = { first, order: takers.map(l => l.map(q => q.id)), score: [0, 0], taken: [0, 0], kicks: [], timer: 4 };
+  this._emit({ type: 'extratime', text: 'Level after extra time (' + sc + '): penalties. ' + this.teams[first].name + ' go first' });
+  this.ball.x = L - 11; this.ball.y = W / 2;
+  // everyone except the two keepers lines up in the centre circle (they walk there during the break)
+  for (const q of this.players) if (q.onPitch) {
+    const k = q.side * 11 + q.slot, ang = (k / 22) * Math.PI * 2;
+    if (q.slot === 0) { q.tx = q.side === 0 ? L - 0.5 : L - 14; q.ty = q.side === 0 ? W / 2 : W / 2 - 12; }
+    else { q.tx = L / 2 + Math.cos(ang) * 6; q.ty = W / 2 + Math.sin(ang) * 6; }
+    q.x = q.px = q.tx; q.y = q.py = q.ty; q.urgent = 0;
+  }
+};
+P._shootoutTick = function () {
+  this._sides(); this._move();
+  const so = this.shootout; so.timer -= DT;
+  if (so.timer > 0) return;
+  so.timer = 6;
+  const k = so.taken[0] + so.taken[1], side = k % 2 === 0 ? so.first : 1 - so.first;
+  const ids = so.order[side], q = this.players.find(p => p.id === ids[so.taken[side] % ids.length]);
+  const gk = this.players.find(p => p.onPitch && p.side !== side && p.slot === 0) || this.onPitch(1 - side)[0];
+  const sudden = so.taken[0] >= 5 && so.taken[1] >= 5;
+  const shoot = this.eff(q, 'shooting') / 20, keep = gk ? this.eff(gk, 'keeping') / 20 : 0.2;
+  const p = clamp(0.86 + (shoot - 0.6) * 0.3 - (keep - 0.55) * 0.25 - (q.slot === 0 ? 0.12 : 0) - (sudden ? 0.03 : 0), 0.45, 0.93);
+  const scored = this.rng() < p;
+  so.taken[side]++; if (scored) so.score[side]++;
+  so.kicks.push({ side, player: q.id, scored });
+  q.x = L - 12; q.y = W / 2; // the kicker steps up, then walks back to the circle
+  for (const k of this.players) if (k.onPitch && k.slot === 0) { // the defending keeper on the line, the other waits by the area
+    if (k === gk) { k.x = k.tx = L - 0.5; k.y = k.ty = W / 2; } else { k.tx = L - 14; k.ty = W / 2 - 12; }
+  }
+  this.ball.x = scored ? L + 0.5 : L - 1; this.ball.y = W / 2 + (this.rng() - 0.5) * 6;
+  this._emit({ type: 'shootoutkick', side, player: q.id, scored, score: so.score.slice(), text: q.p.name + (scored ? ' scores' : this.rng() < 0.6 ? "'s penalty is saved" : ' misses') + ' (' + so.score[0] + '–' + so.score[1] + ' on penalties)' });
+  // decided? within the first five each: when one side cannot catch up; then after every pair in sudden death
+  const left = s => Math.max(0, 5 - so.taken[s]);
+  let done;
+  if (so.taken[0] < 5 || so.taken[1] < 5) done = so.score[0] + left(0) < so.score[1] || so.score[1] + left(1) < so.score[0];
+  else done = so.taken[0] === so.taken[1] && so.score[0] !== so.score[1]; // sudden death: decided only after each pair
+  if (done) {
+    const w = so.score[0] > so.score[1] ? 0 : 1, sc = this.teams[0].name + ' ' + this.teams[0].score + '–' + this.teams[1].score + ' ' + this.teams[1].name;
+    this._finish('Full time after extra time: ' + sc + '. ' + this.teams[w].name + ' win ' + Math.max(...so.score) + '–' + Math.min(...so.score) + ' on penalties');
+  }
 };
 
 // ---------- running ----------
@@ -1127,7 +1211,7 @@ P.runUntil = function (stop) {
   }
   return this.events.slice(start);
 };
-P.runToEnd = function () { let guard = 0; while (!this.finished && guard++ < 60000) this.step(); return this.result(); };
+P.runToEnd = function () { let guard = 0; while (!this.finished && guard++ < 80000) this.step(); return this.result(); };
 
 P.snapshot = function () {
   return { tick: this.tick, half: this.half, clock: this.clockLabel(), minute: this.minute(), phase: this.phase, score: [this.teams[0].score, this.teams[1].score],
@@ -1150,7 +1234,8 @@ P.result = function () {
   const pos = this.teams[0].stats.possession + this.teams[1].stats.possession || 1;
   const teamStats = this.teams.map(tm => Object.assign({}, tm.stats, { possessionPct: Math.round(100 * tm.stats.possession / pos), passPct: tm.stats.passes ? Math.round(100 * tm.stats.passesOk / tm.stats.passes) : 0 }));
   return {
-    engineVersion: ENGINE_VERSION, seed: this.seed, score: [this.teams[0].score, this.teams[1].score], abandoned: this.abandoned, events: this.events, teamStats, playerStats,
+    engineVersion: ENGINE_VERSION, seed: this.seed, score: [this.teams[0].score, this.teams[1].score], winner: this.winner, extraTime: this.half > 2,
+    shootout: this.shootout && { score: this.shootout.score.slice(), first: this.shootout.first, kicks: this.shootout.kicks.slice() }, abandoned: this.abandoned, events: this.events, teamStats, playerStats,
     carryOver: playerStats.map(p => ({ playerId: p.id, name: p.name, side: p.side, minutesPlayed: p.minutes, endCondition: Math.round(p.endCondition * 100) / 100, injury: p.injury, yellow: p.yellow, red: p.red, suspension: suspensionFor(p.redReason) })),
     explanation: this.explain(), momentum: this.momentum, xgTimeline: this.xgTimeline.concat([[tsec, this.teams[0].stats.xg, this.teams[1].stats.xg]]), commands: this.commands,
   };
@@ -1200,7 +1285,8 @@ P.explain = function () {
   const [h, a] = this.teams, xh = h.stats.xg, xa = a.stats.xg;
   let verdict;
   const w = h.score > a.score ? 0 : a.score > h.score ? 1 : -1;
-  if (w < 0) verdict = 'A ' + h.score + '–' + a.score + ' draw; ' + (Math.abs(xh - xa) < 0.4 ? 'chances were even (' : (xh > xa ? names[0] : names[1]) + ' created the better chances (') + xh.toFixed(1) + ' to ' + xa.toFixed(1) + ' xG).';
+  if (w < 0 && this.shootout) { const so = this.shootout.score, sw = so[0] > so[1] ? 0 : 1; verdict = names[sw] + ' won ' + Math.max(...so) + '–' + Math.min(...so) + ' on penalties after a ' + h.score + '–' + a.score + ' draw; ' + (Math.abs(xh - xa) < 0.4 ? 'chances were even (' : (xh > xa ? names[0] : names[1]) + ' created the better chances (') + xh.toFixed(1) + ' to ' + xa.toFixed(1) + ' xG).'; }
+  else if (w < 0) verdict = 'A ' + h.score + '–' + a.score + ' draw; ' + (Math.abs(xh - xa) < 0.4 ? 'chances were even (' : (xh > xa ? names[0] : names[1]) + ' created the better chances (') + xh.toFixed(1) + ' to ' + xa.toFixed(1) + ' xG).';
   else {
     const wx = w === 0 ? xh : xa, lx = w === 0 ? xa : xh;
     const key = out.find(f => (f.side === w) === f.good);

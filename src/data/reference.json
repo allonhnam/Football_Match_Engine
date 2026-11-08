@@ -220,6 +220,20 @@
     "onTargetPct": 0.34904305793379,
     "goalsPerShot": 0.11162243150684932
   },
+  "odds": {
+    "matches": 8906,
+    "note": "d = home-win minus away-win probability implied by the odds (margin removed)",
+    "meanD": 0.12577321010242876,
+    "sdD": 0.33665070523629487,
+    "favouriteWin": 0.5378396586570852,
+    "favouriteP": {
+      "p10": 0.382,
+      "p25": 0.42,
+      "p50": 0.499,
+      "p75": 0.607,
+      "p90": 0.707
+    }
+  },
   "estimates": {
     "offsides": {
       "mean": 4,

@@ -23,6 +23,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [seed, setSeed] = useState(0x7c4a91);
   const [venue, setVenue] = useState('home');
   const [control, setControl] = useState('home');
+  const [competition, setCompetition] = useState<'league' | 'cup'>('league');
   const [boardSide, setBoardSide] = useState('home');
   const [session, setSession] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
@@ -43,7 +44,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (t: 'dark' | 'light') => { setThemeState(t); store.set('me-theme', t); };
 
-  const config = () => ({ home: clone(teams.home), away: clone(teams.away), seed, control: control as any, neutral: venue === 'neutral' });
+  const config = () => ({ home: clone(teams.home), away: clone(teams.away), seed, control: control as any, neutral: venue === 'neutral', knockout: competition === 'cup' || undefined });
   const saveHistory = (cfg: any, R: any, commands: any[]) => {
     const h = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), date: Date.now(), score: R.score,
@@ -80,7 +81,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const editTactics = (side: string) => { setBoardSide(side); router.push('/tactics'); };
 
   const value = {
-    theme, setTheme, teams, setTeams, seed, setSeed, venue, setVenue, control, setControl,
+    theme, setTheme, teams, setTeams, seed, setSeed, venue, setVenue, control, setControl, competition, setCompetition,
     boardSide, setBoardSide, session, report, history, settings, setSettings, showSettings, setShowSettings,
     kickoff, replay, simulate, onFinished, endMatch, editTactics, clearHistory,
   };

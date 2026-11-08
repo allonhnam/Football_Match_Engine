@@ -91,3 +91,20 @@ describe('real-data reference', () => {
     }
   });
 });
+
+describe('predictability fit (odds check)', () => {
+  it('recovers a known ordered-logit model from simulated results', async () => {
+    const { fitOrderedLogit, outcomeProbs } = await import('@/lib/predictability.js');
+    const truth = { t1: -0.9, t2: 0.3, b: 0.7 };
+    let s = 12345; const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+    const samples: { g: number; res: number }[] = [];
+    for (let k = 0; k < 8000; k++) {
+      const g = -4 + 8 * rnd(), [pH, pD] = outcomeProbs(truth, g), u = rnd();
+      samples.push({ g, res: u < pH ? 2 : u < pH + pD ? 1 : 0 });
+    }
+    const fit = fitOrderedLogit(samples);
+    expect(Math.abs(fit.b - truth.b)).toBeLessThan(0.08);
+    expect(Math.abs(fit.t1 - truth.t1)).toBeLessThan(0.12);
+    expect(Math.abs(fit.t2 - truth.t2)).toBeLessThan(0.12);
+  });
+});
