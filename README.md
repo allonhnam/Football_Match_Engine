@@ -24,6 +24,7 @@ npm run dev        # http://localhost:3000
 | `npm run fetch-data` | Download real league results (about 8,900 matches) into `data/football-data/` |
 | `npm run build-reference` | Turn the downloaded results into `src/data/reference.json` |
 | `npm run calibrate -- 500` | Simulate 500 matches and compare them with the real data |
+| `npm run balance -- 200` | Play every tactic option against a balanced side and show win rates |
 
 `npm run simulate` also takes `--home-strength`, `--away-strength`, `--home-formation`, `--away-formation`, `--neutral` and `--events` (print every event, not just the key ones). `npm run calibrate` takes `--hist` to print the distributions.
 
@@ -37,7 +38,22 @@ Both the real data and the simulated matches go through the same code (`src/lib/
 
 The dataset has no offsides or passing data. Those two numbers are rough estimates, marked as such in the Lab and in the calibrate output.
 
-Latest result with 600 matches between freshly generated equal squads: 7 of 14 data-backed metrics within tolerance. The engine runs low on goals (2.5 against 2.8), fouls (21.5 against 23.8), cards (3.6 against 4.3) and goals per shot, and it draws too often (30% against 25%). Shots, shots on target, corners, red cards and home win rate are in range.
+Every simulated match uses a fresh pair of squads, with team quality varying like a real league (`src/lib/league.js`). The spread of quality cannot be read from match results, so it is a calibration setting: a spread of about 1 point reproduces the real draw rate and the real home, draw and away split. Calibrating on two fixed squads gave misleading, squad-dependent results.
+
+Latest result, 6,000 matches: all 14 data-backed metrics are within tolerance, and the distributions closely follow the real ones.
+
+| Metric | Engine | Real |
+| --- | --- | --- |
+| Goals per match | 2.90 | 2.81 |
+| Shots per match | 26.1 | 25.2 |
+| Shots on target | 33.8% | 34.9% |
+| Goals per shot | 11.1% | 11.2% |
+| Corners per match | 9.8 | 9.7 |
+| Fouls per match | 24.1 | 23.8 |
+| Cards per match | 4.34 | 4.29 |
+| Home / draw / away | 44% / 24% / 32% | 44% / 25% / 31% |
+
+The numbers that were adjusted to get there (shot volume, finishing, fouls, bookings, offside timing and home advantage) sit together in the `TUNING` block at the top of `src/engine/engine.js`. A regression test fails if a change to the engine pulls the headline statistics away from the real data.
 
 ## Using the engine in code
 
@@ -105,8 +121,9 @@ Illegal lineups are reported as typed errors (`validateLineup`, and `errors` on 
 
 Working prototype. Not done yet:
 
-- Tuning the engine to the real-data gaps listed above (goals, fouls, cards, draw rate, offsides).
 - Laws still to add: advantage, handball, the goalkeeper holding-time rule, indirect free kicks beyond offsides.
-- Tactic balance: low pressing, cautious mentality and wide play are weaker than the other options.
+- Tactic balance (`npm run balance` shows it): attacking mentality, high pressing and a high line beat the balanced settings outright, and their opposites lose, so there is little trade-off. Width, tempo and passing style barely change results.
+- Squad quality is very decisive: at a neutral venue, a one-point squad rating gap lifts the stronger side's win rate from 35% to about 54%, and a three-point gap to about 79%.
+- Offsides and pass completion have no real-data reference; they are checked against rough estimates.
 - Speed: about 100 ms per match, which is fine for a season but slow for thousands of clubs.
 - Suspensions are a flat one match after a red card; yellow-card accumulation is left to the game.

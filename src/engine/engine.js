@@ -3,6 +3,18 @@
  Same inputs + seed + command log => identical match. */
 const L = 105, W = 68, DT = 0.25, HALF = 2700;
 const GOAL_HALF = 3.66, BOX_D = 16.5, BOX_HALF = 20.16;
+
+// Numbers adjusted by tools/calibrate.mjs so the engine matches real league data (see README).
+const TUNING = {
+  shotBase: 0.0115,      // chance a carrier shoots from a position of almost no value
+  shotSlope: 0.88,      // how quickly that chance rises with shot quality (xG)
+  finishing: 1.62,      // multiplier on the chance an on-target shot scores
+  foulBase: 0.064,      // chance a tackle attempt is a foul
+  foulPress: 0.02,     // extra foul chance per level of pressing
+  yellowBase: 0.177,     // chance a foul is booked
+  homeAdvantage: 0.45,   // attribute points the home side gains on every skill
+  offsideTiming: 8.3,   // how badly forwards mistime runs (bigger means more offsides)
+};
 const FORMATIONS = {
   '4-3-3': [['GK', 0, .5], ['DF', .03, .1], ['DF', 0, .37], ['DF', 0, .63], ['DF', .03, .9], ['MF', .42, .28], ['MF', .34, .5], ['MF', .42, .72], ['FW', .9, .14], ['FW', 1, .5], ['FW', .9, .86]],
   '4-4-2': [['GK', 0, .5], ['DF', .03, .1], ['DF', 0, .37], ['DF', 0, .63], ['DF', .03, .9], ['MF', .46, .1], ['MF', .4, .38], ['MF', .4, .62], ['MF', .46, .9], ['FW', .95, .38], ['FW', .95, .62]],
@@ -179,7 +191,7 @@ P._emit = function (e) {
 P.onPitch = function (side) { return this.players.filter(q => q.onPitch && (side == null || q.side === side)); };
 P.eff = function (q, k) {
   const f = Math.min(1, 0.5 + 0.65 * q.cond);
-  const home = q.side === 0 && !this.config.neutral ? 0.5 : 0;
+  const home = q.side === 0 && !this.config.neutral ? TUNING.homeAdvantage : 0;
   const fm = this.teams[q.side].formation;
   if (q.fitSlot !== q.slot || q.fitForm !== fm) { q.fitSlot = q.slot; q.fitForm = fm; q.fit = positionFit(q.p, fm, q.slot); }
   const fit = q.fit;
@@ -188,6 +200,7 @@ P.eff = function (q, k) {
 
 // ----- restarts -----
 P._setRestart = function (type, side, x, y, delay, extra) {
+  this.stoppage = (this.stoppage || 0) + 1;
   this.phase = 'dead'; this.ball.owner = -1; this.ball.flight = null; this.ball.z = 0;
   this.ball.x = clamp(x, 0, L); this.ball.y = clamp(y, 0, W);
   let taker = -1, best = 1e9;
@@ -258,7 +271,7 @@ P._shoot = function (i, o) {
     if (r() < onT) {
       const gk = this.players.find(p => p.onPitch && p.side !== q.side && p.slot === 0);
       const keep = gk ? this.eff(gk, 'keeping') / 20 : 0;
-      let pg = clamp((xg / onT) * (1.45 + (shoot - 0.55) * 0.6) * (1.2 - keep * 0.45), 0.02, 0.97);
+      let pg = clamp((xg / onT) * (TUNING.finishing + (shoot - 0.55) * 0.6) * (1.2 - keep * 0.45), 0.02, 0.97);
       if (o.penalty) pg = clamp(0.93 - keep * 0.12, 0.6, 0.95);
       outcome = r() < pg ? 'goal' : 'saved';
       ty = W / 2 + (r() * 2 - 1) * (GOAL_HALF - 0.4);
@@ -342,7 +355,7 @@ P._decide = function (i) {
   const ment = [0.75, 1, 1.3][T.mentality];
   // shoot?
   if (xg > 0.025 && q.slot !== 0) {
-    const p = clamp(0.013 + (xg - 0.02) * 0.95, 0, 0.7) * ment * (0.75 + this.eff(q, 'shooting') / 50);
+    const p = clamp(TUNING.shotBase + (xg - 0.02) * TUNING.shotSlope, 0, 0.7) * ment * (0.75 + this.eff(q, 'shooting') / 50);
     if (r() < p) { this._shoot(i, { header: this.ball.z > 1.2 }); return; }
   }
   const vis = this.eff(q, 'vision'), pas = this.eff(q, 'passing');
@@ -395,7 +408,7 @@ P._pass = function (i, j, tx, ty, isThrow) {
   if (!(rt === 'throwin' || rt === 'goalkick' || rt === 'corner')) {
     const lineX = this._offsideLine(q.side);
     const inOppHalf = d > 0 ? m.x > L / 2 : m.x < L / 2;
-    const gap = (m.x - lineX) * d, timing = (m.p.role === 'FW' || m.slot >= 7) && gap > -7 ? (r() - 0.05) * 7.5 : 0; // mistimed runs
+    const gap = (m.x - lineX) * d, timing = (m.p.role === 'FW' || m.slot >= 7) && gap > -7 ? (r() - 0.05) * TUNING.offsideTiming : 0; // mistimed runs
     if (inOppHalf && gap + timing > 0.3 && (m.x - this.ball.x) * d > 0) {
       tm.stats.offsides++;
       this._emit({ type: 'offside', side: q.side, player: m.id, text: m.p.name + ' is caught offside', x: m.x, y: m.y });
@@ -446,7 +459,7 @@ P._foul = function (ti, oi) {
   const agg = [0.85, 1, 1.25][tt.tactics.pressing];
   if (lastMan && r() < 0.08) card = 'red';
   else if (r() < 0.003) card = 'red';
-  else if (r() < (0.17 * agg + (lastMan ? 0.4 : 0)) * (t.yellow ? 0.55 : 1)) card = 'yellow';
+  else if (r() < (TUNING.yellowBase * agg + (lastMan ? 0.4 : 0)) * (t.yellow ? 0.55 : 1)) card = 'yellow';
   if (card === 'yellow') { t.yellow++; tt.stats.yellows++; if (t.yellow >= 2) card = 'red2'; else this._emit({ type: 'yellow', side: t.side, player: t.id, text: 'Yellow card: ' + t.p.name + (lastMan ? ' (stopped a promising attack)' : '') }); }
   if (card === 'red' || card === 'red2') this._sendOff(ti, card === 'red2' ? 'second yellow' : lastMan ? 'denied an obvious goal-scoring opportunity' : 'serious foul play');
   if (r() < 0.015) this._injure(oi);
@@ -491,7 +504,9 @@ P.substitute = function (side, outId, inId, _replay) {
   if (!inn) return { ok: false, error: 'That player is not on the bench' };
   if (tm.subsUsed + queuedOut >= 5) return { ok: false, error: 'No substitutions left (5 used)' };
   if (tm.pending.some(c => c.kind === 'sub' && (c.outId === outId || c.inId === inId))) return { ok: false, error: 'Already queued' };
-  const newWindow = !tm.pending.some(c => c.kind === 'sub') && this.phase !== 'halftime';
+  // Substitutions made during the same stoppage share one window.
+  const sameStoppage = this.phase === 'dead' && tm.windowStoppage === this.stoppage;
+  const newWindow = !tm.pending.some(c => c.kind === 'sub') && this.phase !== 'halftime' && !sameStoppage;
   if (newWindow && tm.windowsUsed >= 3) return { ok: false, error: 'All 3 substitution windows used' };
   tm.pending.push({ kind: 'sub', outId, inId });
   this._cmd({ kind: 'sub', side, outId, inId }, _replay);
@@ -520,7 +535,10 @@ P._applyPending = function () {
   for (const tm of this.teams) {
     if (!tm.pending.length) continue;
     const subs = tm.pending.filter(c => c.kind === 'sub');
-    if (subs.length && this.phase !== 'halftime' && !(this.t === 0 && this.half === 2)) tm.windowsUsed++;
+    if (subs.length && this.phase !== 'halftime' && !(this.t === 0 && this.half === 2) && tm.windowStoppage !== this.stoppage) {
+      tm.windowsUsed++;
+      tm.windowStoppage = this.stoppage;
+    }
     for (const c of tm.pending) {
       if (c.kind === 'sub') {
         const oi = this.players.findIndex(q => q.id === c.outId && q.onPitch);
@@ -788,7 +806,7 @@ P._tackles = function () {
       return;
     }
     const dd = this.dir(o.side), inBox = Math.abs(o.y - W / 2) < BOX_HALF && (dd > 0 ? o.x > L - BOX_D : o.x < BOX_D);
-    if (r() < (0.055 + 0.018 * press + (this.eff(t, 'tackling') < 9 ? 0.015 : 0)) * (inBox ? 0.06 : ownThird ? 0.5 : 1) * (t.yellow ? 0.35 : 1)) { this._foul(i, oi); return; }
+    if (r() < (TUNING.foulBase + TUNING.foulPress * press + (this.eff(t, 'tackling') < 9 ? 0.015 : 0)) * (inBox ? 0.06 : ownThird ? 0.5 : 1) * (t.yellow ? 0.35 : 1)) { this._foul(i, oi); return; }
     o.tackleImmune = 0.6;
   }
 };

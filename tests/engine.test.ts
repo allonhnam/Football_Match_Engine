@@ -86,6 +86,16 @@ describe('substitutions', () => {
     expect(acks[5].ok).toBe(false);
   });
 
+  it('counts substitutions made in the same stoppage as one window', () => {
+    const m = new E.Match(config(5, { control: 'home' }));
+    m.runUntil({ minute: 10 });
+    const outfield = m.onPitch(0).filter((q: any) => q.slot !== 0);
+    const bench = m.teams[0].bench.filter((p: any) => p.role !== 'GK');
+    for (let i = 0; i < 5; i++) expect(m.substitute(0, outfield[i].id, bench[i].id).ok).toBe(true);
+    expect(m.teams[0].windowsUsed).toBe(1);
+    expect(m.teams[0].subsUsed).toBe(5);
+  });
+
   it('refuses unknown players', () => {
     const m = new E.Match(config(5, { control: 'home' }));
     expect(m.substitute(0, 'nobody', 'nobody-else').ok).toBe(false);
