@@ -29,7 +29,7 @@ export function XgRace({ R, teams }: any) {
   );
 }
 export function ShotMap({ R, side, teams }: any) {
-  const shots = R.events.filter(e => (e.type === 'shot' || e.type === 'goal') && e.side === side);
+  const shots = R.events.filter(e => (e.type === 'shot' || e.type === 'goal') && !e.ownGoal && e.side === side);
   const W = 340, H = 250, s = W / 68;
   const pos = e => { const d = (e.side === 0) === (e.half === 1) ? 1 : -1; const x = d > 0 ? e.x : 105 - e.x, y = d > 0 ? e.y : 68 - e.y; return { cx: (68 - y) * s, cy: (105 - x) * s + 6 }; };
   return (
@@ -46,7 +46,7 @@ export function Report({ report, onReplay, onBack }: any) {
   const [resim, setResim] = useState(null), [resP, setResP] = useState(0), [copied, setCopied] = useState(null);
   const ts = R.teamStats.map(t => ({ ...t, cards: t.yellows + t.reds }));
   const pname = id => (R.playerStats.find(p => p.id === id) || {}).name || '';
-  const scorers = s => R.events.filter(e => e.type === 'goal' && e.side === s).map(e => `${lastName(pname(e.player))} ${e.minute}`).join(', ');
+  const scorers = s => R.events.filter(e => e.type === 'goal' && e.side === s).map(e => `${lastName(pname(e.player))}${e.ownGoal ? ' (og)' : ''} ${e.minute}`).join(', ');
   const rows = R.playerStats.slice().sort((a, b) => { const va = a[sort.k], vb = b[sort.k]; return (typeof va === 'string' ? va.localeCompare(vb) : (va ?? -1) - (vb ?? -1)) * sort.d; });
   const th = (k, l, cls = '') => <th className={`py-2 px-1.5 font-semibold text-[10.5px] tracking-[.1em] uppercase text-dim cursor-pointer select-none whitespace-nowrap ${cls}`} onClick={() => setSort(s => ({ k, d: s.k === k ? -s.d : -1 }))}>{l}{sort.k === k ? (sort.d < 0 ? ' ↓' : ' ↑') : ''}</th>;
   const runResim = async () => { setResP(0.01); const N = 120; const res = await runBatch(Array.from({ length: N }, (_, i) => ({ ...config, seed: 50000 + i, control: 'none' })), setResP); let same = 0, w = 0, d = 0, l = 0; res.forEach(r => { if (!r || r.errors) return; if (r.score[0] === R.score[0] && r.score[1] === R.score[1]) same++; if (r.score[0] > r.score[1]) w++; else if (r.score[0] < r.score[1]) l++; else d++; }); setResim({ same: same / N, w: w / N, d: d / N, l: l / N, N }); setResP(0); };

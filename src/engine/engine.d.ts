@@ -72,7 +72,19 @@ export interface MatchConfig {
 
 export type EventType =
   | 'kickoff' | 'goal' | 'shot' | 'corner' | 'offside' | 'foul' | 'yellow' | 'red'
-  | 'penalty' | 'sub' | 'injury' | 'tactic' | 'addedtime' | 'halftime' | 'fulltime' | 'abandoned';
+  | 'penalty' | 'sub' | 'injury' | 'tactic' | 'addedtime' | 'halftime' | 'fulltime' | 'abandoned'
+  /** Referee plays on after a foul; a second event with "No advantage" means the free kick was given after all. */
+  | 'advantage'
+  /** Play stopped for a serious injury; restarts with a dropped ball. */
+  | 'stoppage'
+  /** Goalkeeper held the ball in his hands for more than 8 seconds: corner to the opponents. */
+  | 'keeperholding'
+  /** A goal ruled out (handball by the scorer). */
+  | 'disallowed';
+
+/** What kind of offence a 'foul' event is: 'challenge' and 'handball' give a direct free kick or penalty,
+ * 'dangerous' (playing in a dangerous manner) and 'backpass' (keeper handles a back-pass) an indirect free kick. */
+export type Offence = 'challenge' | 'handball' | 'dangerous' | 'backpass';
 
 export interface MatchEvent {
   type: EventType;
@@ -93,6 +105,11 @@ export interface MatchEvent {
   y: number;
   text: string;
   score?: [number, number];
+  /** On 'goal' events: the goal was an own goal; player is the defender, side is the team credited. */
+  ownGoal?: boolean;
+  /** On 'foul' events. */
+  offence?: Offence;
+  victim?: string;
   [extra: string]: unknown;
 }
 
@@ -107,9 +124,11 @@ export interface TeamStats {
 
 export interface PlayerStats {
   id: string; name: string; num: number; role: Role; side: Side;
-  minutes: number; rating: number; goals: number; assists: number; shots: number;
+  minutes: number; rating: number; goals: number; ownGoals: number; assists: number; shots: number;
   xg: number; passes: number; passPct: number | null; tackles: number; saves: number;
   distKm: number; endCondition: number; yellow: number; red: boolean;
+  /** Why the player was sent off, or null. */
+  redReason: string | null;
   injury: { type: string; days: number } | null;
 }
 
@@ -117,12 +136,15 @@ export interface CarryOver {
   playerId: string; name: string; side: Side;
   minutesPlayed: number; endCondition: number;
   injury: { type: string; days: number } | null;
-  yellow: number; red: boolean; suspension: number;
+  yellow: number; red: boolean;
+  /** Matches banned: 1 after a second yellow or denying a goal, 3 after serious foul play. */
+  suspension: number;
 }
 
 export interface MatchExplanation {
   verdict: string;
-  factors: { title: string; body: string; weight: number; side: Side; t?: number }[];
+  /** Ranked reasons. good: the factor helped `side` (false: it hurt them). */
+  factors: { title: string; body: string; weight: number; side: Side; good: boolean; t?: number }[];
 }
 
 export type ManagerCommand =
@@ -224,3 +246,15 @@ export const TACTIC_LABELS: Record<TacticKey, [string, string, string]>;
 export const DEFAULT_TACTICS: Tactics;
 export const ATTRS: AttributeKey[];
 export const PITCH: { L: number; W: number };
+export const ENGINE_VERSION: string;
+/** Tactic trade-offs as multipliers on chance quality (see engine.js). */
+export const TACTIC_EDGE: {
+  concede: Record<TacticKey, [number, number, number]>;
+  create: Record<TacticKey, [number, number, number]>;
+  centralConcede: [number, number, number];
+  crossConcede: [number, number, number];
+};
+/** Style match-ups: [our tactic, option, their tactic, option, multiplier on our chances, description]. */
+export const MATCHUPS: [TacticKey, number, TacticKey, number, number, string][];
+/** Per formation: [chances created, chances conceded] multipliers. */
+export const FORMATION_EDGE: Record<FormationName, [number, number]>;

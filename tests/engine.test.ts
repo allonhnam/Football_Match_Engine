@@ -92,6 +92,8 @@ describe('substitutions', () => {
     const outfield = m.onPitch(0).filter((q: any) => q.slot !== 0);
     const bench = m.teams[0].bench.filter((p: any) => p.role !== 'GK');
     for (let i = 0; i < 5; i++) expect(m.substitute(0, outfield[i].id, bench[i].id).ok).toBe(true);
+    // Subs made in open play wait for the next stoppage; run until all five are on.
+    while (m.events.filter((e: any) => e.type === 'sub' && e.side === 0).length < 5 && !m.finished) m.runUntil({ event: 'sub' });
     expect(m.teams[0].windowsUsed).toBe(1);
     expect(m.teams[0].subsUsed).toBe(5);
   });
@@ -157,7 +159,8 @@ describe('realism guard rails', () => {
     let goals = 0, shots = 0, yellows = 0;
     const n = 30;
     for (let s = 1; s <= n; s++) {
-      const r: any = E.simulateMatch({ home: team('H', 11), away: team('A', 22), seed: s, control: 'none', neutral: true });
+      // a fresh pair of equal-strength squads every match: one fixed pair gives squad-specific numbers
+      const r: any = E.simulateMatch({ home: team('H', 100 + 2 * s), away: team('A', 101 + 2 * s), seed: s, control: 'none', neutral: true });
       goals += r.score[0] + r.score[1];
       shots += r.teamStats[0].shots + r.teamStats[1].shots;
       yellows += r.teamStats[0].yellows + r.teamStats[1].yellows;

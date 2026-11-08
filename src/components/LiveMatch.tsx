@@ -90,7 +90,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
   const ts = liveStats(m), [h, a] = m.teams;
   const evList = m.events.filter(e => e.type !== 'kickoff' || e.half === 2 || e.tick <= 1).filter(e => !keyOnly || e.key || e.type === 'kickoff' || e.type === 'tactic' || (e.type === 'shot' && e.xg > 0.15)).slice().reverse();
   const reds = s => m.players.filter(q => q.side === s && q.red).length;
-  const restart = m.phase === 'dead' && m.restart && !overlay ? RESTART_LABEL[m.restart.type] : null;
+  const restart = m.phase === 'dead' && m.restart && !overlay ? (m.restart.type === 'freekick' && !m.restart.direct ? 'Indirect free kick' : RESTART_LABEL[m.restart.type]) : null;
   const half = m.finished ? 'FULL TIME' : m.phase === 'halftime' ? 'HALF-TIME' : m.half === 1 ? '1ST HALF' : '2ND HALF';
   const ratings = tab === 'players' ? new Map<string, any>(m.result().playerStats.map(p => [p.id, p] as [string, any])) : null;
   const teamHead = (t, s, right = false) => (
@@ -103,7 +103,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
       <div className="w-[3px] shrink-0" style={{ background: color || 'var(--accent)' }} />
       <div className="px-3 py-2 sm:px-4 sm:py-3"><div className="text-[9.5px] sm:text-[10px] tracking-[.14em] font-bold" style={{ color: color || 'var(--accent)' }}>{eyebrow}</div><div className="text-white font-semibold text-[13px] sm:text-[15px] leading-tight mt-0.5 sm:mt-1">{title}</div>{body && <div className="hidden sm:block text-white/60 text-[11.5px] mt-1">{body}</div>}</div>
     </div>);
-  const bannerColor = b => b.type === 'goal' ? m.teams[b.side].color : b.type === 'yellow' ? 'rgb(var(--c-yellow))' : b.type === 'red' || b.type === 'injury' ? 'var(--bad)' : 'var(--accent)';
+  const bannerColor = b => b.type === 'goal' ? m.teams[b.side].color : b.type === 'yellow' ? 'rgb(var(--c-yellow))' : b.type === 'red' || b.type === 'injury' || b.type === 'disallowed' ? 'var(--bad)' : 'var(--accent)';
   const bannerParts = b => { const [, sub] = eventTitle(b, m); const parts = sub.split(' · '); return b.type === 'goal' ? [parts[0], `${parts.slice(1).join(' · ')} · ${h.short} ${b.score?.[0]}–${b.score?.[1]} ${a.short}`] : [sub, null]; };
   return (
     <div className="grid lg:grid-cols-[minmax(0,1fr)_400px] lg:h-[calc(100vh-56px)]">
@@ -120,7 +120,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
         <div className="relative w-full aspect-[113/76] lg:aspect-auto lg:flex-1 lg:min-h-[320px] rounded-lg overflow-hidden border border-line" style={{ background: 'var(--pitch-a)' }}>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" aria-label="Live 2D match view" />
           {restart && <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-[3px] text-white text-[10.5px] px-2.5 py-1 font-bold tracking-[.14em] uppercase" style={{ background: 'var(--chip)' }}>{restart}</div>}
-          {banner ? <div key={banner.id}>{card(`${{ goal: 'GOAL', yellow: 'YELLOW CARD', red: 'RED CARD', sub: 'SUBSTITUTION', injury: 'INJURY', penalty: 'PENALTY' }[banner.type]} · ${banner.minute}`, bannerParts(banner)[0], bannerParts(banner)[1], bannerColor(banner))}</div>
+          {banner ? <div key={banner.id}>{card(`${{ goal: banner.ownGoal ? 'OWN GOAL' : 'GOAL', yellow: 'YELLOW CARD', red: 'RED CARD', sub: 'SUBSTITUTION', injury: 'INJURY', penalty: 'PENALTY', disallowed: 'NO GOAL' }[banner.type]} · ${banner.minute}`, bannerParts(banner)[0], bannerParts(banner)[1], bannerColor(banner))}</div>
             : insight && settings.insights && !overlay ? <div key={insight.at}>{card(`LIVE INSIGHT · ${insight.range}`, insight.title, insight.body)}</div> : null}
           {overlay && (
             <div className="absolute inset-0 grid place-items-center bg-black/45 backdrop-blur-[2px] p-2 sm:p-4 overflow-y-auto">
