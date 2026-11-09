@@ -245,7 +245,7 @@ function Match(config) {
   this.kickT = 0; this.subTimes = []; this._possSide = -1; this._ballKey = -99; this.restart = null; this.decisionT = 0;
   this.lastPasser = -1; this.lastPasserT = -99; this._edge = [1, 1]; this._central = [1, 1]; this._crossEdge = [1, 1]; this._cutOut = [1, 1]; this._edgeSum = [0, 0]; this._edgeN = 0; this._keyPass = null; this._loosePass = null; this._side = [[], []]; this._markOrder = []; this._trace = null; // set _trace to an array to record every option a player weighs (debugging)
   this.gkHands = -1; this.gkHandsT = 0; this.advantage = null; this.pendingCards = [];
-  this.treating = []; this.leaving = []; // players off the field for treatment, and substituted players walking off
+  this.etFirstKick = 0; this.treating = []; this.leaving = []; // players off the field for treatment, and substituted players walking off
   this.events = []; this.commands = []; this.listeners = [];
   this.momentum = []; // per minute [homeThreat, awayThreat]
   this.possMin = []; this.boxMin = []; this.f3Min = []; this._zone = [0, 0];
@@ -281,7 +281,7 @@ function Match(config) {
 const P = Match.prototype;
 
 P._mkRuntime = function (p, side, slot, onPitch) {
-  return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, tackleImmune: 0, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, tackleCd: 0, runOff: 0, boxRun: false, spaceK: 0, turned: true,
+  return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, tackleImmune: 0, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, tackleCd: 0, runOff: 0, boxRun: false, spaceK: 0, turned: true, treat: null, waitFor: null, leaving: null, gd: 0,
     st: { ownGoals: 0, claims: 0, minutes: 0, passes: 0, passesOk: 0, shots: 0, goals: 0, assists: 0, xg: 0, tackles: 0, interceptions: 0, fouls: 0, saves: 0, dist: 0, onAt: onPitch ? 0 : null, offAt: null } };
 };
 P.dir = function (side) { return (side === 0) === (this.half % 2 === 1) ? 1 : -1; }; // teams change ends every period
@@ -1074,15 +1074,25 @@ const SHAPE = { backGap: 30, mfAhead: [-10, 9], boxRun: 0.35, lineDepth: 0.4, dr
 // Off the ball, a supporting player drifts to the nearby spot with the most room and a clear line to the ball,
 // never beyond `lim` (the offside line) and preferring the spot he chose last time, so he does not dither.
 const SPACE_OFFSETS = [[0, 0], [4, 0], [-4, 0], [0, 5], [0, -5], [3, 4], [3, -4], [-3, 4], [-3, -4]];
+const SPACE_COST = SPACE_OFFSETS.map(o => 0.3 * Math.hypot(o[0], o[1]));
 P._findSpace = function (q, lim) {
-  const b = this.ball, opp = this._side[1 - q.side], d = this.dir(q.side);
+  const b = this.ball, opp = this._side[1 - q.side], d = this.dir(q.side), n0 = opp.length;
   let best = -1e9, bk = 0, bx = q.tx, by = q.ty;
   for (let k = 0; k < SPACE_OFFSETS.length; k++) {
     let cx = clamp(q.tx + d * SPACE_OFFSETS[k][0], 1, L - 1); const cy = clamp(q.ty + SPACE_OFFSETS[k][1], 2, W - 2);
     if (lim != null && (cx - lim) * d > 0) cx = lim;
-    let room = 10, lane = 5;
-    for (let n = 0; n < opp.length; n++) { const o = opp[n]; const rr = dist(o.x, o.y, cx, cy); if (rr < room) room = rr; const ll = segDist(o.x, o.y, b.x, b.y, cx, cy); if (ll < lane) lane = ll; }
-    const sc = room + 0.7 * lane - 0.3 * Math.hypot(SPACE_OFFSETS[k][0], SPACE_OFFSETS[k][1]) + (k === q.spaceK ? 1 : 0);
+    // nearest opponent to the spot, and nearest to the line from the ball to it: compared squared, rooted once
+    // (the same numbers dist and segDist would give, since the square root keeps the order)
+    const sx = cx - b.x, sy = cy - b.y, l2 = sx * sx + sy * sy;
+    let room2 = Infinity, lane2 = Infinity;
+    for (let n = 0; n < n0; n++) {
+      const o = opp[n];
+      const rx = o.x - cx, ry = o.y - cy, rr = rx * rx + ry * ry; if (rr < room2) room2 = rr;
+      let u = l2 ? ((o.x - b.x) * sx + (o.y - b.y) * sy) / l2 : 0; u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const lx = o.x - (b.x + u * sx), ly = o.y - (b.y + u * sy), ll = lx * lx + ly * ly; if (ll < lane2) lane2 = ll;
+    }
+    const room = room2 < 100 ? Math.sqrt(room2) : 10, lane = lane2 < 25 ? Math.sqrt(lane2) : 5;
+    const sc = room + 0.7 * lane - SPACE_COST[k] + (k === q.spaceK ? 1 : 0);
     if (sc > best) { best = sc; bk = k; bx = cx; by = cy; }
   }
   q.spaceK = bk; q.tx = bx; q.ty = by;
@@ -1162,7 +1172,9 @@ P._targets = function () {
     // the most dangerous attacker (nearest the goal) is picked up first
     const order = this._markOrder; order.length = 0;
     for (let k = 0; k < theirs.length; k++) order.push(theirs[k]);
-    order.sort((p, q) => dist(p.x, p.y, ownGoal, W / 2) - dist(q.x, q.y, ownGoal, W / 2));
+    for (let k = 0; k < order.length; k++) order[k].gd = dist(order[k].x, order[k].y, ownGoal, W / 2);
+    // stable insertion sort: the same order Array.prototype.sort (also stable) gives, without allocating
+    for (let k = 1; k < order.length; k++) { const a = order[k]; let j = k - 1; while (j >= 0 && order[j].gd > a.gd) { order[j + 1] = order[j]; j--; } order[j + 1] = a; }
     for (let k = 0; k < order.length; k++) {
       const a = order[k];
       if (a.slot === 0 || Math.abs(a.x - ownGoal) > 36) continue;
