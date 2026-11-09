@@ -11,21 +11,22 @@ const TUNING = {
   finishSkill: 3.2,     // how much a finisher's shooting (or heading) changes his odds of scoring a chance
   keepSkill: 2.5,       // how much the keeper's keeping changes them the other way
   xgScale: 1.45,       // shot quality at point-blank range, before distance, angle and pressure (sets the xG scale)
-  finishing: 2.45,     // multiplier on the chance an on-target shot scores
-  foulBase: 0.126,      // chance a tackle attempt is a foul
+  finishing: 1.74,     // multiplier on the chance an on-target shot scores
+  foulBase: 0.145,      // chance a tackle attempt is a foul
   foulPress: 0.07,     // extra foul chance per level of pressing
-  yellowBase: 0.166,     // chance a foul is booked
+  yellowBase: 0.162,     // chance a foul is booked
   homeAdvantage: 0.3,   // attribute points the home side gains on every skill
-  onTarget: 0.228,        // base chance a shot is on target, before skill and shot quality
-  offsideTiming: 3.02,   // metres a run or a pass can be mistimed by (more for a passer with poor vision)
+  onTarget: 0.128,        // base chance a shot is on target, before skill and shot quality
+  offsideTiming: 2.44,   // metres a run or a pass can be mistimed by (more for a passer with poor vision)
   // How a player on the ball weighs his options (see _decide): each is worth its chance of success times the value
   // of where the ball ends up, minus the chance of losing it times what that gives the opponent.
-  threat: 0.3,          // possession value near goal (see _possValue)
+  threat: 0.45,          // possession value near goal (see _possValue)
   room: 0.06,           // per metre of space a receiver has: a tightly marked player gets half of a position's value
-  shotAppetite: 0,  // extra pull of a shot regardless of its quality: players shoot from range more than pure value says
-  blockChance: 0.25,    // chance each defender in the line of a shot (within 7 m) blocks it; players weigh it before shooting
-  shotBias: 2.92,        // how keen players are to shoot rather than keep the ball for a better chance
-  crossValue: 0.225,     // what a cross that finds a team-mate's head is worth
+  shotAppetite: -0.0226,  // extra pull of a shot regardless of its quality: players shoot from range more than pure value says
+  blockChance: 0.137,    // chance each defender in the line of a shot (within 7 m) blocks it; players weigh it before shooting
+  shotBias: 4.87,        // how keen players are to shoot rather than keep the ball for a better chance
+  mentalityShoot: 0.3,  // how much Attack (or Defend) mentality raises (or lowers) the urge to shoot
+  crossValue: 0.12,     // what a cross that finds a team-mate's head is worth
   lossWeight: 4,      // how much players fear losing the ball, relative to what it gives the opponent
   fatigue: 1.6,         // how fast running drains condition (players end a match at about 80%)
   think: 1.25,           // how long players take on the ball before acting (multiplier)
@@ -33,7 +34,7 @@ const TUNING = {
   carryReach: 2.5,      // metres from his path at which an opponent can challenge a carrier
   carryLoss: 0.3,       // chance such an opponent takes the ball, before tackling against dribbling
   carryPace: 0.6,       // share of top speed for a carrier with opponents in front (0.85 with open space)
-  intercept: 0.3,       // chance per tick an opponent within 1.5 m of a ball along the ground cuts it out (average defender)
+  intercept: 0.24,       // chance per tick an opponent within 1.5 m of a ball along the ground cuts it out (average defender)
   passError: 0.02,      // spread of a pass per metre for a perfect passer (worse passers and pressure add to it)
   longError: 1.5,       // a long ball in the air is less accurate than a pass along the ground
   heavyLoft: 0.08,      // and harder to control as it drops
@@ -41,9 +42,16 @@ const TUNING = {
   deflect: 0.5,        // share of interceptions that only deflect the ball, leaving it loose
   overhit: 0.35, 
   crossBlock: 0.1, 
-  blockCorner: 0.475,     // share of blocked shots that go behind for a corner
+  blockCorner: 0.3,     // share of blocked shots that go behind for a corner
      // chance an open-play cross is blocked by a defender standing in front of the crosser
        // chance an average crosser over-hits it out of play
+  ballFriction: 0.789,    // share of a loose ball's speed left after a second on the grass
+  headedBehind: 0.18,   // share of headers the defenders win at a cross that go behind for a corner
+  aerialWin: 0.272,      // base chance the attacker wins the header where a cross lands (before heading skill)
+  fkShoot: 0.45,        // chance a direct free kick within 30 m of goal is shot at goal
+  fkCross: 0.7,         // chance a free kick wide or further out in the attacking third is crossed into the box
+  rollOn: 1,            // how far a pass nobody reaches runs on (x the old roll): balls into space run out of play
+  clearWide: 6,         // metres a clearance is aimed towards the near touchline
   heavyTouch: 0.03,     // chance a received pass gets away from an average player (more for fast balls and under pressure)
   cutInside: 1.4,       // how much wide forwards favour cutting inside onto goal over other carries
   turnKeep: 0.75,       // chance of keeping the ball when turning with a marker tight behind
@@ -56,8 +64,8 @@ const TUNING = {
   // Game state, tuned against half-time and full-time scores (55% of real goals come after the break; a half-time
   // leader wins 73% and loses 9%). Multipliers on the chances a side creates, applied to every side and tactic alike.
   lateOpenness: 0.32,   // chances improve through the match (tired legs, stretched games): x(1 + k * (minute/90 - 0.5))
-  chasing: 0.27,        // per goal behind (up to 2): the trailing side commits men forward
-  sittingOn: 0.08,      // per goal ahead (up to 2): the leading side drops off and creates less
+  chasing: 0.14,        // per goal behind (up to 2): the trailing side commits men forward
+  sittingOn: 0.03,      // per goal ahead (up to 2): the leading side drops off and creates less
   // Time-wasting by a side leading after 75 minutes, and the referee's answers to it (Laws 12, 15 and 16)
   wasteTime: 0.35,      // its restarts take this much longer
   delayCaution: 0.05,   // chance per such restart that the taker is cautioned for delaying it
@@ -106,7 +114,7 @@ const DEFAULT_TACTICS = { mentality: 1, pressing: 1, line: 1, width: 1, tempo: 1
 // Seconds from the ball going dead to the restart: [minimum, random extra]. Roughly the averages in top leagues.
 const RESTART_TIME = { throwin: [9, 11], goalkick: [22, 18], corner: [28, 20], freekick: [24, 28], penalty: [50, 40], dropball: [10, 10] };
 const ATTRS = ['pace', 'stamina', 'passing', 'vision', 'dribbling', 'shooting', 'heading', 'tackling', 'positioning', 'keeping'];
-const ENGINE_VERSION = '0.5.1';
+const ENGINE_VERSION = '0.6.0';
 const KEY_EVENTS = { shootoutkick: 1, extratime: 1, goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
 
 // ---------- RNG (mulberry32, serialisable) ----------
@@ -321,6 +329,13 @@ P._setRestart = function (type, side, x, y, delay, extra) {
   }
   if (type === 'throwin') this.teams[side].stats.throwIns++; else if (type === 'goalkick') this.teams[side].stats.goalKicks++;
   this.restart = Object.assign({ type, side, x: this.ball.x, y: this.ball.y, timer: delay, taker }, extra || {});
+  if (type === 'freekick') {
+    // Within range a direct free kick is often shot at goal; wide or further out in the attacking third it is
+    // crossed into a box loaded with the tallest players, like a corner.
+    const d = this.dir(side), bx = this.ball.x, by = this.ball.y, fxa = d > 0 ? bx : L - bx, dd = dist(bx, by, d > 0 ? L : 0, W / 2);
+    if (this.restart.direct && dd < 30 && Math.abs(by - W / 2) < 20 && this.rng() < TUNING.fkShoot) this.restart.shootable = true;
+    else if (fxa > 68 && dd > 20 && this.rng() < TUNING.fkCross) this.restart.delivery = true;
+  }
   if (wasting) {
     // A side protecting a late lead takes its time. The referee may caution the taker for delaying the restart
     // (Law 12), and at a throw-in or goal kick start a visible 5-second countdown (Laws 15 and 16).
@@ -378,10 +393,10 @@ P._resume = function () {
   this._give(r.taker);
   const d = this.dir(r.side);
   if (r.type === 'penalty') { this._shoot(r.taker, { xg: 0.76, penalty: true }); return; }
-  if (r.type === 'corner') { this._cross(r.taker); return; }
-  if (r.type === 'freekick' && r.direct) {
+  if (r.type === 'corner' || r.delivery) { this._cross(r.taker, false, r.type === 'freekick'); return; }
+  if (r.shootable) {
     const gx = d > 0 ? L : 0, dd = dist(r.x, r.y, gx, W / 2);
-    if (dd < 30 && this.rng() < 0.45) { this._shoot(r.taker, { xg: clamp(0.11 - (dd - 18) * 0.006, 0.03, 0.12), freekick: true }); return; }
+    this._shoot(r.taker, { xg: clamp(0.11 - (dd - 18) * 0.006, 0.03, 0.12), freekick: true }); return;
   }
   this.restart = null; this.decisionT = r.type === 'kickoff' ? 0.3 : 0.6;
   this.restartType = r.type;
@@ -627,7 +642,7 @@ P._decide = function (i) {
     const xg = this._xg(q.x, q.y, q.side, press);
     // each defender in the line of the shot may block it
     const through = Math.pow(1 - TUNING.blockChance, this._blockers(q));
-    if (xg > 0.01 * TUNING.xgScale) pick((xg + TUNING.shotAppetite) * through * TUNING.shotBias * [0.85, 1, 1.15][T.mentality] * (0.9 + this.eff(q, 'shooting') / 100), { kind: 'shoot' });
+    if (xg > 0.01 * TUNING.xgScale) pick((xg + TUNING.shotAppetite) * through * TUNING.shotBias * (1 + TUNING.mentalityShoot * (T.mentality - 1)) * (0.9 + this.eff(q, 'shooting') / 100), { kind: 'shoot' });
   }
   // carry: straight on, or angled in or out
   if (this.gkHands !== i) {
@@ -676,7 +691,7 @@ P._decide = function (i) {
   else if (best.kind === 'pass') this._pass(i, best.j, best.tx, best.ty, false);
   else if (best.kind === 'cross') this._cross(i, true);
   else if (best.kind === 'touch') this._kick(i, best.tx, best.ty, 'clear', -1, 3 + r() * 4);
-  else if (best.kind === 'clear') { const tx = clamp(q.x + d * (35 + r() * 20), 2, L - 2), ty = clamp(q.y + (r() - 0.5) * 40 + (q.y < W / 2 ? -6 : 6), -8, W + 8); this._kick(i, tx, ty, 'clear', -1, 4 + r() * 6); }
+  else if (best.kind === 'clear') { const tx = clamp(q.x + d * (35 + r() * 20), 2, L - 2), ty = clamp(q.y + (r() - 0.5) * 40 + (q.y < W / 2 ? -1 : 1) * TUNING.clearWide, -8, W + 8); this._kick(i, tx, ty, 'clear', -1, 4 + r() * 6); }
   else {
     // run at the defence when there is room in front, otherwise keep the ball moving at a jog
     let open = true;
@@ -718,7 +733,7 @@ P._kick = function (i, tx, ty, kind, j, h) {
     cutOut: kind === 'clear' ? 1 : Math.max(0.35, 1.85 - this.eff(q, 'passing') / 14) };
   q.carry = null; this.kickT = this.clockSec();
 };
-P._cross = function (i, open) {
+P._cross = function (i, open, fk) {
   const q = this.players[i], d = this.dir(q.side), r = this.rng;
   const gx = d > 0 ? L : 0;
   // an open-play cross into a defender standing in front of the crosser is blocked, often behind for a corner
@@ -744,7 +759,17 @@ P._cross = function (i, open) {
   let tx = clamp(aimX + (r() - 0.5) * 8 * acc, gx > 0 ? L - 18 : 2, gx > 0 ? L - 2 : 18), ty = aimY + (r() - 0.5) * 10 * acc;
   if (r() < TUNING.overhit * acc) { if (r() < 0.3) { ty = q.y < W / 2 ? W + 2 + r() * 4 : -2 - r() * 4; tx = clamp(tx + d * r() * 6, -3, L + 3); } else { tx = gx + d * (1 + r() * 3); ty = W / 2 + (q.y < W / 2 ? 1 : -1) * (5 + r() * 12); } } // over-hit: out beyond the far post, or over the bar's line
   if (j < 0) { let bd = 1e9; this.players.forEach((m, k) => { if (m.onPitch && m.side === q.side && k !== i && m.slot !== 0) { const dd = dist(m.x, m.y, tx, ty) - this.eff(m, 'heading') * 0.2; if (dd < bd) { bd = dd; j = k; } } }); }
-  this.restartType = open ? null : 'corner';
+  // a free kick into the box can be offside (a corner cannot, Law 11)
+  if (fk && j >= 0) {
+    const m = this.players[j], gap = (m.x - this._offsideLine(q.side)) * d;
+    if (gap + (r() - 0.5) * 2 > 0.3 && (m.x - q.x) * d > 0) {
+      this.teams[q.side].stats.offsides++;
+      this._emit({ type: 'offside', side: q.side, player: m.id, text: m.p.name + ' is caught offside from the free kick', x: m.x, y: m.y });
+      this._setRestart('freekick', 1 - q.side, m.x, m.y, 4, { direct: false });
+      return;
+    }
+  }
+  this.restartType = open || fk ? null : 'corner';
   this.teams[q.side].stats.passes++; q.st.passes++;
   this._kick(i, tx, ty, 'cross', j, 4.5);
 };
@@ -777,7 +802,7 @@ P._foul = function (ti, oi, kind, o2) {
   const agg = [0.85, 1, 1.25][tt.tactics.pressing];
   if (kind === 'challenge') {
     if (lastMan && !inBox && r() < 0.08) { card = 'red'; why = 'denied an obvious goal-scoring opportunity'; }
-    else if (r() < 0.0048) { card = 'red'; why = 'serious foul play'; }
+    else if (r() < 0.0036) { card = 'red'; why = 'serious foul play'; }
     else if (r() < (TUNING.yellowBase * agg + (lastMan ? 0.4 : 0)) * (t.yellow ? 0.55 : 1)) { card = 'yellow'; why = lastMan ? (inBox ? 'penalty, denied a goal-scoring chance' : 'stopped a promising attack') : ''; }
   } else if (kind === 'handball') {
     if (o2.denyGoal) { card = 'red'; why = 'handball denied a goal'; }
@@ -1216,9 +1241,9 @@ P._restartTargets = function () {
       const dd = dist(q.tx, q.ty, b.x, b.y); if (dd < keep && q.slot !== 0) { const a = Math.atan2(q.ty - b.y, q.tx - b.x); q.tx = b.x + Math.cos(a) * keep; q.ty = b.y + Math.sin(a) * keep; }
       if (r.type === 'goalkick' && this._inOwnBox(r.side, q.tx, q.ty)) q.tx = this.dir(r.side) > 0 ? BOX_D + 1 : L - BOX_D - 1;
     }
-    if (r.type === 'corner') {
+    if (r.type === 'corner' || r.delivery) {
       const d = this.dir(r.side), gx = d > 0 ? L : 0;
-      if (q.slot !== 0 && (q.side === r.side ? q.p.role !== 'MF' || q.slot % 2 : true)) { if (Math.abs(q.tx - gx) > 18 && q.side !== r.side || q.side === r.side && q.p.role !== 'MF') { q.tx = gx - d * (5 + (q.slot % 4) * 3); q.ty = W / 2 + ((q.slot * 7) % 13 - 6); } }
+      if (q.slot !== 0 && (q.side === r.side ? q.p.role !== 'MF' || q.slot % 2 : true)) { if (Math.abs(q.tx - gx) > 18 && q.side !== r.side || q.side === r.side && q.p.role !== 'MF') { q.tx = gx - d * (r.delivery ? (q.side === r.side ? 9 + (q.slot % 4) * 2 : 8 + (q.slot % 4) * 1.5) : 5 + (q.slot % 4) * 3); q.ty = W / 2 + ((q.slot * 7) % 13 - 6); } }
     }
     q.tx = clamp(q.tx, -0.5, L + 0.5); q.ty = clamp(q.ty, -0.5, W + 0.5); // never send anyone off the field
     q.urgent = 0;
@@ -1431,7 +1456,7 @@ P._flight = function () {
   b.x = f.sx + (f.tx - f.sx) * u; b.y = f.sy + (f.ty - f.sy) * u; b.z = 4 * f.h * u * (1 - u);
   if (f.kind === 'shot') { if (u >= 1) { b.flight = null; this._resolveShot(f); } return; }
   // interception
-  if (b.z < 2.2 && f.el > 0.15) {
+  if (b.z < 2.2 && f.el > 0.15 && !(f.kind === 'cross' && u > 0.5)) { // a cross dropping into the box is contested in the air where it lands (below)
     for (let i = 0; i < this.players.length; i++) {
       const q = this.players[i];
       if (!q.onPitch || q.side === this.players[f.passer].side) continue;
@@ -1472,11 +1497,11 @@ P._flight = function () {
       if (f.kind === 'cross' && q.side === passer.side && Math.abs(q.x - (this.dir(q.side) > 0 ? L : 0)) < 17) {
         // contested header
         const opp = this._nearestOpp(q);
-        const win = opp.d > 2 ? 0.8 : clamp(0.42 + (this.eff(q, 'heading') - this.eff(this.players[opp.i], 'heading')) / 30, 0.15, 0.75);
+        const win = opp.d > 2 ? 0.8 : clamp(TUNING.aerialWin + (this.eff(q, 'heading') - this.eff(this.players[opp.i], 'heading')) / 30, 0.15, 0.8);
         if (r() < win) { this.ball.owner = -1; this.ball.lastSide = q.side; q.x = b.x; q.y = b.y; this.ball.z = 1.8; this._shoot(take, { header: true }); return; }
         take = opp.i;
         { const c0 = this.players[take]; if (c0.slot !== 0 && Math.abs(c0.x - (this.dir(c0.side) > 0 ? 0 : L)) < 6 && Math.abs(c0.y - W / 2) < 9 && r() < 0.06) { this._ownGoal(take); return; } }
-        if (r() < 0.32) { const ad = this.dir(q.side); this.teams[q.side].stats.corners++; this._emit({ type: 'corner', side: q.side, text: 'Headed behind. Corner to ' + this.teams[q.side].name }); this._setRestart('corner', q.side, ad > 0 ? L - 0.3 : 0.3, b.y < W / 2 ? 0.3 : W - 0.3, 6); return; }
+        if (r() < TUNING.headedBehind) { const ad = this.dir(q.side); this.teams[q.side].stats.corners++; this._emit({ type: 'corner', side: q.side, text: 'Headed behind. Corner to ' + this.teams[q.side].name }); this._setRestart('corner', q.side, ad > 0 ? L - 0.3 : 0.3, b.y < W / 2 ? 0.3 : W - 0.3, 6); return; }
         const c = this.players[take]; const d = this.dir(c.side);
         this._give(take); this._kick(take, clamp(c.x + d * (20 + r() * 20), 2, L - 2), clamp(c.y + (r() - 0.5) * 50, -8, W + 8), 'clear', -1, 5); return;
       }
@@ -1491,13 +1516,13 @@ P._flight = function () {
       this._give(take);
     } else {
       // nobody there: it keeps rolling (a ball dropping from the air bounces on more slowly)
-      const dx = f.tx - f.sx, dy = f.ty - f.sy, D = Math.sqrt(dx * dx + dy * dy) || 1, v = f.speed * (f.h > 1.5 ? 0.2 : 0.35); this._loose(b.x, b.y, dx / D * v, dy / D * v);
+      const dx = f.tx - f.sx, dy = f.ty - f.sy, D = Math.sqrt(dx * dx + dy * dy) || 1, v = f.speed * (f.h > 1.5 ? 0.2 : 0.35) * TUNING.rollOn; this._loose(b.x, b.y, dx / D * v, dy / D * v);
       if (f.kind === 'pass' && f.recv >= 0) this._loosePass = { recv: f.recv, t: this.clockSec() }; // he may still run onto it
     }
   }
 };
 P._looseBall = function () {
-  const b = this.ball, fr = Math.pow(0.5, DT);
+  const b = this.ball, fr = Math.pow(TUNING.ballFriction, DT);
   b.x += b.vx * DT; b.y += b.vy * DT; b.vx *= fr; b.vy *= fr;
   let take = -1, bd = 1e9;
   for (let i = 0; i < this.players.length; i++) { const q = this.players[i]; if (!q.onPitch || q.injured) continue; const dd = dist(q.x, q.y, b.x, b.y); if (dd >= 1.1) continue; const sc = dd + this.rng() * 0.8 - this.eff(q, 'pace') * 0.01; if (sc < bd) { bd = sc; take = i; } }
