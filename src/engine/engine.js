@@ -14,9 +14,14 @@ const TUNING = {
   foulBase: 0.08,      // chance a tackle attempt is a foul
   foulPress: 0.02,     // extra foul chance per level of pressing
   yellowBase: 0.186,     // chance a foul is booked
-  homeAdvantage: 0.45,   // attribute points the home side gains on every skill
+  homeAdvantage: 0.38,   // attribute points the home side gains on every skill
   onTarget: 0.045,        // base chance a shot is on target, before skill and shot quality
   offsideTiming: 8.1,   // how badly forwards mistime runs (bigger means more offsides)
+  // Game state, tuned against half-time and full-time scores (55% of real goals come after the break; a half-time
+  // leader wins 73% and loses 9%). Multipliers on the chances a side creates, applied to every side and tactic alike.
+  lateOpenness: 0.3,   // chances improve through the match (tired legs, stretched games): x(1 + k * (minute/90 - 0.5))
+  chasing: 0.12,        // per goal behind (up to 2): the trailing side commits men forward
+  sittingOn: 0.04,      // per goal ahead (up to 2): the leading side drops off and creates less
 };
 // Tactical trade-offs. The 2D model produces most effects of a tactic by itself (shape, pressing runs, pass
 // length, decision speed, stamina), but it is too coarse to make every option cost something, so each setting
@@ -32,7 +37,7 @@ const TACTIC_EDGE = {
   crossConcede: [1.15, 1, 0.9],
 };
 // Formation trade-offs on the same scale: [chances created, chances conceded]
-const FORMATION_EDGE = { '4-3-3': [1, 1], '4-4-2': [1.09, 0.95], '4-2-3-1': [0.93, 1.03], '3-5-2': [1.03, 0.98], '5-3-2': [1.02, 0.94] };
+const FORMATION_EDGE = { '4-3-3': [1, 1], '4-4-2': [1.05, 0.95], '4-2-3-1': [0.86, 1.03], '3-5-2': [1.03, 0.98], '5-3-2': [1.02, 0.94] };
 // Rock-paper-scissors between styles: [our tactic, option, their tactic, option, multiplier on our chances]
 const MATCHUPS = [
   ['passing', 2, 'line', 2, 1.18, 'direct balls in behind a high line'],
@@ -58,7 +63,7 @@ const TACTIC_LABELS = {
 };
 const DEFAULT_TACTICS = { mentality: 1, pressing: 1, line: 1, width: 1, tempo: 1, passing: 1 };
 const ATTRS = ['pace', 'stamina', 'passing', 'vision', 'dribbling', 'shooting', 'heading', 'tackling', 'positioning', 'keeping'];
-const ENGINE_VERSION = '0.3.0';
+const ENGINE_VERSION = '0.4.0';
 const KEY_EVENTS = { shootoutkick: 1, extratime: 1, goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
 
 // ---------- RNG (mulberry32, serialisable) ----------
@@ -173,7 +178,7 @@ function Match(config) {
   this.seed = config.seed >>> 0;
   this.rng = makeRng(this.seed);
   this.control = config.control || 'home'; // which side(s) the human manages; others use the AI manager
-  this.tick = 0; this.half = 1; this.t = 0; this.added = [0, 0, 0, 0];
+  this.tick = 0; this.half = 1; this.t = 0; this.added = [0, 0, 0, 0]; this.htScore = null;
   // Knockout ties: true, or { aggregate: [home, away] } with the goals each side scored in earlier legs.
   this.knockout = config.knockout ? { aggregate: (config.knockout.aggregate || [0, 0]).slice(0, 2) } : null;
   this.shootout = null; this.winner = null;
@@ -317,8 +322,14 @@ P._xg = function (x, y, side, pressure) {
   const ang = Math.abs(a1 - a2);
   let xg = 0.95 * Math.exp(-dd / 7.2) * Math.min(1, ang / 0.5);
   if (pressure < 1.5) xg *= 0.6; else if (pressure < 3) xg *= 0.82;
-  xg *= this._edge[side] * (Math.abs(y - W / 2) < 9 ? this._central[1 - side] : 1);
+  xg *= this._edge[side] * (Math.abs(y - W / 2) < 9 ? this._central[1 - side] : 1) * this._gameState(side);
   return clamp(xg, 0.005, 0.85);
+};
+// How the score and the clock change a side's chances (see TUNING): games open up late, and the side behind pushes.
+P._gameState = function (side) {
+  const lead = clamp(this.teams[side].score - this.teams[1 - side].score, -2, 2);
+  const t = Math.min(this.clockSec() / 60, 120) / 90;
+  return (1 + TUNING.lateOpenness * (t - 0.5)) * (lead < 0 ? 1 - TUNING.chasing * lead : 1 - TUNING.sittingOn * lead);
 };
 P._shoot = function (i, o) {
   o = o || {};
@@ -1141,7 +1152,8 @@ P._endHalf = function () {
   this.ball.flight = null; this.ball.owner = -1;
   if (this.half === 1 || this.half === 3) {
     this.phase = 'halftime';
-    this._emit({ type: 'halftime', text: (this.half === 3 ? 'Half-time in extra time: ' : 'Half-time: ') + sc });
+    if (this.half === 1) this.htScore = [this.teams[0].score, this.teams[1].score];
+    this._emit({ type: 'halftime', text: (this.half === 3 ? 'Half-time in extra time: ' : 'Half-time: ') + sc, score: [this.teams[0].score, this.teams[1].score] });
     return;
   }
   if (this.half === 2 && this.knockout && this._tieLevel()) {
@@ -1271,7 +1283,7 @@ P.result = function () {
   const pos = this.teams[0].stats.possession + this.teams[1].stats.possession || 1;
   const teamStats = this.teams.map(tm => Object.assign({}, tm.stats, { possessionPct: Math.round(100 * tm.stats.possession / pos), passPct: tm.stats.passes ? Math.round(100 * tm.stats.passesOk / tm.stats.passes) : 0 }));
   return {
-    engineVersion: ENGINE_VERSION, seed: this.seed, score: [this.teams[0].score, this.teams[1].score], winner: this.winner, extraTime: this.half > 2,
+    engineVersion: ENGINE_VERSION, seed: this.seed, score: [this.teams[0].score, this.teams[1].score], halftimeScore: this.htScore ? this.htScore.slice() : null, winner: this.winner, extraTime: this.half > 2,
     shootout: this.shootout && { score: this.shootout.score.slice(), first: this.shootout.first, kicks: this.shootout.kicks.slice() }, abandoned: this.abandoned, events: this.events, teamStats, playerStats,
     carryOver: playerStats.map(p => ({ playerId: p.id, name: p.name, side: p.side, minutesPlayed: p.minutes, endCondition: Math.round(p.endCondition * 100) / 100, injury: p.injury, yellow: p.yellow, red: p.red, suspension: suspensionFor(p.redReason) })),
     explanation: this.explain(), momentum: this.momentum, xgTimeline: this.xgTimeline.concat([[tsec, this.teams[0].stats.xg, this.teams[1].stats.xg]]), commands: this.commands,

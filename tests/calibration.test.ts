@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import reference from '@/data/reference.json';
 import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
-import { COUNT_METRICS, RATE_METRICS, compareRate, lineFromEngine } from '@/lib/metrics';
+import { COUNT_METRICS, RATE_METRICS, HALF_METRICS, compareRate, compareHalf, compareScorelines, lineFromEngine } from '@/lib/metrics';
 
 describe('league squads', () => {
   it('are repeatable and different from match to match', () => {
@@ -33,7 +33,10 @@ describe('agreement with real league data', () => {
     for (let i = 0; i < 150; i++) {
       const { home, away } = leagueTeams(i);
       const r: any = E.simulateMatch({ home, away, seed: i + 1, control: 'none' });
-      lines.push(lineFromEngine(r.score, r.teamStats));
+      // The half-time score is what the first-half goal events add up to.
+      const firstHalf = [0, 1].map(s => r.events.filter((e: any) => e.type === 'goal' && e.half === 1 && e.side === s).length);
+      expect(r.halftimeScore).toEqual(firstHalf);
+      lines.push(lineFromEngine(r.score, r.teamStats, r.halftimeScore));
     }
     const failures: string[] = [];
     for (const key of ['goals', 'shots', 'corners', 'fouls', 'cards']) {
@@ -51,6 +54,13 @@ describe('agreement with real league data', () => {
       const c = compareRate((reference.rates as any)[key], lines.filter(metric.hit).length, lines.length);
       if (!c.ok) failures.push(`${key}: engine ${c.mean.toFixed(3)} vs real ${(reference.rates as any)[key].toFixed(3)}`);
     }
+    // How matches unfold: more goals after the break, and half-time leads that are not too safe.
+    for (const key of ['secondHalfGoals', 'leadHeld']) {
+      const c = compareHalf(HALF_METRICS.find(m => m.key === key)!, (reference.half as any)[key], lines);
+      if (!c.ok) failures.push(`${key}: engine ${c.mean.toFixed(3)} vs real ${(reference.half as any)[key].toFixed(3)}`);
+    }
+    const sl = compareScorelines(reference.scorelines.hist, lines);
+    if (!sl.ok) failures.push(`scorelines: shape gap ${sl.tv.toFixed(3)} (allowed ${sl.tol.toFixed(3)})`);
     expect(failures).toEqual([]);
   }, 90_000);
 });

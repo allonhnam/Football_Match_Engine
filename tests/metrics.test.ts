@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import reference from '@/data/reference.json';
 import {
   analyse, compareCount, compareRate, compareRatio, histogram, totalVariation, lineFromEngine,
+  HALF_METRICS, SCORELINES, compareHalf, compareScorelines, scorelineKey,
   type MatchLine,
 } from '@/lib/metrics';
 
@@ -48,6 +49,52 @@ describe('analyse', () => {
   });
 });
 
+describe('halves and scorelines', () => {
+  const half = (key: string) => HALF_METRICS.find(m => m.key === key)!;
+  // 1-0 at half-time: won 2-0, drawn 1-1, lost 1-2. Level 0-0 at half-time: 1-1. No half-time score: ignored.
+  const lines = [
+    line({ goalsH: 2, goalsA: 0, htH: 1, htA: 0 }), line({ goalsH: 1, goalsA: 1, htH: 1, htA: 0 }),
+    line({ goalsH: 1, goalsA: 2, htH: 1, htA: 0 }), line({ goalsH: 1, goalsA: 1, htH: 0, htA: 0 }),
+    line({ goalsH: 5, goalsA: 0 }),
+  ];
+
+  it('follows what the half-time leader did, from either side', () => {
+    const a = analyse(lines);
+    expect(a.half.leadHeld).toBeCloseTo(1 / 3);
+    expect(a.half.leadDrawn).toBeCloseTo(1 / 3);
+    expect(a.half.leadLost).toBeCloseTo(1 / 3);
+    expect(a.half.htLevel).toBeCloseTo(1 / 4);
+    expect(a.half.htZeroZero).toBeCloseTo(1 / 4);
+    // goals 2+2+3+2 = 9, of which 1+1+1+0 = 3 before the break
+    expect(a.half.secondHalfGoals).toBeCloseTo(6 / 9);
+    // an away lead held counts the same as a home one
+    expect(analyse([line({ goalsH: 0, goalsA: 2, htH: 0, htA: 1 })]).half.leadHeld).toBe(1);
+  });
+
+  it('groups final scores, with the rest as other', () => {
+    expect(scorelineKey(line({ goalsH: 2, goalsA: 1 }))).toBe('2-1');
+    expect(scorelineKey(line({ goalsH: 4, goalsA: 0 }))).toBe('other');
+    const hist = analyse(lines).scorelines.hist;
+    expect(hist.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
+    expect(hist[SCORELINES.indexOf('1-1')]).toBeCloseTo(2 / 5);
+  });
+
+  it('reads the half-time score from an engine result', () => {
+    const stats = Array(2).fill({ shots: 0, onTarget: 0, corners: 0, fouls: 0, yellows: 0, reds: 0 });
+    expect(lineFromEngine([2, 1], stats, [1, 1])).toMatchObject({ htH: 1, htA: 1 });
+    expect(lineFromEngine([2, 1], stats).htH).toBeNaN();
+  });
+
+  it('accepts a matching batch and rejects a different one', () => {
+    const real = analyse(lines);
+    expect(compareHalf(half('leadHeld'), real.half.leadHeld, lines).ok).toBe(true);
+    expect(compareHalf(half('htLevel'), 0.9, Array(400).fill(line({ htH: 1, htA: 0 }))).ok).toBe(false);
+    const draws = Array(400).fill(line({ goalsH: 1, goalsA: 1 }));
+    expect(compareScorelines(analyse(draws).scorelines.hist, draws).ok).toBe(true);
+    expect(compareScorelines(reference.scorelines.hist, draws).ok).toBe(false);
+  });
+});
+
 describe('comparisons', () => {
   const real = { mean: 2.8, sd: 1.7, p10: 1, p50: 3, p90: 5, edges: [1, 2, 3, 4, 5, 6], hist: [0.06, 0.16, 0.24, 0.22, 0.16, 0.09, 0.07] };
 
@@ -89,6 +136,13 @@ describe('real-data reference', () => {
       expect(c.hist.length).toBe(c.edges.length + 1);
       expect(c.hist.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
     }
+  });
+
+  it('has half-time numbers and a scoreline distribution', () => {
+    expect(reference.half.secondHalfGoals).toBeGreaterThan(0.5); // more goals after the break
+    expect(reference.half.leadHeld + reference.half.leadDrawn + reference.half.leadLost).toBeCloseTo(1);
+    expect(reference.scorelines.keys).toEqual(SCORELINES);
+    expect(reference.scorelines.hist.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
   });
 });
 
