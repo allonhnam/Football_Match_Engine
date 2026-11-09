@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
+import { breathe } from './breathe';
 
 const L = 105, W = 68;
 const newMatch = (seed = 3) => {
@@ -15,10 +16,10 @@ const lastEvent = (m: any, type: string) => m.events.filter((e: any) => e.type =
 const intoBox = (m: any, side: number) => { const d = m.dir(side); m.ball.x = d > 0 ? L - 8 : 8; m.ball.y = W / 2; };
 
 describe('laws of the game', () => {
-  it('takes every kick-off after a goal with all players in their own half (Law 8)', () => {
+  it('takes every kick-off after a goal with all players in their own half (Law 8)', async () => {
     let kickoffs = 0;
     const offenders: string[] = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 12; i++) { await breathe();
       const { home, away } = leagueTeams(i);
       const m: any = new E.Match({ home, away, seed: i + 1, control: 'none', officials: false });
       let afterGoal = false, prev: any = null;
@@ -36,7 +37,7 @@ describe('laws of the game', () => {
     }
     expect(kickoffs).toBeGreaterThan(10);
     expect(offenders).toEqual([]);
-  }, 60_000);
+  });
 
   it('never gives two team-mates the same surname', () => {
     for (let seed = 1; seed <= 200; seed++) {
@@ -132,9 +133,9 @@ describe('laws of the game', () => {
     expect(m.onPitch(1).some((q: any) => q.slot === 0)).toBe(true);
   });
 
-  it('plays advantage and still shows the card at the next stoppage', () => {
+  it('plays advantage and still shows the card at the next stoppage', async () => {
     let advantages = 0, recalled = 0;
-    for (let s = 1; s <= 12; s++) {
+    for (let s = 1; s <= 12; s++) { await breathe();
       const { home, away } = leagueTeams(s);
       const r: any = E.simulateMatch({ home, away, seed: s, control: 'none' });
       advantages += r.events.filter((e: any) => e.type === 'advantage' && !/^No advantage/.test(e.text)).length;
@@ -143,7 +144,7 @@ describe('laws of the game', () => {
     expect(advantages).toBeGreaterThan(12);
     expect(recalled).toBeGreaterThan(0);
     expect(recalled).toBeLessThan(advantages);
-  }, 60_000);
+  });
 
   // A last-man foul 20 m out by `slot 2` of the away side on the home centre-forward, with the home side keeping the
   // ball. `rolls` are the referee's random draws in order (card decisions, injury, advantage).
@@ -338,9 +339,10 @@ describe('laws of the game', () => {
 
 describe('tactics', () => {
   // Same squads and seeds, one setting changed for the home side: every option has to show up somewhere.
-  const play = (tactics: object, n = 24) => {
+  const play = async (tactics: object, n = 24) => {
     const sum: Record<string, number> = { shots: 0, fouls: 0, passPct: 0, cond: 0 };
     for (let i = 0; i < n; i++) {
+      await breathe();
       const { home, away } = leagueTeams(i);
       home.tactics = { ...home.tactics, ...tactics };
       const r: any = E.simulateMatch({ home, away, seed: 300 + i, control: 'none', neutral: true });
@@ -352,15 +354,15 @@ describe('tactics', () => {
     return sum;
   };
 
-  it('has no dead options: each setting changes how the team plays', () => {
-    expect(play({ mentality: 2 }).shots).toBeGreaterThan(play({ mentality: 0 }).shots + 3);
-    const hi = play({ pressing: 2 }), lo = play({ pressing: 0 });
+  it('has no dead options: each setting changes how the team plays', async () => {
+    expect((await play({ mentality: 2 })).shots).toBeGreaterThan((await play({ mentality: 0 })).shots + 3);
+    const hi = await play({ pressing: 2 }), lo = await play({ pressing: 0 });
     expect(hi.fouls).toBeGreaterThan(lo.fouls + 5);
     expect(hi.cond).toBeLessThan(lo.cond - 0.05);
-    expect(play({ passing: 0 }).passPct).toBeGreaterThan(play({ passing: 2 }).passPct + 4);
-    expect(play({ tempo: 0 }).passPct).toBeGreaterThan(play({ tempo: 2 }).passPct + 2);
-    expect(play({ line: 2 }).shots).toBeGreaterThan(play({ line: 0 }).shots + 2);
-  }, 120_000);
+    expect((await play({ passing: 0 })).passPct).toBeGreaterThan((await play({ passing: 2 })).passPct + 4);
+    expect((await play({ tempo: 0 })).passPct).toBeGreaterThan((await play({ tempo: 2 })).passPct + 2);
+    expect((await play({ line: 2 })).shots).toBeGreaterThan((await play({ line: 0 })).shots + 2);
+  });
 
   it('makes styles counter each other', () => {
     const e = E as any;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import type { MatchConfig, TeamSheet } from '@/engine/engine';
+import { breathe } from './breathe';
 
 const team = (name: string, seed: number, strength = 12, extra: object = {}): TeamSheet =>
   E.makeTeam({ name, seed, strength, ...extra });
@@ -105,12 +106,12 @@ describe('substitutions', () => {
 });
 
 describe('robustness', () => {
-  it('survives random squads, tactics and manager commands without breaking invariants', () => {
+  it('survives random squads, tactics and manager commands without breaking invariants', async () => {
     const rng = E.makeRng(2026);
     const pick = (n: number) => Math.floor(rng() * n);
     const formations = Object.keys(E.FORMATIONS) as (keyof typeof E.FORMATIONS)[];
 
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 24; i++) { await breathe();
       const tactics = () => Object.fromEntries(E.TACTIC_KEYS.map(k => [k, pick(3)]));
       const home = team('H' + i, i + 1, 4 + pick(15), { formation: formations[pick(formations.length)], tactics: tactics() });
       const away = team('A' + i, i + 100, 4 + pick(15), { formation: formations[pick(formations.length)], tactics: tactics() });
@@ -151,14 +152,14 @@ describe('robustness', () => {
       expect(result.playerStats.length).toBeGreaterThan(10);
       expect(result.carryOver.length).toBeGreaterThan(10);
     }
-  }, 120_000);
+  });
 });
 
 describe('realism guard rails', () => {
-  it('keeps headline numbers near real football for equal squads', () => {
+  it('keeps headline numbers near real football for equal squads', async () => {
     let goals = 0, shots = 0, yellows = 0;
     const n = 30;
-    for (let s = 1; s <= n; s++) {
+    for (let s = 1; s <= n; s++) { await breathe();
       // a fresh pair of equal-strength squads every match: one fixed pair gives squad-specific numbers
       const r: any = E.simulateMatch({ home: team('H', 100 + 2 * s), away: team('A', 101 + 2 * s), seed: s, control: 'none', neutral: true });
       goals += r.score[0] + r.score[1];
@@ -171,15 +172,15 @@ describe('realism guard rails', () => {
     expect(shots / n).toBeLessThan(36);
     expect(yellows / n).toBeGreaterThan(2);
     expect(yellows / n).toBeLessThan(6.5);
-  }, 60_000);
+  });
 
-  it('lets a clearly better squad win more often', () => {
+  it('lets a clearly better squad win more often', async () => {
     let strongWins = 0, weakWins = 0;
-    for (let s = 1; s <= 30; s++) {
+    for (let s = 1; s <= 30; s++) { await breathe();
       const r: any = E.simulateMatch({ home: team('Strong', 11, 15), away: team('Weak', 22, 10), seed: s, control: 'none', neutral: true });
       if (r.score[0] > r.score[1]) strongWins++;
       if (r.score[0] < r.score[1]) weakWins++;
     }
     expect(strongWins).toBeGreaterThan(weakWins * 2);
-  }, 60_000);
+  });
 });
