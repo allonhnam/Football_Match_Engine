@@ -90,7 +90,7 @@ The result:
 | `src/app/`, `src/components/` | The visualizer: matchday and live match, tactics board, report, Engine Lab |
 | `src/lib/` | Pitch drawing, the statistics shared by the calibration tools, league squads, the Web Worker batch runner |
 | `src/data/reference.json` | Real-football numbers built from the league data |
-| `tests/` | 80 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws, cup ties, tactics, attributes, the pitch view |
+| `tests/` | 88 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view |
 | `tools/` | Headless play, data download, calibration, balance and attribute tools |
 
 ## Known limits

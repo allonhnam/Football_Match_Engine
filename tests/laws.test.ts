@@ -338,6 +338,101 @@ describe('laws of the game', () => {
   });
 });
 
+// Offside is judged when a team-mate plays the ball. In open play the engine adds a small random error near the line
+// (a run or a pass a fraction too early or late, larger for a passer with poor vision). These tests fix the random
+// draw at its midpoint, so that error is zero and they check the rule itself.
+describe('offside (Law 11)', () => {
+  /** Line up an attack by side 0. Positions are metres from the goal side 0 defends (105 = the goal it attacks). */
+  function lineUp(o: { opp: (q: any, n: number) => number; passer: number; ball?: number; recv: number }) {
+    const m = newMatch();
+    const d = m.dir(0), X = (fx: number) => (d > 0 ? fx : L - fx);
+    m.rng = () => 0.5;
+    let n = 0;
+    for (const q of m.players) if (q.onPitch && q.side === 1) { q.x = X(o.opp(q, q.slot === 0 ? -1 : n++)); q.y = 10 + (n * 5) % 50; }
+    const passer = idx(m, 0, q => q.slot !== 0), recv = idx(m, 0, (q: any) => q.slot !== 0 && m.players.indexOf(q) !== passer);
+    const p = m.players[passer], r = m.players[recv];
+    p.x = X(o.passer); p.y = 30; r.x = X(o.recv); r.y = 40;
+    m.ball.x = X(o.ball ?? o.passer); m.ball.y = 30; m.ball.owner = passer;
+    const before = m.teams[0].stats.offsides;
+    const flagged = () => m.teams[0].stats.offsides > before;
+    return { m, passer, recv, r, X, flagged };
+  }
+  /** A back line at 80 m and the keeper on his line. */
+  const backLine = (q: any, n: number) => (n < 0 ? 103 : 80);
+
+  it('flags a player beyond the second-last opponent and gives an indirect free kick where he stood', () => {
+    const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 88 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(true);
+    expect(lastEvent(m, 'offside').player).toBe(r.id);
+    expect(m.restart.type).toBe('freekick');
+    expect(m.restart.side).toBe(1);
+    expect(m.restart.direct).toBe(false);
+    expect(Math.abs(m.restart.x - r.x)).toBeLessThan(0.01);
+  });
+
+  it('does not flag a player level with the second-last opponent', () => {
+    const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 80 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(false);
+    expect(m.ball.flight && m.ball.flight.kind).toBe('pass');
+  });
+
+  it('counts the keeper: with the keeper out, one defender behind the attacker is not enough', () => {
+    // one defender back on the line at 100 m, the keeper out at 70 m, everyone else at 60 m: the second-last
+    // opponent is the keeper, so an attacker at 85 m is offside even with a defender behind him
+    const { m, passer, recv, r, flagged } = lineUp({ opp: (q, n) => (n < 0 ? 70 : n === 0 ? 100 : 60), passer: 55, recv: 85 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(true);
+  });
+
+  it('never flags a player in his own half', () => {
+    // a very high line at 40 m: the attacker at 50 m is beyond it but still in his own half
+    const { m, passer, recv, r, flagged } = lineUp({ opp: (q, n) => (n < 0 ? 60 : 40), passer: 30, recv: 50 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(false);
+  });
+
+  it('never flags a player behind the ball', () => {
+    // the passer is already beyond the line at 90 m and lays it back to a team-mate at 85 m
+    const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 90, recv: 85 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(false);
+  });
+
+  it('has no offside from a throw-in, a goal kick or a corner', () => {
+    for (const rt of ['throwin', 'goalkick', 'corner']) {
+      const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 88 });
+      m.restartType = rt;
+      m._pass(passer, recv, r.x, r.y);
+      expect(flagged(), rt).toBe(false);
+    }
+  });
+
+  /** One attacker alone in the box at 95 m, the rest of side 0 well away from it. */
+  function setPiece() {
+    const s = lineUp({ opp: backLine, passer: 75, recv: 95 });
+    const { m, passer, recv, X } = s;
+    m.players.forEach((q: any, k: number) => { if (q.onPitch && q.side === 0 && k !== passer && k !== recv && q.slot !== 0) { q.x = X(40); q.y = 10; } });
+    m.players[recv].y = W / 2;
+    return s;
+  }
+
+  it('can flag a player beyond the line from a free kick into the box', () => {
+    const { m, passer, r, flagged } = setPiece();
+    m._cross(passer, false, true);
+    expect(flagged()).toBe(true);
+    expect(lastEvent(m, 'offside').player).toBe(r.id);
+    expect(m.restart.direct).toBe(false);
+  });
+
+  it('never flags a player from a corner', () => {
+    const { m, passer, flagged } = setPiece();
+    m._cross(passer, false, false);
+    expect(flagged()).toBe(false);
+  });
+});
+
 describeStatistical('tactics', () => {
   // Same squads and seeds, one setting changed for the home side: every option has to show up somewhere.
   const play = async (tactics: object, n = 24) => {
