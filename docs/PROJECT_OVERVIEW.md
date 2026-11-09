@@ -9,7 +9,7 @@
 | **Engine** | `src/engine/engine.js`, about 1,820 lines, no dependencies, typed by `engine.d.ts` |
 | **Visualizer** | 4 routes: `/` matchday, `/tactics`, `/report`, `/lab` |
 | **Tools** | 7 Node command-line tools in `tools/` |
-| **Tests** | 80 tests in 7 files; CI runs 4 jobs on Linux, Windows and macOS |
+| **Tests** | 88 tests in 7 files, 40 of them on the rules of football; CI runs 4 jobs on Linux, Windows and macOS |
 | **Realism** | 24 of 24 real-data checks pass, and 12 of 12 match-flow numbers sit in their published ranges |
 | **Speed** | about 250 ms per match on one core; about 18 matches a second in the browser's worker pool |
 
@@ -32,7 +32,7 @@ The brief (version 1.0, November 2026) asks for four deliverables and scores the
 
 | # | Question from the brief | How the project answers it | Proof |
 | :-: | :-- | :-- | :-- |
-| 1 | Does it follow the Laws of the Game 2026/27? | Restarts, offside, fouls, cards, advantage, the keeper's 8 seconds, 5-second countdowns, treatment, dropped balls, substitution windows, extra time, shootouts | 27 tests in `tests/laws.test.ts` |
+| 1 | Does it follow the Laws of the Game 2026/27? | Restarts, offside, fouls, cards, advantage, the keeper's 8 seconds, 5-second countdowns, treatment, dropped balls, substitution windows, extra time, shootouts | 40 rule tests: 32 in `tests/laws.test.ts` (8 on offside), plus lineup, substitution and cup-tie rules in `engine.test.ts` and `knockout.test.ts` |
 | 2 | Do its statistics match real football (distributions, not just averages)? | `npm run calibrate` compares full distributions with 8,907 real matches | 24 of 24 pass, plus 12 of 12 match-flow ranges |
 | 3 | Can it be plugged into a game? | Run to a minute or event, pause, resume, substitute, change tactics, save and load, headless batches, `carryOver` | `tests/engine.test.ts` (determinism, save and load, fuzz) |
 | 4 | Does it look like football? | Live 2D pitch with officials, ball flight, players walking off, countdown rings | The visualizer at `/` |
@@ -109,7 +109,7 @@ Each option gets one value: **chance it works × value of the new position − c
 | `PASS_ODDS` | The fitted pass-completion model |
 | `ENGINE_VERSION` | Saved matches record it; a save only replays exactly on the same version |
 | `carryOver` | What the game keeps after a match: minutes, condition, injuries, cards, suspensions |
-| `QUICK_TESTS` | Set to `1` to skip the 17 statistical tests (63 tests run in about 17 s) |
+| `QUICK_TESTS` | Set to `1` to skip the 17 statistical tests (71 tests run in about 17 s) |
 | `describeStatistical`, `itStatistical` | Test helpers in `tests/statistical.ts` that `QUICK_TESTS` skips |
 | `breathe()` | Test helper in `tests/breathe.ts` that lets long test loops yield between matches |
 
@@ -135,6 +135,8 @@ Each option gets one value: **chance it works × value of the new position − c
 | 12 | Engine twice as fast again (about 550 to about 280 ms a match), with identical results (PR #9) |
 | 13 | README speed figures corrected (PR #10) |
 | 14 | CI cut from 6 jobs to 4, with quick tests on Windows and macOS (PR #11) |
+| 15 | Overview and diagrams brought up to engine 0.6.0 (PR #12) |
+| 16 | Offside tests: 8 cases for Law 11, so every major law has a direct test (PR #13) |
 
 ### How close it is to real football (3,000 simulated matches)
 
@@ -174,10 +176,10 @@ Each option gets one value: **chance it works × value of the new position − c
 
 | Job | Tests |
 | :-- | :-- |
-| Ubuntu, Node 20 | all 80 |
-| Ubuntu, Node 22 | all 80 |
-| Windows, Node 20 | 63 quick tests (`QUICK_TESTS=1`) |
-| macOS, Node 22 | 63 quick tests (`QUICK_TESTS=1`) |
+| Ubuntu, Node 20 | all 88 |
+| Ubuntu, Node 22 | all 88 |
+| Windows, Node 20 | 71 quick tests (`QUICK_TESTS=1`) |
+| macOS, Node 22 | 71 quick tests (`QUICK_TESTS=1`) |
 
 Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on pull requests and pushes to `main`, skips changes that only touch `.md` files, and a new push cancels the old run.
 
@@ -198,8 +200,8 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 ```bash
 npm install
 npm run dev                 # http://localhost:3000
-npm test                    # 80 tests
-QUICK_TESTS=1 npm test      # 63 quick tests
+npm test                    # 88 tests
+QUICK_TESTS=1 npm test      # 71 quick tests
 npm run simulate -- --seed 42
 npm run calibrate -- 3000   # compare with real football
 npm run balance -- 200      # tactic and formation win rates
