@@ -23,6 +23,7 @@ export function eventTitle(e, m) {
     case 'foul': return [`${({ handball: 'Handball', dangerous: 'Dangerous play', backpass: 'Back-pass handled' } as any)[e.offence as string] || 'Foul'} · ${T}`, e.text];
     case 'advantage': return [`Advantage · ${T}`, e.text];
     case 'stoppage': return ['Play stopped', e.text];
+    case 'treatment': return [`${e.back ? 'Back on' : 'Treatment'} · ${T}`, e.back ? `${P(e.player)} returns after a minute off` : `${P(e.player)} leaves the field and must stay off for a minute after the restart`];
     case 'keeperholding': return [`8-second rule · ${T}`, e.text];
     case 'disallowed': return [`Goal disallowed · ${T}`, e.text];
     case 'tactic': return [`Tactical change · ${T}`, e.text.replace(m.teams[e.side].name + ' ', '')];

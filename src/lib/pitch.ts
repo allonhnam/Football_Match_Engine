@@ -80,7 +80,9 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const labels = [];
   for (const q of m.players) {
-    if (!q.onPitch) continue;
+    const offField = !q.onPitch && (q.treat || q.leaving); // off for treatment, or walking off after a substitution
+    if (!q.onPitch && !offField) continue;
+    ctx.globalAlpha = offField ? 0.5 : 1;
     const x = X(lerp(q.px, q.x)), y = Y(lerp(q.py, q.y));
     const gk = q.slot === 0, c = gk ? (q.side === 0 ? '#FFD23C' : '#3DDC97') : m.teams[q.side].color;
     if (owner === q && m.gkHands === b.owner) {
@@ -95,6 +97,7 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
     ctx.fillStyle = textOn(c); ctx.font = `700 ${Math.round(r * 0.95)}px Inter, sans-serif`; ctx.fillText(q.p.num, x, y + 0.5);
     if (opts.names) labels.push([lastName(q.p.name), x, y + r + 9]);
   }
+  ctx.globalAlpha = 1;
   if (labels.length) {
     ctx.font = `500 ${Math.max(9.5, Math.round(r * 0.8))}px Inter, sans-serif`;
     for (const [t, x, y] of labels) { const w = ctx.measureText(t).width + 8, h = Math.max(13, r * 1.1); ctx.fillStyle = col.chip; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h / 2, w, h, 3); else ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, x, y + 0.5); }

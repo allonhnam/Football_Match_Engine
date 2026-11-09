@@ -101,7 +101,7 @@ const DEFAULT_TACTICS = { mentality: 1, pressing: 1, line: 1, width: 1, tempo: 1
 // Seconds from the ball going dead to the restart: [minimum, random extra]. Roughly the averages in top leagues.
 const RESTART_TIME = { throwin: [9, 11], goalkick: [22, 18], corner: [28, 20], freekick: [24, 28], penalty: [50, 40], dropball: [10, 10] };
 const ATTRS = ['pace', 'stamina', 'passing', 'vision', 'dribbling', 'shooting', 'heading', 'tackling', 'positioning', 'keeping'];
-const ENGINE_VERSION = '0.5.0';
+const ENGINE_VERSION = '0.5.1';
 const KEY_EVENTS = { shootoutkick: 1, extratime: 1, goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
 
 // ---------- RNG (mulberry32, serialisable) ----------
@@ -232,6 +232,7 @@ function Match(config) {
   this.kickT = 0; this.subTimes = []; this._possSide = -1; this._ballKey = -99; this.restart = null; this.decisionT = 0;
   this.lastPasser = -1; this.lastPasserT = -99; this._edge = [1, 1]; this._central = [1, 1]; this._crossEdge = [1, 1]; this._cutOut = [1, 1]; this._edgeSum = [0, 0]; this._edgeN = 0; this._keyPass = null; this._loosePass = null; this._side = [[], []]; this._markOrder = []; this._trace = null; // set _trace to an array to record every option a player weighs (debugging)
   this.gkHands = -1; this.gkHandsT = 0; this.advantage = null; this.pendingCards = [];
+  this.treating = []; this.leaving = []; // players off the field for treatment, and substituted players walking off
   this.events = []; this.commands = []; this.listeners = [];
   this.momentum = []; // per minute [homeThreat, awayThreat]
   this.possMin = []; this.boxMin = []; this.f3Min = []; this._zone = [0, 0];
@@ -299,7 +300,7 @@ P._setRestart = function (type, side, x, y, delay, extra) {
   this.stoppage = (this.stoppage || 0) + 1;
   this.advantage = null; this.gkHands = -1; this._loosePass = null;
   // cards held back while the referee played advantage are shown at the next stoppage (Law 5)
-  if (this.pendingCards.length) { const pc = this.pendingCards; this.pendingCards = []; for (const c of pc) this._card(c.ti, c.card, c.why); }
+  if (this.pendingCards.length) { const pc = this.pendingCards; this.pendingCards = []; for (const c of pc) if (c.card) this._card(c.ti, c.card, c.why); }
   this.phase = 'dead'; this.ball.owner = -1; this.ball.flight = null; this.ball.z = 0;
   this.ball.x = clamp(x, 0, L); this.ball.y = clamp(y, 0, W);
   let taker = -1, best = 1e9;
@@ -445,6 +446,8 @@ P._resolveShot = function (f) {
     if (this.lastPasser >= 0 && this.lastPasser !== f.shooter && this.players[this.lastPasser].side === q.side && this.clockSec() - this.lastPasserT < 12) { assist = this.players[this.lastPasser]; assist.st.assists++; }
     this.goalsThisHalf = (this.goalsThisHalf || 0) + 1;
     this._emit({ type: 'goal', side: q.side, player: q.id, assist: assist && assist.id, xg: f.xg, header: f.header, penalty: f.penalty, x: f.sx, y: f.sy, text: 'GOAL! ' + name + (f.penalty ? ' (pen)' : f.header ? ' (header)' : '') + (assist ? ', assisted by ' + assist.p.name : '') + ' · ' + xgs + ' xG', score: [this.teams[0].score, this.teams[1].score] });
+    // a goal after advantage for denying a goal-scoring chance: no caution (Law 12, 2026/27)
+    if (this.pendingCards.length) this.pendingCards = this.pendingCards.filter(c => !(c.dogso && c.for === q.side));
     this._setRestart('kickoff', opp, L / 2, W / 2, TUNING.goalRestart);
     return;
   }
@@ -726,12 +729,19 @@ P._foul = function (ti, oi, kind, o2) {
     if (o2.denyGoal) { card = 'red'; why = 'handball denied a goal'; }
     else if (r() < 0.3) { card = 'yellow'; why = 'handball stopped a promising attack'; }
   } else if (kind === 'dangerous' && r() < 0.12 * (t.yellow ? 0.5 : 1)) { card = 'yellow'; why = 'reckless play'; }
-  if (kind === 'challenge' && o && r() < 0.015) this._injure(oi, false);
-  // advantage: play on when the fouled side keeps the ball in a useful position (Law 5)
+  const hurt = kind === 'challenge' && o && !o.injured && r() < 0.015 && (this._injure(oi, false), !!o.injured);
+  // advantage: play on when the fouled side keeps the ball in a useful position (Law 5); not for serious foul play
   const keeps = o && this.ball.owner === oi && this.phase === 'play';
   const fxa = d > 0 ? fx : L - fx;
-  if ((kind === 'challenge' || kind === 'dangerous') && keeps && !inBox && fxa > 45 && r() < 0.4) {
-    if (card) this.pendingCards.push({ ti, card, why });
+  const dogso = card === 'red' && why.startsWith('denied');
+  if ((kind === 'challenge' || kind === 'dangerous') && keeps && !inBox && fxa > 45 && !(card === 'red' && !dogso) && r() < 0.4) {
+    // Law 12 (2026/27), with advantage played: denying an obvious goal-scoring opportunity is a caution, and no card
+    // at all if the goal follows; stopping a promising attack is not cautioned. If the advantage does not follow,
+    // the referee goes back to the original sanction.
+    if (card) {
+      const spa = card === 'yellow' && why === 'stopped a promising attack';
+      this.pendingCards.push({ ti, card: dogso ? 'yellow' : spa ? null : card, why: dogso ? 'denied a goal-scoring chance, advantage played' : why, dogso, for: att, orig: { card, why } });
+    }
     this.advantage = { side: att, x: fx, y: fy, until: this.clockSec() + 3, direct: kind === 'challenge' };
     this._emit({ type: 'advantage', side: att, player: o.id, text: 'Advantage played to ' + this.teams[att].name, x: fx, y: fy });
     for (const q of this._side[t.side]) if (dist(q.x, q.y, o.x, o.y) < 4) q.tackleCd = Math.max(q.tackleCd, 1.5); // let the advantage develop
@@ -739,6 +749,9 @@ P._foul = function (ti, oi, kind, o2) {
   }
   if (card) this._card(ti, card, why);
   if (this.abandoned) return;
+  // Law 5 (2026/27): a seriously hurt player leaves the field for treatment, unless the offender was cautioned or
+  // sent off for the challenge or the player is to take the penalty.
+  if (hurt && o.injured.days >= 10) this._treat(o, !!card || inBox);
   const direct = kind === 'challenge' || kind === 'handball';
   if (inBox && direct) this._setRestart('penalty', att, d > 0 ? L - 11 : 11, W / 2, 7);
   else if (inBox) {
@@ -749,7 +762,7 @@ P._foul = function (ti, oi, kind, o2) {
 };
 P._card = function (ti, card, why) {
   const t = this.players[ti], tt = this.teams[t.side];
-  if (!t.onPitch) return;
+  if (!t.onPitch && !t.treat) return;
   if (card === 'yellow') {
     t.yellow++; tt.stats.yellows++;
     if (t.yellow >= 2) this._sendOff(ti, 'second yellow');
@@ -758,6 +771,7 @@ P._card = function (ti, card, why) {
 };
 P._sendOff = function (ti, why) {
   const t = this.players[ti], tt = this.teams[t.side];
+  if (t.treat) this._endTreatment(t, false);
   t.red = true; t.redReason = why; t.onPitch = false; t.st.offAt = this.clockSec(); tt.stats.reds++;
   if (this.ball.owner === ti) this.ball.owner = -1;
   this._emit({ type: 'red', side: t.side, player: t.id, text: 'RED CARD: ' + t.p.name + ' (' + why + ')' });
@@ -783,13 +797,31 @@ P._injure = function (i, canStop) {
   if (canStop && days >= 10 && this.phase === 'play') {
     const b = this.ball, side = b.owner >= 0 ? this.players[b.owner].side : b.lastSide;
     this._emit({ type: 'stoppage', side, text: 'Play stopped for treatment; dropped ball to ' + this.teams[side].name });
+    this._treat(q, false);
     this._setRestart('dropball', side, b.x, b.y, 8);
     return true;
   }
   return false;
 };
+// Law 5 (2026/27): a player assessed or treated on the field leaves it, and may come back only one minute after play
+// restarts. Goalkeepers are exempt. The team plays a player short meanwhile (or replaces him).
+P._treat = function (q, exempt) {
+  if (exempt || q.slot === 0 || !q.onPitch || this.phase === 'halftime') return;
+  const i = this.players.indexOf(q);
+  q.onPitch = false; q.carry = null; q.urgent = 0;
+  q.treat = { until: Infinity, x: q.x, y: q.y < W / 2 ? -3.5 : W + 3.5 };
+  this.treating.push(q);
+  if (this.ball.owner === i) this.ball.owner = -1;
+  this._emit({ type: 'treatment', side: q.side, player: q.id, text: q.p.name + ' leaves the field for treatment' });
+};
+P._endTreatment = function (q, back) {
+  q.treat = null; this.treating = this.treating.filter(x => x !== q);
+  if (!back) return;
+  q.onPitch = true;
+  this._emit({ type: 'treatment', side: q.side, player: q.id, back: true, text: q.p.name + ' returns after treatment' });
+};
 P._checkAbandon = function () {
-  for (const s of [0, 1]) if (this.onPitch(s).length < 7) {
+  for (const s of [0, 1]) if (this.onPitch(s).length + this.treating.filter(q => q.side === s).length < 7) {
     this.abandoned = { reason: this.teams[s].name + ' have fewer than 7 players', minute: this.minute() };
     this._emit({ type: 'abandoned', side: s, text: 'Match abandoned: ' + this.abandoned.reason });
     this.finished = true; this.phase = 'fulltime';
@@ -806,7 +838,7 @@ P.substitute = function (side, outId, inId, _replay) {
   if (this.finished) return { ok: false, error: 'The match has finished' };
   if (!out) return { ok: false, error: 'That player is not in this team' };
   if (out.red) return { ok: false, error: 'Sent-off players cannot be replaced' };
-  if (!out.onPitch) return { ok: false, error: out.p.name + ' is not on the pitch' };
+  if (!out.onPitch && !out.treat) return { ok: false, error: out.p.name + ' is not on the pitch' };
   if (!inn) return { ok: false, error: 'That player is not on the bench' };
   const maxSubs = this._maxSubs();
   if (tm.subsUsed + queuedOut >= maxSubs) return { ok: false, error: 'No substitutions left (' + maxSubs + ' used)' };
@@ -848,13 +880,22 @@ P._applyPending = function () {
     }
     for (const c of tm.pending) {
       if (c.kind === 'sub') {
-        const oi = this.players.findIndex(q => q.id === c.outId && q.onPitch);
+        const oi = this.players.findIndex(q => q.id === c.outId && (q.onPitch || q.treat));
         const inn = tm.bench.find(p => p.id === c.inId);
         if (oi < 0 || !inn) continue;
-        const out = this.players[oi];
+        const out = this.players[oi], wasTreated = !!out.treat;
+        if (wasTreated) this._endTreatment(out, false);
         out.onPitch = false; out.subOff = true; out.st.offAt = this.clockSec();
         const nq = this._mkRuntime(inn, tm.side, out.slot, true); nq.st.onAt = this.clockSec();
-        nq.x = out.x < L / 2 ? out.x : out.x; nq.y = out.y < W / 2 ? 0 : W; nq.px = nq.x; nq.py = nq.y;
+        if (this.phase === 'dead' && this.restart && !wasTreated) {
+          // Law 3 (2026/27): the substituted player leaves within 10 seconds, at the nearest point on the boundary;
+          // the substitute comes on at the halfway line once he is off, and play waits for the change.
+          const ex = [[out.x, -3, out.y], [out.x, W + 3, W - out.y], [-3, out.y, out.x], [L + 3, out.y, L - out.x]].sort((a, b) => a[2] - b[2])[0];
+          out.leaving = { x: ex[0], y: ex[1], until: this.clockSec() + 10, sp: Math.max(1.5, (dist(out.x, out.y, ex[0], ex[1]) - 2) / 8) };
+          this.leaving.push(out);
+          nq.waitFor = out; nq.x = L / 2; nq.y = -1;
+        } else { nq.x = out.x; nq.y = out.y < W / 2 ? 0 : W; }
+        nq.px = nq.x; nq.py = nq.y;
         this.players.push(nq);
         tm.bench = tm.bench.filter(p => p.id !== c.inId);
         tm.subsUsed++;
@@ -910,7 +951,7 @@ P._ai = function (side) {
   if (m > 70 && diff < 0 && tm.tactics.mentality < 2 && !tm.aiChased) { tm.aiChased = true; this.setTactics(side, { mentality: 2, tempo: 2 }, true); }
   if (m > 80 && diff > 0 && tm.tactics.mentality > 0 && !tm.aiProtect) { tm.aiProtect = true; this.setTactics(side, { mentality: 0 }, true); }
   // injured player first
-  const inj = this.onPitch(side).find(q => q.injured);
+  const inj = this.onPitch(side).find(q => q.injured) || this.treating.find(q => q.side === side);
   const maxSubs = this._maxSubs();
   if (inj && tm.subsUsed < maxSubs) this._aiSub(side, inj);
   if (m < 57 || tm.subsUsed >= maxSubs || tm.pending.length) return;
@@ -1142,15 +1183,19 @@ P._move = function () {
   for (let i = 0; i < n; i++) { const q = ps[i]; q.px = q.x; q.py = q.y; }
   for (let i = 0; i < n; i++) {
     const q = ps[i];
-    if (!q.onPitch) continue;
+    const off = q.onPitch ? null : q.treat || q.leaving;
+    if (!q.onPitch && !off) continue;
+    if (off) { q.tx = off.x; q.ty = off.y; q.urgent = 0; }
+    if (q.waitFor) { if (q.waitFor.leaving) { q.speed = 0; continue; } q.waitFor = null; } // substitute waits at the halfway line
     if (q.tackleCd > 0) q.tackleCd -= DT;
     const dx = q.tx - q.x, dy = q.ty - q.y, dd = Math.sqrt(dx * dx + dy * dy);
+    if (q.leaving && (dd < 2.3 || this.clockSec() >= q.leaving.until)) { q.leaving = null; continue; }
     if (!q.ePace || (this.tick + q.slot) % 20 === 0) { q.ePace = this.eff(q, 'pace'); q.eStam = this.eff(q, 'stamina'); }
     const top = (5.2 + q.ePace * 0.17) * (q.injured ? 0.6 : 1);
     // Off the ball: stand when roughly in position, walk or jog when a few metres out, run when far out of
     // position (a support run, or getting back after losing the ball).
     if (!q.urgent && dd < 2) { q.speed = 0; continue; }
-    let sp = q.urgent ? top * Math.max(0.55, q.urgent) : clamp(0.25 + dd * 0.18, 0.8, 3);
+    let sp = q.leaving ? q.leaving.sp : q.urgent ? top * Math.max(0.55, q.urgent) : clamp(0.25 + dd * 0.18, 0.8, 3);
     if (owner === q) {
       sp *= 0.86;
       const d = this.dir(q.side), opp = this._side[1 - q.side];
@@ -1204,8 +1249,10 @@ P.step = function () {
 
   if (this.phase === 'dead') {
     this._targets(); this._restartTargets(); this._move();
+    if (this.leaving.length) this.leaving = this.leaving.filter(q => q.leaving);
     const r = this.restart; if (!r) { this.phase = 'play'; return; }
     r.timer -= DT;
+    if (this.leaving.length) r.timer = Math.max(r.timer, DT); // play waits until substituted players are off
     const t = this.players[r.taker];
     // Law 8: a kick-off waits until every player is in their own half (the taker may stand on the line).
     const set = r.type !== 'kickoff' || r.timer < -20 || this.players.every((q, k) => !q.onPitch || k === r.taker || (q.x - L / 2) * this.dir(q.side) <= 0.5);
@@ -1214,11 +1261,13 @@ P.step = function () {
     if (this.tick % 40 === 0) this._aiAll();
     return;
   }
+  if (this.treating.length) { const now = this.clockSec(); for (const q of this.treating.slice()) if (now >= q.treat.until) this._endTreatment(q, true); }
   if (this.advantage) {
     const a = this.advantage;
     if (b.owner >= 0 && this.players[b.owner].side !== a.side && this.clockSec() <= a.until) {
       // the expected advantage did not follow: go back and penalise the original offence
       this.advantage = null;
+      for (const c of this.pendingCards) if (c.orig) { c.card = c.orig.card; c.why = c.orig.why; c.dogso = false; }
       this._emit({ type: 'advantage', side: a.side, text: 'No advantage; free kick to ' + this.teams[a.side].name, x: a.x, y: a.y });
       this._setRestart('freekick', a.side, a.x, a.y, 4, { direct: a.direct });
       return;
@@ -1272,7 +1321,7 @@ P._aiAll = function () {
   for (const s of [0, 1]) {
     const human = this.control === 'both' || (this.control === 'home' && s === 0) || (this.control === 'away' && s === 1);
     if (!human) this._ai(s);
-    else { const inj = this.onPitch(s).find(q => q.injured && !this.teams[s].pending.some(c => c.outId === q.id)); if (inj && this.teams[s].subsUsed < this._maxSubs() && this.teams[s].windowsUsed < this._maxWindows()) this._aiSub(s, inj); }
+    else { const inj = this.onPitch(s).concat(this.treating.filter(q => q.side === s)).find(q => q.injured && !this.teams[s].pending.some(c => c.outId === q.id)); if (inj && this.teams[s].subsUsed < this._maxSubs() && this.teams[s].windowsUsed < this._maxWindows()) this._aiSub(s, inj); }
   }
 };
 P._tackles = function () {
@@ -1409,6 +1458,8 @@ const _origResume = P._resume;
 P._resume = function () {
   const r = this.restart;
   _origResume.call(this);
+  // the minute off for treatment counts from the restart
+  for (const q of this.treating) if (q.treat.until === Infinity) q.treat.until = this.clockSec() + 60;
   if (!r || this.phase !== 'play') return;
   const rt = r.type;
   if (rt === 'throwin' || rt === 'goalkick') {
@@ -1462,6 +1513,10 @@ P._startSecondHalf = function () { // starts the next period: second half, or ei
   const next = this.half + 1;
   const recover = next === 2 ? 0.07 : next === 3 ? 0.03 : 0.01;
   this.half = next; this.t = 0; this.addedAnnounced = false; this.goalsThisHalf = 0; this.injuries = 0;
+  // treated players are back for the new period; anyone still walking off after a substitution is off
+  for (const q of this.treating.slice()) this._endTreatment(q, true);
+  for (const q of this.leaving) q.leaving = null; this.leaving = [];
+  for (const q of this.players) q.waitFor = null;
   for (const q of this.players) { if (q.onPitch) { q.cond = Math.min(1, q.cond + recover); q.x = L - q.x; q.y = W - q.y; q.px = q.x; q.py = q.y; } }
   for (const o of this.officials) { o.x = o.px = L - o.x; if (o.role === 'referee') o.y = o.py = W - o.y; }
   if (next === 3) this.etFirstKick = this.rng() < 0.5 ? 0 : 1; // a new toss of the coin for extra time
@@ -1548,7 +1603,7 @@ P.runToEnd = function () { let guard = 0; while (!this.finished && guard++ < 800
 P.snapshot = function () {
   return { tick: this.tick, half: this.half, clock: this.clockLabel(), minute: this.minute(), phase: this.phase, score: [this.teams[0].score, this.teams[1].score],
     ball: Object.assign({}, this.ball), officials: this.officials.map(o => Object.assign({}, o)),
-    keeperHolding: this.gkHands >= 0 && this.ball.owner === this.gkHands ? { player: this.players[this.gkHands].id, seconds: this.clockSec() - this.gkHandsT } : null, players: this.players.filter(q => q.onPitch).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond })) };
+    keeperHolding: this.gkHands >= 0 && this.ball.owner === this.gkHands ? { player: this.players[this.gkHands].id, seconds: this.clockSec() - this.gkHandsT } : null, players: this.players.filter(q => q.onPitch || q.treat || q.leaving).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond, off: q.treat ? 'treatment' : q.leaving ? 'substituted' : null })) };
 };
 
 // ---------- results ----------

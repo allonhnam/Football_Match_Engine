@@ -9,7 +9,7 @@ import { makeRng, makeTeam } from '../engine/engine.js';
  */
 // Spread of squad quality (the standard deviation is half this, about 0.64 points). Calibrated so that how
 // predictable engine matches are matches bookmaker odds for real matches (npm run calibrate, "Predictability").
-const SPREAD = 0.96;
+const SPREAD = 0.99;
 
 export function leagueTeams(i, gap = 0) {
   const rng = makeRng(90210 + i * 31);

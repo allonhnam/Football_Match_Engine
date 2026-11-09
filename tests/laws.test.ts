@@ -145,6 +145,99 @@ describe('laws of the game', () => {
     expect(recalled).toBeLessThan(advantages);
   }, 60_000);
 
+  // A last-man foul 20 m out by `slot 2` of the away side on the home centre-forward, with the home side keeping the
+  // ball. `rolls` are the referee's random draws in order (card decisions, injury, advantage).
+  const lastManFoul = (rolls: number[]) => {
+    const m = newMatch(), d = m.dir(0);
+    const oi = idx(m, 0, q => q.slot === 9), ti = idx(m, 1, q => q.slot === 2), o = m.players[oi], t = m.players[ti];
+    o.x = d > 0 ? L - 20 : 20; o.y = W / 2; t.x = o.x; t.y = o.y + 1;
+    m.players.forEach((q: any) => { if (q.onPitch && q.side === 1 && q.slot !== 0 && q !== t) q.x = o.x - d * 10; });
+    m.ball.owner = oi; m.ball.x = o.x; m.ball.y = o.y;
+    const rng = m.rng; let k = 0; m.rng = () => (k < rolls.length ? rolls[k++] : 0.5);
+    m._foul(ti, oi, 'challenge');
+    m.rng = rng;
+    return { m, t, oi };
+  };
+
+  it('cautions instead of sending off when advantage is played for denying a goal-scoring chance (Law 12)', () => {
+    const { m, t } = lastManFoul([0, 0.5, 0.1]);
+    expect(m.advantage).toBeTruthy();
+    expect(m.pendingCards[0].orig.card).toBe('red'); // a red had play been stopped
+    m._setRestart('throwin', 0, 50, 0, 3);
+    expect(t.red).toBe(false);
+    expect(t.yellow).toBe(1);
+  });
+
+  it('shows no card for denying a goal-scoring chance when advantage is played and the goal follows (Law 12, 2026/27)', () => {
+    const { m, t, oi } = lastManFoul([0, 0.5, 0.1]);
+    const rng = m.rng; m.rng = () => 0.5;
+    m._resolveShot({ outcome: 'goal', shooter: oi, xg: 0.4, sx: m.players[oi].x, sy: W / 2 });
+    m.rng = rng;
+    expect(lastEvent(m, 'goal')).toBeTruthy();
+    expect(t.red).toBe(false);
+    expect(t.yellow).toBe(0);
+  });
+
+  it('goes back to the red card when the advantage does not follow', () => {
+    const { m, t } = lastManFoul([0, 0.5, 0.1]);
+    m.ball.owner = m.players.indexOf(t); // the defenders win it straight back
+    m.step();
+    expect(lastEvent(m, 'advantage').text).toMatch(/^No advantage/);
+    expect(t.red).toBe(true);
+  });
+
+  it('does not caution a foul that stopped a promising attack when advantage is played', () => {
+    const { m, t } = lastManFoul([0.5, 0.5, 0.1, 0.5, 0.1]);
+    expect(m.advantage).toBeTruthy();
+    expect(m.pendingCards[0].orig.why).toBe('stopped a promising attack');
+    m._setRestart('throwin', 0, 50, 0, 3);
+    expect(t.yellow).toBe(0);
+  });
+
+  it('sends a treated player off the field until a minute after the restart; keepers are exempt (Law 5, 2026/27)', () => {
+    const m = newMatch();
+    m.teams[0].subsUsed = 5; // no substitutes left, so he cannot simply be replaced
+    const p = idx(m, 0, q => q.slot !== 0), q = m.players[p];
+    const rng = m.rng; m.rng = () => 0.9; // a long injury
+    expect(m._injure(p, true)).toBe(true);
+    m.rng = rng;
+    expect(q.onPitch).toBe(false);
+    expect(m.onPitch(0).length).toBe(10);
+    while (m.phase !== 'play') m.step();
+    const restartedAt = m.clockSec();
+    while (q.treat && !m.finished) { m.step(); expect(q.onPitch).toBe(!q.treat); }
+    expect(q.onPitch).toBe(true);
+    expect(m.clockSec() - restartedAt).toBeGreaterThanOrEqual(60);
+    expect(m.clockSec() - restartedAt).toBeLessThan(61);
+    expect(m.events.filter((e: any) => e.type === 'treatment').length).toBe(2);
+
+    const m2 = newMatch(), gk = idx(m2, 1, q => q.slot === 0);
+    m2.rng = () => 0.9;
+    m2._injure(gk, true);
+    expect(m2.players[gk].onPitch).toBe(true);
+  });
+
+  it('gives a substituted player at most 10 seconds to leave, and brings the substitute on at halfway (Law 3)', () => {
+    const m = newMatch();
+    m._setRestart('throwin', 0, 50, 0, 1);
+    const out = m.players.find((q: any) => q.onPitch && q.side === 1 && q.slot === 5);
+    out.x = 60; out.y = W / 2; // as far from the boundary as a player can be
+    const inId = m.teams[1].bench[0].id;
+    expect(m.substitute(1, out.id, inId).ok).toBe(true);
+    const sub = m.players.find((q: any) => q.id === inId);
+    expect(out.leaving).toBeTruthy();
+    const t0 = m.clockSec();
+    while (out.leaving) {
+      expect(m.phase).toBe('dead'); // play waits for the change
+      expect(sub.x).toBe(L / 2);
+      m.step();
+    }
+    expect(m.clockSec() - t0).toBeLessThanOrEqual(10);
+    expect(out.y < 0 || out.y > W || out.x < 0 || out.x > L).toBe(true);
+    while (m.phase === 'dead') m.step();
+    expect(sub.onPitch).toBe(true);
+  });
+
   it('bans players after red cards: one match for a second yellow, three for serious foul play', () => {
     const m = newMatch();
     const a = idx(m, 0, q => q.slot === 5), b = idx(m, 1, q => q.slot === 6);
