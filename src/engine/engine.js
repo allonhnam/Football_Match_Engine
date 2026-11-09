@@ -14,7 +14,7 @@ const TUNING = {
   finishing: 2.45,     // multiplier on the chance an on-target shot scores
   foulBase: 0.126,      // chance a tackle attempt is a foul
   foulPress: 0.07,     // extra foul chance per level of pressing
-  yellowBase: 0.175,     // chance a foul is booked
+  yellowBase: 0.166,     // chance a foul is booked
   homeAdvantage: 0.3,   // attribute points the home side gains on every skill
   onTarget: 0.228,        // base chance a shot is on target, before skill and shot quality
   offsideTiming: 3.02,   // metres a run or a pass can be mistimed by (more for a passer with poor vision)
@@ -58,15 +58,20 @@ const TUNING = {
   lateOpenness: 0.32,   // chances improve through the match (tired legs, stretched games): x(1 + k * (minute/90 - 0.5))
   chasing: 0.27,        // per goal behind (up to 2): the trailing side commits men forward
   sittingOn: 0.08,      // per goal ahead (up to 2): the leading side drops off and creates less
+  // Time-wasting by a side leading after 75 minutes, and the referee's answers to it (Laws 12, 15 and 16)
+  wasteTime: 0.35,      // its restarts take this much longer
+  delayCaution: 0.05,   // chance per such restart that the taker is cautioned for delaying it
+  countdownUse: 0.35,   // chance the referee starts the 5-second countdown at a delayed throw-in or goal kick
+  countdownBeat: 0.93,  // chance the taker beats the count (otherwise the restart goes to the opponents)
 };
 // Tactical trade-offs. The 2D model produces most effects of a tactic by itself (shape, pressing runs, pass
 // length, decision speed, stamina), but it is too coarse to make every option cost something, so each setting
 // also scales the quality of the chances a side creates or concedes (1 = no effect). Tuned with npm run balance.
 const TACTIC_EDGE = {
   // our setting -> multiplier on the chances the opponent creates against us
-  concede: { mentality: [0.82, 1, 1.18], pressing: [0.8, 1, 1.03], line: [0.85, 1, 1.18], tempo: [0.97, 1, 1.02], width: [1, 1, 1], passing: [1, 1, 1] },
+  concede: { mentality: [0.82, 1, 1.18], pressing: [0.8, 1, 1.03], line: [0.85, 1, 1.18], tempo: [1, 1, 1], width: [1, 1, 1], passing: [1, 1, 1] },
   // our setting -> multiplier on the chances we create
-  create: { mentality: [1, 1, 1], pressing: [1, 1, 1], line: [0.95, 1, 1.12], tempo: [0.97, 1, 1.14], width: [0.97, 1, 1.03], passing: [0.95, 1, 1.07] },
+  create: { mentality: [1, 1, 1], pressing: [1, 1, 1], line: [0.95, 1, 1.12], tempo: [0.84, 1, 1.2], width: [0.97, 1, 1.03], passing: [0.95, 1, 1.07] },
   // our width -> multiplier on central chances against us (a narrow block protects the middle, a wide one leaves gaps)
   centralConcede: [0.88, 1, 1.06],
   // our width -> multiplier on headed chances against us from crosses (a narrow block lets the opponent cross)
@@ -303,6 +308,28 @@ P._setRestart = function (type, side, x, y, delay, extra) {
   if (this.pendingCards.length) { const pc = this.pendingCards; this.pendingCards = []; for (const c of pc) if (c.card) this._card(c.ti, c.card, c.why); }
   this.phase = 'dead'; this.ball.owner = -1; this.ball.flight = null; this.ball.z = 0;
   this.ball.x = clamp(x, 0, L); this.ball.y = clamp(y, 0, W);
+  const taker = this._pickTaker(type, side, x, y);
+  // Real restarts take time: fetching the ball, setting a wall, players taking up positions (and a side protecting a
+  // late lead in no hurry). The delay passed in is a minimum.
+  const rt = RESTART_TIME[type];
+  let wasting = 0;
+  if (rt) {
+    const lead = this.teams[side].score - this.teams[1 - side].score, late = this.clockSec() > 75 * 60 && lead > 0;
+    const normal = rt[0] + this.rng() * rt[1];
+    if (late) wasting = normal * TUNING.wasteTime;
+    delay = Math.max(delay, normal + wasting);
+  }
+  if (type === 'throwin') this.teams[side].stats.throwIns++; else if (type === 'goalkick') this.teams[side].stats.goalKicks++;
+  this.restart = Object.assign({ type, side, x: this.ball.x, y: this.ball.y, timer: delay, taker }, extra || {});
+  if (wasting) {
+    // A side protecting a late lead takes its time. The referee may caution the taker for delaying the restart
+    // (Law 12), and at a throw-in or goal kick start a visible 5-second countdown (Laws 15 and 16).
+    const r = this.rng;
+    this.restart.wasting = { left: wasting, caution: r() < TUNING.delayCaution, countdown: (type === 'throwin' || type === 'goalkick') && r() < TUNING.countdownUse, beat: r() < TUNING.countdownBeat };
+  }
+  this._applyPending();
+};
+P._pickTaker = function (type, side, x, y) {
   let taker = -1, best = 1e9;
   this.players.forEach((q, i) => {
     if (!q.onPitch || q.side !== side) return;
@@ -314,13 +341,34 @@ P._setRestart = function (type, side, x, y, delay, extra) {
     if (type === 'kickoff') d = q.p.role === 'FW' || q.p.role === 'MF' ? dist(q.x, q.y, x, y) : 1e6 + d;
     if (d < best) { best = d; taker = i; }
   });
-  // Real restarts take time: fetching the ball, setting a wall, players taking up positions (and a side protecting a
-  // late lead in no hurry). The delay passed in is a minimum.
-  const rt = RESTART_TIME[type];
-  if (rt) { const lead = this.teams[side].score - this.teams[1 - side].score, late = this.clockSec() > 75 * 60 && lead > 0; delay = Math.max(delay, (rt[0] + this.rng() * rt[1]) * (late ? 1.35 : 1)); }
-  if (type === 'throwin') this.teams[side].stats.throwIns++; else if (type === 'goalkick') this.teams[side].stats.goalKicks++;
-  this.restart = Object.assign({ type, side, x: this.ball.x, y: this.ball.y, timer: delay, taker }, extra || {});
-  this._applyPending();
+  return taker;
+};
+// The time-wasting part of a restart, once the normal time is up and the taker is on the ball.
+P._delayedRestart = function (r) {
+  const w = r.wasting, tk = this.players[r.taker], now = this.clockSec();
+  if (!w.started) {
+    w.started = true;
+    if (w.caution && tk && tk.onPitch) {
+      this._card(r.taker, 'yellow', 'delaying the restart of play');
+      if (!tk.onPitch) { r.taker = this._pickTaker(r.type, r.side, r.x, r.y); return; }
+    }
+    if (w.countdown) {
+      r.countdown = { start: now, until: now + 5 };
+      this._emit({ type: 'countdown', side: r.side, player: tk && tk.id, text: 'The referee starts a 5-second countdown on ' + this.teams[r.side].name + "'s " + (r.type === 'throwin' ? 'throw-in' : 'goal kick'), x: r.x, y: r.y });
+      // most takers beat the count; the rest let it run out
+      if (w.beat) r.timer = Math.min(r.timer, 1.5 + this.rng() * 3);
+      else r.timer = Math.max(r.timer, 5.5);
+    }
+  }
+  if (r.countdown && now > r.countdown.until) {
+    // Law 15: the throw-in goes to the opponents. Law 16: a goal kick becomes a corner to the opponents.
+    const opp = 1 - r.side;
+    this._emit({ type: 'countdown', side: r.side, player: tk && tk.id, expired: true, text: r.type === 'throwin' ? 'Too slow: the throw-in goes to ' + this.teams[opp].name : 'Too slow: corner to ' + this.teams[opp].name, x: r.x, y: r.y });
+    if (r.type === 'throwin') this._setRestart('throwin', opp, r.x, r.y, 3);
+    else { this.teams[opp].stats.corners++; this._setRestart('corner', opp, this.dir(opp) > 0 ? L - 0.3 : 0.3, r.y < W / 2 ? 0.3 : W - 0.3, 6); }
+    return true;
+  }
+  return false;
 };
 P._resume = function () {
   const r = this.restart; this.restart = null; this.phase = 'play';
@@ -715,7 +763,13 @@ P._foul = function (ti, oi, kind, o2) {
   if (kind !== 'backpass') { tt.stats.fouls++; t.st.fouls++; }
   const inBox = this._inBox(att, fx, fy);
   let goalSide = 0; for (const q of this._side[t.side]) if (q.slot !== 0 && q !== t && (q.x - fx) * d > 0) goalSide++;
-  const lastMan = kind === 'challenge' && goalSide === 0 && Math.abs(fx - (d > 0 ? L : 0)) < 22 && Math.abs(fy - W / 2) < 15;
+  // Denying an obvious goal-scoring opportunity (Law 12): distance and direction to goal, the defenders goal-side, and
+  // (2026/27) the position and number of attackers: with one defender left, two team-mates in support still make it
+  // an obvious chance.
+  const nearGoal = Math.abs(fx - (d > 0 ? L : 0)) < 22 && Math.abs(fy - W / 2) < 15;
+  let support = 0;
+  if (o && goalSide === 1 && nearGoal) for (const q of this._side[att]) if (q !== o && q.slot !== 0 && dist(q.x, q.y, fx, fy) < 15 && (q.x - fx) * d > -4) support++;
+  const lastMan = kind === 'challenge' && nearGoal && (goalSide === 0 || support >= 2);
   const what = kind === 'handball' ? 'Handball by ' + t.p.name : kind === 'dangerous' ? 'Dangerous play by ' + t.p.name : kind === 'backpass' ? t.p.name + ' handles a back-pass' : 'Foul by ' + t.p.name + ' on ' + o.p.name;
   this._emit({ type: 'foul', offence: kind, side: t.side, player: t.id, victim: o ? o.id : undefined, text: what, x: fx, y: fy });
   // misconduct
@@ -787,7 +841,24 @@ P._replaceKeeper = function (side) {
   if (gk && out && this.substitute(side, out.id, gk.id, true).ok) return;
   this._reslot(side);
 };
-P._injure = function (i, canStop) {
+// Law 8 (2026/27): a dropped ball in a penalty area goes to the defending keeper; anywhere else, to the team that
+// would have kept or gained possession: the team in possession (or `winner`, the side that had just won it), else
+// the side whose player would get to the loose ball first.
+P._droppedBallSide = function (winner) {
+  const b = this.ball;
+  for (const s of [0, 1]) if (this._inOwnBox(s, b.x, b.y)) return s;
+  if (winner != null) return winner;
+  if (b.owner >= 0) return this.players[b.owner].side;
+  const tx = b.flight ? b.flight.tx : b.x, ty = b.flight ? b.flight.ty : b.y;
+  let side = b.lastSide, best = 1e9;
+  for (const q of this.players) {
+    if (!q.onPitch || q.injured) continue;
+    const t = dist(q.x, q.y, tx, ty) / (5.2 + this.eff(q, 'pace') * 0.17);
+    if (t < best) { best = t; side = q.side; }
+  }
+  return side;
+};
+P._injure = function (i, canStop, winner) {
   const q = this.players[i]; if (q.injured || !q.onPitch) return false;
   const r = this.rng, kinds = ['hamstring strain', 'ankle knock', 'calf strain', 'knee sprain', 'groin strain', 'dead leg'];
   const days = Math.round(r() < 0.6 ? 2 + r() * 10 : 10 + r() * 45);
@@ -795,7 +866,7 @@ P._injure = function (i, canStop) {
   this.injuries = (this.injuries || 0) + 1;
   this._emit({ type: 'injury', side: q.side, player: q.id, text: q.p.name + ' is injured (' + q.injured.type + ', about ' + days + ' days)' });
   if (canStop && days >= 10 && this.phase === 'play') {
-    const b = this.ball, side = b.owner >= 0 ? this.players[b.owner].side : b.lastSide;
+    const b = this.ball, side = this._droppedBallSide(winner);
     this._emit({ type: 'stoppage', side, text: 'Play stopped for treatment; dropped ball to ' + this.teams[side].name });
     this._treat(q, false);
     this._setRestart('dropball', side, b.x, b.y, 8);
@@ -1254,6 +1325,7 @@ P.step = function () {
     r.timer -= DT;
     if (this.leaving.length) r.timer = Math.max(r.timer, DT); // play waits until substituted players are off
     const t = this.players[r.taker];
+    if (r.wasting && (r.wasting.started || (r.timer <= r.wasting.left && (!t || dist(t.x, t.y, r.x, r.y) < 1.5))) && this._delayedRestart(r)) return;
     // Law 8: a kick-off waits until every player is in their own half (the taker may stand on the line).
     const set = r.type !== 'kickoff' || r.timer < -20 || this.players.every((q, k) => !q.onPitch || k === r.taker || (q.x - L / 2) * this.dir(q.side) <= 0.5);
     if (r.timer <= 0 && set && (!t || dist(t.x, t.y, r.x, r.y) < 1.5 || r.timer < -6)) this._resume();
@@ -1342,7 +1414,7 @@ P._tackles = function () {
     if (r() < pw) {
       t.st.tackles++; this.teams[t.side].stats.tackles++;
       const d = this.dir(t.side), fx = d > 0 ? t.x : L - t.x; if (fx > 70) this.teams[t.side].stats.finalThirdWins++;
-      if (r() < 0.0015 && this._injure(oi, true)) return;
+      if (r() < 0.0015 && this._injure(oi, true, t.side)) return; // the tackler had won the ball: his team gets the drop
       const edge = Math.min(b.y, W - b.y);
       if (edge < 15 && r() < 0.55) { const v = 7 + r() * 6, a = (b.y < W / 2 ? -Math.PI / 2 : Math.PI / 2) + (r() - 0.5) * 1.2; this._loose(b.x, b.y, Math.cos(a) * v, Math.sin(a) * v); } // poked out for a throw-in
       else if (r() < 0.6) this._give(i); else { const a = r() * 2 * Math.PI, v = 4 + r() * 7; this._loose(b.x, b.y, Math.cos(a) * v, Math.sin(a) * v); }
@@ -1603,7 +1675,7 @@ P.runToEnd = function () { let guard = 0; while (!this.finished && guard++ < 800
 P.snapshot = function () {
   return { tick: this.tick, half: this.half, clock: this.clockLabel(), minute: this.minute(), phase: this.phase, score: [this.teams[0].score, this.teams[1].score],
     ball: Object.assign({}, this.ball), officials: this.officials.map(o => Object.assign({}, o)),
-    keeperHolding: this.gkHands >= 0 && this.ball.owner === this.gkHands ? { player: this.players[this.gkHands].id, seconds: this.clockSec() - this.gkHandsT } : null, players: this.players.filter(q => q.onPitch || q.treat || q.leaving).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond, off: q.treat ? 'treatment' : q.leaving ? 'substituted' : null })) };
+    keeperHolding: this.gkHands >= 0 && this.ball.owner === this.gkHands ? { player: this.players[this.gkHands].id, seconds: this.clockSec() - this.gkHandsT } : null, restartCountdown: this.restart && this.restart.countdown ? { type: this.restart.type, player: this.players[this.restart.taker] && this.players[this.restart.taker].id, seconds: this.clockSec() - this.restart.countdown.start } : null, players: this.players.filter(q => q.onPitch || q.treat || q.leaving).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond, off: q.treat ? 'treatment' : q.leaving ? 'substituted' : null })) };
 };
 
 // ---------- results ----------

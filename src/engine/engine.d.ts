@@ -85,6 +85,9 @@ export type EventType =
   | 'stoppage'
   /** A player leaves the field for treatment, or (with back: true) returns one minute after play restarted. */
   | 'treatment'
+  /** The referee starts a 5-second countdown on a delayed throw-in or goal kick; with expired: true, it ran out and
+   * the throw-in went to the opponents (or the goal kick became a corner to them). */
+  | 'countdown'
   /** Goalkeeper held the ball in his hands for more than 8 seconds: corner to the opponents. */
   | 'keeperholding'
   /** A goal ruled out (handball by the scorer). */
@@ -239,7 +242,8 @@ export class Match {
   explain(): MatchExplanation;
   /** A frame for drawing: clock, score, ball (x, y, height z), players, the referee and two assistants, and the
    * keeper holding the ball (with seconds held, for the 8-second rule). px/py are positions one tick earlier.
-   * Players off the field for treatment or walking off after a substitution are included with `off` set. */
+   * Players off the field for treatment or walking off after a substitution are included with `off` set, and
+   * `restartCountdown` gives the seconds counted at a delayed throw-in or goal kick (Laws 15 and 16). */
   snapshot(): any;
   /** Referee and assistant referees: [referee, assistant (top touchline, left half), assistant (bottom, right half)]. */
   officials: { role: 'referee' | 'assistant'; x: number; y: number; px: number; py: number }[];
@@ -280,6 +284,8 @@ export const DEFAULT_TACTICS: Tactics;
 export const ATTRS: AttributeKey[];
 export const PITCH: { L: number; W: number };
 export const ENGINE_VERSION: string;
+/** The calibration settings (see the comments in engine.js). Changing them changes every match. */
+export const TUNING: Record<string, number>;
 /** Tactic trade-offs as multipliers on chance quality (see engine.js). */
 export const TACTIC_EDGE: {
   concede: Record<TacticKey, [number, number, number]>;

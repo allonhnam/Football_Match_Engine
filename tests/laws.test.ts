@@ -194,6 +194,92 @@ describe('laws of the game', () => {
     expect(t.yellow).toBe(0);
   });
 
+  it('counts the attackers in support when judging a denied goal-scoring chance (Law 12, 2026/27)', () => {
+    // one defender still goal-side: an obvious chance only if two attackers are in support
+    const foul = (support: boolean) => {
+      const m = newMatch(), d = m.dir(0);
+      const oi = idx(m, 0, q => q.slot === 9), ti = idx(m, 1, q => q.slot === 2), o = m.players[oi], t = m.players[ti];
+      o.x = d > 0 ? L - 20 : 20; o.y = W / 2; t.x = o.x; t.y = o.y + 1;
+      const cover = m.players[idx(m, 1, q => q.slot === 3)];
+      m.players.forEach((q: any) => { if (q.onPitch && q.side === 1 && q.slot !== 0 && q !== t) q.x = o.x - d * 10; });
+      cover.x = o.x + d * 6; cover.y = W / 2 - 3;
+      m.players.forEach((q: any) => { if (q.onPitch && q.side === 0 && q !== o && q.slot !== 0) q.x = o.x - d * 25; });
+      if (support) [7, 8].forEach((s, k) => { const a = m.players[idx(m, 0, q => q.slot === s)]; a.x = o.x + d * 2; a.y = W / 2 + (k ? 7 : -7); });
+      m.ball.owner = oi; m.ball.x = o.x; m.ball.y = o.y;
+      const rng = m.rng; let k = 0; m.rng = () => (k++ === 0 ? 0.01 : 0.5);
+      m._foul(ti, oi, 'challenge');
+      m.rng = rng;
+      return t;
+    };
+    expect(foul(false).red).toBe(false);
+    const t = foul(true);
+    expect(t.red).toBe(true);
+    expect(t.redReason).toBe('denied an obvious goal-scoring opportunity');
+  });
+
+  it('drops the ball for the defending keeper in his area, else for the team that would have kept or won it (Law 8, 2026/27)', () => {
+    const m = newMatch(), d1 = m.dir(1);
+    m.ball.owner = -1; m.ball.flight = null;
+    m.ball.x = d1 > 0 ? L - 8 : 8; m.ball.y = W / 2; // in the area side 0 defends
+    expect(m._droppedBallSide()).toBe(0);
+    m.ball.x = L / 2; m.ball.y = W / 2;
+    expect(m._droppedBallSide(1)).toBe(1); // side 1 had just won it
+    const q = m.players[idx(m, 0, p => p.slot === 6)];
+    m.ball.x = q.x + 0.5; m.ball.y = q.y; m.ball.lastSide = 1;
+    if (m._inOwnBox(0, m.ball.x, m.ball.y) || m._inOwnBox(1, m.ball.x, m.ball.y)) return;
+    expect(m._droppedBallSide()).toBe(0); // loose, nearest to a side-0 player
+  });
+
+  // A late throw-in or goal kick by a side protecting a lead, with the referee's response forced through TUNING.
+  const delayedRestart = (type: 'throwin' | 'goalkick', settings: Record<string, number>) => {
+    const m: any = new E.Match({ home: E.makeTeam({ name: 'Home', seed: 11 }), away: E.makeTeam({ name: 'Away', seed: 22 }), seed: 3, control: 'none' });
+    m.runUntil({ minute: 77 });
+    while (m.phase !== 'play') m.step();
+    m.teams[0].score = m.teams[1].score + 1;
+    m.players.forEach((q: any) => { q.yellow = 0; }); // so a caution is a yellow, not a second yellow
+    const saved: Record<string, number> = {};
+    for (const k in settings) { saved[k] = (E.TUNING as any)[k]; (E.TUNING as any)[k] = settings[k]; }
+    try {
+      const d = m.dir(0);
+      if (type === 'throwin') m._setRestart('throwin', 0, 50, 0, 3);
+      else m._setRestart('goalkick', 0, d > 0 ? 5.5 : L - 5.5, W / 2, 5);
+      const first = m.restart, taker = m.players[first.taker];
+      let started = -1;
+      for (let i = 0; i < 400 && m.restart === first; i++) { m.step(); if (started < 0 && first.countdown) started = m.clockSec(); }
+      return { m, first, taker, started };
+    } finally { Object.assign(E.TUNING, saved); }
+  };
+
+  it('gives a throw-in to the opponents when the 5-second countdown runs out (Law 15, 2026/27)', () => {
+    const { m, first, started } = delayedRestart('throwin', { countdownUse: 1, countdownBeat: 0, delayCaution: 0 });
+    expect(started).toBeGreaterThan(0);
+    expect(lastEvent(m, 'countdown').expired).toBe(true);
+    expect(m.restart.type).toBe('throwin');
+    expect(m.restart.side).toBe(1);
+    expect(m.clockSec() - started).toBeGreaterThan(5);
+    expect(m.restart.x).toBe(first.x);
+  });
+
+  it('gives a corner to the opponents when the countdown on a goal kick runs out (Law 16, 2026/27)', () => {
+    const { m } = delayedRestart('goalkick', { countdownUse: 1, countdownBeat: 0, delayCaution: 0 });
+    expect(lastEvent(m, 'countdown').expired).toBe(true);
+    expect(m.restart.type).toBe('corner');
+    expect(m.restart.side).toBe(1);
+  });
+
+  it('lets play go on when the taker beats the countdown', () => {
+    const { m, started } = delayedRestart('throwin', { countdownUse: 1, countdownBeat: 1, delayCaution: 0 });
+    expect(started).toBeGreaterThan(0);
+    expect(m.events.some((e: any) => e.type === 'countdown' && e.expired)).toBe(false);
+    expect(m.clockSec() - started).toBeLessThanOrEqual(5);
+  });
+
+  it('cautions a player for delaying the restart (Law 12)', () => {
+    const { m, taker } = delayedRestart('throwin', { countdownUse: 0, delayCaution: 1 });
+    expect(lastEvent(m, 'yellow').player).toBe(taker.id);
+    expect(lastEvent(m, 'yellow').text).toMatch(/delaying the restart/);
+  });
+
   it('sends a treated player off the field until a minute after the restart; keepers are exempt (Law 5, 2026/27)', () => {
     const m = newMatch();
     m.teams[0].subsUsed = 5; // no substitutes left, so he cannot simply be replaced

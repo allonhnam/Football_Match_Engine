@@ -25,6 +25,7 @@ export function eventTitle(e, m) {
     case 'stoppage': return ['Play stopped', e.text];
     case 'treatment': return [`${e.back ? 'Back on' : 'Treatment'} · ${T}`, e.back ? `${P(e.player)} returns after a minute off` : `${P(e.player)} leaves the field and must stay off for a minute after the restart`];
     case 'keeperholding': return [`8-second rule · ${T}`, e.text];
+    case 'countdown': return [e.expired ? `Countdown expired · ${T}` : `5-second countdown · ${T}`, e.text];
     case 'disallowed': return [`Goal disallowed · ${T}`, e.text];
     case 'tactic': return [`Tactical change · ${T}`, e.text.replace(m.teams[e.side].name + ' ', '')];
     case 'halftime': return ['Half-time', e.text.replace('Half-time: ', '')];
