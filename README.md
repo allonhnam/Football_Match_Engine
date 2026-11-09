@@ -59,7 +59,7 @@ const again = Match.load(saved).runToEnd();
 - **Errors.** Illegal lineups come back as typed errors (`validateLineup`, and `errors` on a `Match` or `simulateMatch` result), never thrown. Illegal manager commands return `{ ok: false, error }`.
 - **Live view.** Call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(...)` from a timer at any speed, draw `m.snapshot()`, and listen to events with `m.on(e => ...)`.
 - **Cup ties.** Pass `knockout: true`, or `knockout: { aggregate: [2, 1] }` for a second leg. The result then always has a `winner`, plus `extraTime` and `shootout`.
-- **Background matches.** `simulateMatch` takes about 130 ms per match on one core. The visualizer spreads batches over Web Workers (`src/lib/batch.ts`): a 380-match season takes about 13 s. A hard tick cap means a match can never hang.
+- **Background matches.** `simulateMatch` takes about 250 ms per match on one core (about 235 ms in Node, 275 ms in a browser tab, on a recent laptop). The visualizer spreads batches over Web Workers (`src/lib/batch.ts`): about 18 matches a second, so a 380-match season takes about 21 s. The Engine Lab's Performance tab measures this on your own machine. A hard tick cap means a match can never hang.
 
 The result:
 
