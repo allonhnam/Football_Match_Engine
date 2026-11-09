@@ -16,7 +16,7 @@ export function ManagerPanel({ m, control, bump, readOnly }: any) {
   useEffect(() => { setDraft({ ...m.teams[side].tactics, ...(pendingT ? pendingT.tactics : {}) }); setOutId(null); setInId(null); }, [side]);
   if (readOnly) return <p className="text-dim text-[12.5px] py-10 text-center px-4">This is a replay. Manager decisions are re-applied from the recorded command log, so they cannot be changed.</p>;
   if (!sides.length) return <p className="text-dim text-[12.5px] py-10 text-center px-4">You are watching: both teams are run by the AI manager. Choose a side under “You manage” in match setup to make decisions.</p>;
-  const onP = m.onPitch(side).slice().sort((a, b) => a.cond - b.cond);
+  const onP = m.onPitch(side).concat(m.treating.filter(q => q.side === side)).sort((a, b) => a.cond - b.cond); // includes players off for treatment
   const queued = tm.pending.filter(c => c.kind === 'sub'), subsLeft = 5 - tm.subsUsed - queued.length;
   const doSub = () => { const r = m.substitute(side, outId, inId); setMsg(r.ok ? { ok: true, t: r.queued ? 'Queued. It happens at the next stoppage.' : 'Substitution made.' } : { ok: false, t: r.error }); if (r.ok) { setOutId(null); setInId(null); } bump(); };
   const changed = E.TACTIC_KEYS.some(k => draft[k] !== tm.tactics[k]);

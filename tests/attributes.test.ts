@@ -4,15 +4,38 @@ import * as E from '@/engine/engine';
 // Every attribute must change the thing it stands for. Both sides get the same squad at a neutral ground; one side
 // gets +6 in a single attribute and alternates home and away. `npm run attributes` runs the full-size version.
 const N = 60;
-function compare(attr: string, stat: (r: any, side: number) => number, n = N) {
-  let mine = 0, theirs = 0;
+/** Sums a [numerator, denominator] stat over n matches, for the boosted side and for its opponent. */
+function play(attr: string, stat: (r: any, side: number) => [number, number], n: number) {
+  const mine = [0, 0], theirs = [0, 0];
   for (let i = 0; i < n; i++) {
     const side = i % 2, teams = [E.makeTeam({ name: 'H', seed: 700 + i }), E.makeTeam({ name: 'A', seed: 700 + i })];
     for (const p of teams[side].players) if (attr !== 'keeping' || p.role === 'GK') (p.attrs as any)[attr] = Math.min(20, (p.attrs as any)[attr] + 6);
     const r: any = E.simulateMatch({ home: teams[0], away: teams[1], seed: 40 + i, control: 'none', neutral: true });
-    mine += stat(r, side); theirs += stat(r, 1 - side);
+    const a = stat(r, side), b = stat(r, 1 - side);
+    mine[0] += a[0]; mine[1] += a[1]; theirs[0] += b[0]; theirs[1] += b[1];
   }
-  return { mine: mine / n, theirs: theirs / n };
+  return { mine: mine[0] / mine[1], theirs: theirs[0] / theirs[1] };
+}
+/** Average of a per-match stat. */
+const compare = (attr: string, stat: (r: any, side: number) => number, n = N) => play(attr, (r, s) => [stat(r, s), 1], n);
+/** The same 0.15 xG chance from 14 m taken 4,000 times, with the shooter's shooting and the defending keeper's
+ * keeping set to the given values: goals per attempt, and per shot on target. */
+function scoringRate({ shooting, keeping }: { shooting: number; keeping: number }) {
+  const m: any = new E.Match({ home: E.makeTeam({ name: 'H', seed: 7 }), away: E.makeTeam({ name: 'A', seed: 7 }), seed: 5, control: 'none', neutral: true });
+  m.runUntil({ minute: 3 });
+  const i = m.players.findIndex((q: any) => q.onPitch && q.side === 0 && q.slot === 9), q = m.players[i];
+  const gk = m.players.find((p: any) => p.onPitch && p.side === 1 && p.slot === 0);
+  q.p = { ...q.p, attrs: { ...q.p.attrs, shooting } };
+  gk.p = { ...gk.p, attrs: { ...gk.p.attrs, keeping } };
+  let goals = 0, onTarget = 0;
+  for (let k = 0; k < 4000; k++) {
+    q.x = m.dir(0) > 0 ? 105 - 14 : 14; q.y = 34;
+    m._shoot(i, { xg: 0.15, freekick: true }); // a free kick: no blockers, so every attempt reaches the keeper or misses
+    const o = m.ball.flight.outcome;
+    if (o === 'goal' || o === 'saved') onTarget++;
+    if (o === 'goal') goals++;
+  }
+  return { perAttempt: goals / 4000, perOnTarget: goals / onTarget };
 }
 const events = (r: any, side: number, pred: (e: any) => boolean) => r.events.filter((e: any) => e.side === side && pred(e)).length;
 
@@ -37,10 +60,12 @@ describe('player attributes', { timeout: 120_000 }, () => {
     const c = compare('dribbling', (r, s) => r.teamStats[s].boxEntries);
     expect(c.mine).toBeGreaterThan(c.theirs * 1.3);
   });
-  it('shooting: better finishers score more of their shots', () => {
-    // finishing is noisy per match, so this check uses more matches
-    const c = compare('shooting', (r, s) => r.score[s] / Math.max(1, r.teamStats[s].shots), 150);
-    expect(c.mine).toBeGreaterThan(c.theirs * 1.1);
+  // Finishing and keeping are checked on the same chance taken thousands of times: whether a single shot goes in
+  // is too random for a CI-sized sample of matches to show a 10% effect reliably. `npm run attributes` shows the
+  // effect on results over 2,000 matches.
+  it('shooting: a better finisher scores more of the same chances', () => {
+    // better finishers hit the target more often and beat the keeper more often
+    expect(scoringRate({ shooting: 16, keeping: 13 }).perAttempt).toBeGreaterThan(scoringRate({ shooting: 10, keeping: 13 }).perAttempt * 1.25);
   });
   it('heading: better headers win more headers and get more headed attempts', () => {
     // headed goals are too rare (a few per hundred matches) to test directly; headed attempts follow won headers
@@ -56,10 +81,7 @@ describe('player attributes', { timeout: 120_000 }, () => {
     const c = compare('positioning', (r, s) => r.teamStats[1 - s].boxEntries);
     expect(c.mine).toBeLessThan(c.theirs * 0.93);
   });
-  it('keeping: a better keeper concedes fewer goals per shot on target', () => {
-    // only one player gets the boost, so this check uses more matches (the effect is about 10%; 150 matches was
-    // close enough to noise to fail on an unlucky draw)
-    const c = compare('keeping', (r, s) => r.score[1 - s] / Math.max(1, r.teamStats[1 - s].onTarget), 300);
-    expect(c.mine).toBeLessThan(c.theirs * 0.93);
+  it('keeping: a better keeper saves more of the same shots on target', () => {
+    expect(scoringRate({ shooting: 13, keeping: 16 }).perOnTarget).toBeLessThan(scoringRate({ shooting: 13, keeping: 10 }).perOnTarget * 0.85);
   });
 });

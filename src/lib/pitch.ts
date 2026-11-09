@@ -80,13 +80,20 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const labels = [];
   for (const q of m.players) {
-    if (!q.onPitch) continue;
+    const offField = !q.onPitch && (q.treat || q.leaving); // off for treatment, or walking off after a substitution
+    if (!q.onPitch && !offField) continue;
+    ctx.globalAlpha = offField ? 0.5 : 1;
     const x = X(lerp(q.px, q.x)), y = Y(lerp(q.py, q.y));
     const gk = q.slot === 0, c = gk ? (q.side === 0 ? '#FFD23C' : '#3DDC97') : m.teams[q.side].color;
     if (owner === q && m.gkHands === b.owner) {
       const held = Math.min(8, now - m.gkHandsT), frac = held / 8, late = held > 3; // the referee counts down the last 5 seconds
       ctx.save(); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = late ? col.bad : '#fff'; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke(); ctx.restore();
+    } else if (m.restart && m.restart.countdown && m.players[m.restart.taker] === q) {
+      // the referee's 5-second countdown at a delayed throw-in or goal kick (Laws 15 and 16)
+      const frac = Math.min(1, (now - m.restart.countdown.start) / 5);
+      ctx.save(); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = frac > 0.6 ? col.bad : '#fff'; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke(); ctx.restore();
     } else if (owner === q) { ctx.save(); ctx.shadowColor = col.accent; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(x, y, r + 3.5, 0, Math.PI * 2); ctx.strokeStyle = col.accent; ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore(); }
     const vx = q.x - q.px, vy = q.y - q.py, vl = Math.hypot(vx, vy);
     if (vl > 0.04) { const a = Math.atan2(vy, vx); ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * (r + 5), y + Math.sin(a) * (r + 5)); ctx.lineTo(x + Math.cos(a + 0.5) * (r + 0.5), y + Math.sin(a + 0.5) * (r + 0.5)); ctx.lineTo(x + Math.cos(a - 0.5) * (r + 0.5), y + Math.sin(a - 0.5) * (r + 0.5)); ctx.closePath(); ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fill(); }
@@ -95,6 +102,7 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
     ctx.fillStyle = textOn(c); ctx.font = `700 ${Math.round(r * 0.95)}px Inter, sans-serif`; ctx.fillText(q.p.num, x, y + 0.5);
     if (opts.names) labels.push([lastName(q.p.name), x, y + r + 9]);
   }
+  ctx.globalAlpha = 1;
   if (labels.length) {
     ctx.font = `500 ${Math.max(9.5, Math.round(r * 0.8))}px Inter, sans-serif`;
     for (const [t, x, y] of labels) { const w = ctx.measureText(t).width + 8, h = Math.max(13, r * 1.1); ctx.fillStyle = col.chip; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h / 2, w, h, 3); else ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, x, y + 0.5); }
