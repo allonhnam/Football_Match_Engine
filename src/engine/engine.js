@@ -205,6 +205,14 @@ function Match(config) {
   this._emit({ type: 'kickoff', side: this.firstKick, text: 'Kick-off. ' + this.teams[0].name + ' v ' + this.teams[1].name });
   this._setRestart('kickoff', this.firstKick, L / 2, W / 2, 3);
   this._sides(); this._targets(); this._restartTargets();
+  this.officialsOn = config.officials !== false; // headless runs (simulateMatch) skip them: they are only drawn
+  // Match officials (Law 5 and 6): the referee works the diagonal, the assistants each take one touchline and
+  // half, level with the second-last defender. They are for display only and never touch the random numbers.
+  this.officials = [
+    { role: 'referee', x: L / 2 - 4, y: W / 2 + 10, px: L / 2 - 4, py: W / 2 + 10 },
+    { role: 'assistant', x: L / 4, y: -1, px: L / 4, py: -1 },
+    { role: 'assistant', x: 3 * L / 4, y: W + 1, px: 3 * L / 4, py: W + 1 },
+  ];
   for (const q of this.players) { q.x = q.px = q.tx; q.y = q.py = q.ty; }
 }
 const P = Match.prototype;
@@ -853,7 +861,30 @@ P._restartTargets = function () {
   }
   const t = this.players[r.taker]; if (t) { t.tx = b.x; t.ty = b.y; t.urgent = 1; }
 };
+P._moveOfficials = function () {
+  const b = this.ball, [ref, a1, a2] = this.officials;
+  const step = (o, tx, ty, vmax) => {
+    o.px = o.x; o.py = o.y;
+    const dx = tx - o.x, dy = ty - o.y, d = Math.sqrt(dx * dx + dy * dy);
+    const v = Math.min(vmax, 0.6 + d * 0.9) * DT;
+    if (d > 0.05) { const k = Math.min(1, v / d); o.x += dx * k; o.y += dy * k; }
+  };
+  if (this.phase === 'shootout') { step(ref, L - 13, W / 2 - 5, 3); step(a1, L, W / 2 - 3.66, 3); step(a2, L / 2, W + 1, 3); return; }
+  // Referee: on the diagonal from the bottom-left to the top-right corner of the field, near the ball's x,
+  // about 12 m from the ball and never on top of it.
+  const diagY = x => W - 6 - (x / L) * (W - 12);
+  let tx = clamp(b.x - 6, 8, L - 8), ty = 0.55 * diagY(tx) + 0.45 * b.y;
+  const dbx = tx - b.x, dby = ty - b.y, db = Math.sqrt(dbx * dbx + dby * dby) || 1;
+  if (db < 11) { tx = b.x + dbx / db * 11; ty = b.y + dby / db * 11; }
+  step(ref, clamp(tx, 2, L - 2), clamp(ty, 2, W - 2), 6.5);
+  // Assistants: level with the second-last defender, or with the ball when it is nearer the goal line.
+  const leftAtt = this.dir(0) < 0 ? 0 : 1; // the side attacking the left-hand goal
+  const lineL = this._offsideLine(leftAtt), lineR = this._offsideLine(1 - leftAtt);
+  step(a1, clamp(Math.min(lineL, b.x), 0, L / 2), -1, 7);
+  step(a2, clamp(Math.max(lineR, b.x), L / 2, L), W + 1, 7);
+};
 P._move = function () {
+  if (this.officialsOn) this._moveOfficials();
   const ps = this.players, n = ps.length, owner = this.ball.owner >= 0 ? ps[this.ball.owner] : null, lastSide = this.ball.lastSide;
   const T0 = this.teams[0].tactics, T1 = this.teams[1].tactics;
   for (let i = 0; i < n; i++) { const q = ps[i]; q.px = q.x; q.py = q.y; }
@@ -1132,6 +1163,7 @@ P._startSecondHalf = function () { // starts the next period: second half, or ei
   const recover = next === 2 ? 0.07 : next === 3 ? 0.03 : 0.01;
   this.half = next; this.t = 0; this.addedAnnounced = false; this.goalsThisHalf = 0; this.injuries = 0;
   for (const q of this.players) { if (q.onPitch) { q.cond = Math.min(1, q.cond + recover); q.x = L - q.x; q.y = W - q.y; q.px = q.x; q.py = q.y; } }
+  for (const o of this.officials) { o.x = o.px = L - o.x; if (o.role === 'referee') o.y = o.py = W - o.y; }
   if (next === 3) this.etFirstKick = this.rng() < 0.5 ? 0 : 1; // a new toss of the coin for extra time
   const side = next === 2 ? 1 - this.firstKick : next === 3 ? this.etFirstKick : 1 - this.etFirstKick;
   this._emit({ type: 'kickoff', side, text: ['', '', 'Second half under way', 'Extra time under way', 'Second half of extra time under way'][next] });
@@ -1215,7 +1247,8 @@ P.runToEnd = function () { let guard = 0; while (!this.finished && guard++ < 800
 
 P.snapshot = function () {
   return { tick: this.tick, half: this.half, clock: this.clockLabel(), minute: this.minute(), phase: this.phase, score: [this.teams[0].score, this.teams[1].score],
-    ball: Object.assign({}, this.ball), players: this.players.filter(q => q.onPitch).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond })) };
+    ball: Object.assign({}, this.ball), officials: this.officials.map(o => Object.assign({}, o)),
+    keeperHolding: this.gkHands >= 0 && this.ball.owner === this.gkHands ? { player: this.players[this.gkHands].id, seconds: this.clockSec() - this.gkHandsT } : null, players: this.players.filter(q => q.onPitch).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond })) };
 };
 
 // ---------- results ----------
@@ -1316,7 +1349,7 @@ Match.replay = function (config, commands, untilTick) {
 };
 P._addThreat = function (s, xg) { const mi = Math.floor(this.clockSec() / 60); while (this.momentum.length <= mi) this.momentum.push([0, 0]); this.momentum[mi][s] += xg; };
 
-function simulateMatch(config) { const m = new Match(config); if (m.errors) return { errors: m.errors }; return m.runToEnd(); }
+function simulateMatch(config) { const m = new Match(Object.assign({ officials: false }, config)); if (m.errors) return { errors: m.errors }; return m.runToEnd(); }
 
 export {
   ENGINE_VERSION, Match, simulateMatch, validateLineup, generateSquad, makeTeam, autoPick, positionFit, roleRating,

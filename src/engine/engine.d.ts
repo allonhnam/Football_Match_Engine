@@ -72,6 +72,8 @@ export interface MatchConfig {
    * fourth window), then a penalty shootout. For the second leg of a two-legged tie pass the goals each side
    * scored in earlier legs; the tie is then decided on aggregate. */
   knockout?: boolean | { aggregate: [number, number] };
+  /** Move the referee and assistants (default true for a Match, false for simulateMatch, which nobody watches). */
+  officials?: boolean;
 }
 
 export type EventType =
@@ -225,7 +227,11 @@ export class Match {
   runToEnd(): MatchResult;
   result(): MatchResult;
   explain(): MatchExplanation;
+  /** A frame for drawing: clock, score, ball (x, y, height z), players, the referee and two assistants, and the
+   * keeper holding the ball (with seconds held, for the 8-second rule). px/py are positions one tick earlier. */
   snapshot(): any;
+  /** Referee and assistant referees: [referee, assistant (top touchline, left half), assistant (bottom, right half)]. */
+  officials: { role: 'referee' | 'assistant'; x: number; y: number; px: number; py: number }[];
   onPitch(side?: Side): any[];
   clockSec(): number;
   clockLabel(): string;

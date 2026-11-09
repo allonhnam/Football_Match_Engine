@@ -43,13 +43,51 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
   }
   const b = m.ball, owner = b.owner >= 0 ? m.players[b.owner] : null;
   const r = Math.max(8, s * 0.95);
+  const now = m.clockSec();
+
+  // Ball in flight: a shot traces a line in the shooter's colour; a pass or cross shows where it is meant to land.
+  if (b.flight) {
+    const f = b.flight, cx = lerp(b.px, b.x), cy = lerp(b.py, b.y);
+    const shooter = m.players[f.shooter ?? f.passer], tc = shooter ? m.teams[shooter.side].color : '#fff';
+    ctx.save(); ctx.lineCap = 'round';
+    if (f.kind === 'shot') {
+      const g = ctx.createLinearGradient(X(f.sx), Y(f.sy), X(cx), Y(cy)); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, tc);
+      ctx.strokeStyle = g; ctx.lineWidth = Math.max(2, s * 0.3); ctx.beginPath(); ctx.moveTo(X(f.sx), Y(f.sy)); ctx.lineTo(X(cx), Y(cy)); ctx.stroke();
+    } else if (f.kind === 'pass' || f.kind === 'cross') {
+      ctx.globalAlpha = 0.55; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.moveTo(X(cx), Y(cy)); ctx.lineTo(X(f.tx), Y(f.ty)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(X(f.tx), Y(f.ty), Math.max(3, s * 0.5), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Officials: the referee in black, the assistants on the touchlines with their flag up just after an offside.
+  if (m.officials) {
+    let offsideX = null;
+    for (let k = m.events.length - 1; k >= 0 && m.events[k].t > now - 4; k--) if (m.events[k].type === 'offside') { offsideX = m.events[k].x; break; }
+    m.officials.forEach((o, k) => {
+      const x = X(lerp(o.px, o.x)), y = Y(lerp(o.py, o.y)), ro = r * (o.role === 'referee' ? 0.62 : 0.5);
+      if (o.role === 'assistant') {
+        const up = offsideX != null && (k === 1 ? offsideX < 52.5 : offsideX >= 52.5);
+        const dir = k === 1 ? 1 : -1; // flag points onto the field
+        ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y);
+        const fx = x + (up ? 0 : ro * 1.2), fy = y + dir * (up ? ro * 2.6 : ro * 1.4); ctx.lineTo(fx, fy); ctx.stroke();
+        ctx.fillStyle = up ? '#FF5A36' : '#F5D90A'; ctx.fillRect(fx - (up ? 0 : 0), fy - (dir > 0 ? 0 : ro * 0.9), ro * 1.2, ro * 0.9);
+      }
+      ctx.beginPath(); ctx.arc(x, y, ro, 0, Math.PI * 2); ctx.fillStyle = '#16181a'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = '#F5D90A'; ctx.stroke();
+    });
+  }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const labels = [];
   for (const q of m.players) {
     if (!q.onPitch) continue;
     const x = X(lerp(q.px, q.x)), y = Y(lerp(q.py, q.y));
     const gk = q.slot === 0, c = gk ? (q.side === 0 ? '#FFD23C' : '#3DDC97') : m.teams[q.side].color;
-    if (owner === q) { ctx.save(); ctx.shadowColor = col.accent; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(x, y, r + 3.5, 0, Math.PI * 2); ctx.strokeStyle = col.accent; ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore(); }
+    if (owner === q && m.gkHands === b.owner) {
+      const held = Math.min(8, now - m.gkHandsT), frac = held / 8, late = held > 3; // the referee counts down the last 5 seconds
+      ctx.save(); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = late ? col.bad : '#fff'; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke(); ctx.restore();
+    } else if (owner === q) { ctx.save(); ctx.shadowColor = col.accent; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(x, y, r + 3.5, 0, Math.PI * 2); ctx.strokeStyle = col.accent; ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore(); }
     const vx = q.x - q.px, vy = q.y - q.py, vl = Math.hypot(vx, vy);
     if (vl > 0.04) { const a = Math.atan2(vy, vx); ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * (r + 5), y + Math.sin(a) * (r + 5)); ctx.lineTo(x + Math.cos(a + 0.5) * (r + 0.5), y + Math.sin(a + 0.5) * (r + 0.5)); ctx.lineTo(x + Math.cos(a - 0.5) * (r + 0.5), y + Math.sin(a - 0.5) * (r + 0.5)); ctx.closePath(); ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fill(); }
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(11,15,14,.8)'; ctx.stroke();
@@ -61,7 +99,8 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
     ctx.font = `500 ${Math.max(9.5, Math.round(r * 0.8))}px Inter, sans-serif`;
     for (const [t, x, y] of labels) { const w = ctx.measureText(t).width + 8, h = Math.max(13, r * 1.1); ctx.fillStyle = col.chip; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h / 2, w, h, 3); else ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, x, y + 0.5); }
   }
-  const bx = X(lerp(b.px, b.x)), by = Y(lerp(b.py, b.y)), bz = lerp(b.pz || 0, b.z || 0);
+  const inHands = owner && m.gkHands === b.owner;
+  const bx = inHands ? X(lerp(owner.px, owner.x)) + r * 0.55 : X(lerp(b.px, b.x)), by = inHands ? Y(lerp(owner.py, owner.y)) - r * 0.55 : Y(lerp(b.py, b.y)), bz = inHands ? 1 : lerp(b.pz || 0, b.z || 0);
   ctx.beginPath(); ctx.ellipse(bx + 1, by + 1.5, Math.max(3, s * 0.42) * (1 - Math.min(0.5, bz * 0.06)), Math.max(2, s * 0.28), 0, 0, Math.PI * 2); ctx.fillStyle = `rgba(0,0,0,${0.42 - Math.min(0.25, bz * 0.03)})`; ctx.fill();
   ctx.beginPath(); ctx.arc(bx, by - bz * s * 0.55, Math.max(3.6, s * 0.45) * (1 + Math.min(0.35, bz * 0.035)), 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1; ctx.stroke();
   if (flash > 0) { ctx.fillStyle = `rgba(0,0,0,${0.4 * flash})`; ctx.fillRect(0, 0, Wc, Hc); }
