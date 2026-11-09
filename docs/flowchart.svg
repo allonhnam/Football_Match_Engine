@@ -38,7 +38,7 @@
 
   <!-- title -->
   <text x="720" y="50" text-anchor="middle" font-size="30" font-weight="700" fill="#2E2A3A">The life of one match</text>
-  <text x="720" y="82" text-anchor="middle" font-size="15" fill="#6E6585">How src/engine/engine.js plays a match: validate, kick off, then loop step() every 0.25 s of game time until the result</text>
+  <text x="720" y="82" text-anchor="middle" font-size="15" fill="#6E6585">How src/engine/engine.js plays a match: check the lineup, kick off, then call step() every 0.25 s of game time until the result</text>
 
   <!-- lanes -->
   <rect class="lane" x="16" y="100" width="352" height="1420" rx="18"/>
@@ -88,6 +88,8 @@
   <g filter="url(#shadow)"><rect class="proc" x="550" y="578" width="460" height="78" rx="12" style="stroke-width:3.5"/></g>
   <text class="t" x="780" y="604" style="font-size:18px">step() · advance the clock 0.25 s</text>
   <text class="s" x="780" y="631">one seeded RNG: same inputs + seed + commands = same match</text>
+  <text x="1030" y="602" font-size="12" fill="#6E6585" font-weight="700">runUntil() · runToEnd()</text>
+  <text x="1030" y="640" font-size="12" fill="#6E6585">call step() in a loop</text>
 
   <!-- F period over -->
   <line class="ln" x1="780" y1="656" x2="780" y2="680" marker-end="url(#arrow)"/>
@@ -123,32 +125,35 @@
   <text class="lbl" x="930" y="1140">loose</text>
 
   <!-- J1 carrier -->
-  <g filter="url(#shadow)"><rect class="proc" x="405" y="1240" width="230" height="124" rx="12"/></g>
+  <g filter="url(#shadow)"><rect class="proc" x="405" y="1240" width="230" height="140" rx="12"/></g>
   <text class="t" x="520" y="1264">Carrier decides</text>
   <text class="m" x="520" y="1290">_decide()</text>
   <text class="s" x="520" y="1310">shoot · pass · cross · carry · clear</text>
-  <text class="m" x="520" y="1334">_tackles()</text>
-  <text class="s" x="520" y="1352">foul? card? advantage?</text>
+  <text class="s" x="520" y="1330">keeper: 8-second count</text>
+  <text class="m" x="520" y="1350">_tackles()</text>
+  <text class="s" x="520" y="1368">foul? card? advantage?</text>
 
   <!-- J2 flight -->
-  <g filter="url(#shadow)"><rect class="proc" x="665" y="1240" width="230" height="124" rx="12"/></g>
+  <g filter="url(#shadow)"><rect class="proc" x="665" y="1240" width="230" height="140" rx="12"/></g>
   <text class="t" x="780" y="1264">Ball in flight</text>
   <text class="m" x="780" y="1290">_flight()</text>
   <text class="s" x="780" y="1310">pass arrives, cut out, offside</text>
-  <text class="s" x="780" y="1334">shot: xG → save, wide, goal</text>
-  <text class="s" x="780" y="1352">own goal · handball</text>
+  <text class="s" x="780" y="1330">cross: header contest</text>
+  <text class="s" x="780" y="1350">shot: xG → block, save, goal</text>
+  <text class="s" x="780" y="1368">own goal · handball</text>
 
   <!-- J3 loose -->
-  <g filter="url(#shadow)"><rect class="proc" x="925" y="1240" width="230" height="124" rx="12"/></g>
+  <g filter="url(#shadow)"><rect class="proc" x="925" y="1240" width="230" height="140" rx="12"/></g>
   <text class="t" x="1040" y="1264">Loose ball</text>
   <text class="m" x="1040" y="1290">_looseBall() · _checkOut()</text>
-  <text class="s" x="1040" y="1316">nearest players chase</text>
-  <text class="s" x="1040" y="1340">throw-in · corner · goal kick</text>
+  <text class="s" x="1040" y="1312">nearest players chase</text>
+  <text class="s" x="1040" y="1332">rolls on (ballFriction)</text>
+  <text class="s" x="1040" y="1356">throw-in · corner · goal kick</text>
 
   <!-- merge to K -->
-  <polyline class="ln" points="520,1364 520,1392 760,1392 760,1406" marker-end="url(#arrow)"/>
-  <line class="ln" x1="780" y1="1364" x2="780" y2="1406" marker-end="url(#arrow)"/>
-  <polyline class="ln" points="1040,1364 1040,1392 800,1392 800,1406" marker-end="url(#arrow)"/>
+  <polyline class="ln" points="520,1380 520,1394 760,1394 760,1406" marker-end="url(#arrow)"/>
+  <line class="ln" x1="780" y1="1380" x2="780" y2="1406" marker-end="url(#arrow)"/>
+  <polyline class="ln" points="1040,1380 1040,1394 800,1394 800,1406" marker-end="url(#arrow)"/>
 
   <!-- K events -->
   <g filter="url(#shadow)"><polygon class="para" points="590,1410 1000,1410 970,1466 560,1466"/></g>
@@ -162,19 +167,35 @@
 
   <!-- loop back to step -->
   <polyline class="loop" points="950,1500 1410,1500 1410,617 1014,617" marker-end="url(#arrowLoop)"/>
-  <rect x="1290" y="1004" width="112" height="44" rx="10" fill="#FBFAF7" stroke="#C9BCEF"/>
-  <text x="1346" y="1021" text-anchor="middle" font-size="13" font-weight="700" fill="#8C76D1">next tick</text>
-  <text x="1346" y="1038" text-anchor="middle" font-size="11.5" fill="#8C76D1">~22,000 per match</text>
+  <rect x="1290" y="1300" width="112" height="44" rx="10" fill="#FBFAF7" stroke="#C9BCEF"/>
+  <text x="1346" y="1317" text-anchor="middle" font-size="13" font-weight="700" fill="#8C76D1">next tick</text>
+  <text x="1346" y="1334" text-anchor="middle" font-size="11.5" fill="#8C76D1">~22,000 per match</text>
 
   <!-- ============ STOPPAGES (right) ============ -->
   <!-- G yes -> restart -->
   <polyline class="ln" points="905,906 1196,906" marker-end="url(#arrow)"/>
   <text class="lbl" x="930" y="896">Yes</text>
-  <g filter="url(#shadow)"><rect class="proc" x="1200" y="862" width="196" height="96" rx="12"/></g>
+  <g filter="url(#shadow)"><rect class="proc" x="1200" y="862" width="196" height="156" rx="12"/></g>
   <text class="t" x="1298" y="884">Set piece</text>
-  <text class="s" x="1298" y="908">walk to restart spots</text>
-  <text class="s" x="1298" y="928">taker in place →</text>
-  <text class="m" x="1298" y="946">_resume()</text>
+  <text class="s" x="1298" y="906">walk to restart spots</text>
+  <text class="s" x="1298" y="924">free kick: shoot or cross</text>
+  <text class="s" x="1298" y="946">leader after 75′ wastes time</text>
+  <text class="s" x="1298" y="964">→ 5-second countdown</text>
+  <text class="m" x="1298" y="982">_delayedRestart()</text>
+  <text class="m" x="1298" y="1004">taker ready → _resume()</text>
+
+  <!-- off the field -->
+  <line class="dash" x1="1298" y1="1018" x2="1298" y2="1046" marker-end="url(#arrow)"/>
+  <rect x="1200" y="1050" width="196" height="196" rx="12" fill="#FFFFFF" stroke="#9A91B0" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text class="t" x="1298" y="1072">Off the field</text>
+  <text class="s" x="1298" y="1094">treated player stays off</text>
+  <text class="s" x="1298" y="1112">until 1′ after the restart</text>
+  <text class="m" x="1298" y="1130">_treat()</text>
+  <text class="s" x="1298" y="1154">subbed player walks off</text>
+  <text class="s" x="1298" y="1172">within 10 s</text>
+  <text class="s" x="1298" y="1196">dropped ball after a stop</text>
+  <text class="m" x="1298" y="1214">_droppedBallSide()</text>
+  <text class="s" x="1298" y="1234" style="font-size:11.5px">keeper, or team with the ball</text>
   <line class="loop" x1="1396" y1="910" x2="1410" y2="910"/>
 
   <!-- manager commands -->
