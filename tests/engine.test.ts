@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import type { MatchConfig, TeamSheet } from '@/engine/engine';
 import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 const team = (name: string, seed: number, strength = 12, extra: object = {}): TeamSheet =>
   E.makeTeam({ name, seed, strength, ...extra });
@@ -155,7 +156,7 @@ describe('robustness', () => {
   });
 });
 
-describe('realism guard rails', () => {
+describeStatistical('realism guard rails', () => {
   it('keeps headline numbers near real football for equal squads', async () => {
     let goals = 0, shots = 0, yellows = 0;
     const n = 30;

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
 import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 const L = 105, W = 68;
 const newMatch = (seed = 3) => {
@@ -337,7 +338,7 @@ describe('laws of the game', () => {
   });
 });
 
-describe('tactics', () => {
+describeStatistical('tactics', () => {
   // Same squads and seeds, one setting changed for the home side: every option has to show up somewhere.
   const play = async (tactics: object, n = 24) => {
     const sum: Record<string, number> = { shots: 0, fouls: 0, passPct: 0, cond: 0 };

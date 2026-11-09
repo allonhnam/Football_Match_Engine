@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 const tie = (i: number, extra: object = {}) => E.simulateMatch({
   home: E.makeTeam({ name: 'H', seed: 2 * i + 1 }), away: E.makeTeam({ name: 'A', seed: 2 * i + 2 }),
@@ -24,7 +25,7 @@ function checkShootout(so: any) {
 }
 
 describe('knockout ties', () => {
-  it('always produces a winner, through extra time and penalties when needed', async () => {
+  itStatistical('always produces a winner, through extra time and penalties when needed', async () => {
     let et = 0, pens = 0;
     for (let i = 0; i < 60; i++) { await breathe();
       const r = tie(i);
@@ -48,7 +49,7 @@ describe('knockout ties', () => {
     expect(lastClock).toBeLessThan(126 * 60);
   });
 
-  it('decides a second leg on aggregate', async () => {
+  itStatistical('decides a second leg on aggregate', async () => {
     // the away side won the first leg 2-0: the home side needs to win by two to force extra time
     for (let i = 0; i < 30; i++) { await breathe();
       const r = tie(i, { knockout: { aggregate: [0, 2] } });
