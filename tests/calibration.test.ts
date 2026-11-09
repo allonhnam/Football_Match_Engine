@@ -16,7 +16,8 @@ describe('league squads', () => {
     const spread = Math.sqrt(strengths.reduce((a, b) => a + (b - mean) ** 2, 0) / strengths.length);
     expect(mean).toBeGreaterThan(11.7);
     expect(mean).toBeLessThan(12.3);
-    expect(spread).toBeGreaterThan(0.6);
+    // (how wide is set by matching bookmaker odds: see the predictability check in tools/calibrate.mjs)
+    expect(spread).toBeGreaterThan(0.4);
     expect(spread).toBeLessThan(1.5);
   });
 

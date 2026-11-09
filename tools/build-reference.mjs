@@ -87,6 +87,20 @@ const reference = {
   estimates: {
     offsides: { mean: 4.0, lo: 3.2, hi: 4.8, note: 'Typical top-league offsides per match (both teams); not in the dataset' },
     passCompletion: { mean: 0.82, lo: 0.78, hi: 0.86, note: 'Typical top-league pass completion; not in the dataset' },
+    // How a match flows and who does what. Published top-league averages (Opta / FBref event data, league
+    // reports on ball-in-play time), rounded, with ranges wide enough to cover the five leagues and recent seasons.
+    passesPerTeam: { mean: 470, lo: 400, hi: 560, note: 'Passes per team per match' },
+    ballInPlay: { mean: 57, lo: 52, hi: 63, note: 'Minutes the ball is in play per match' },
+    throwIns: { mean: 41, lo: 33, hi: 49, note: 'Throw-ins per match (both teams)' },
+    goalKicks: { mean: 16, lo: 12, hi: 20, note: 'Goal kicks per match (both teams)' },
+    headerShare: { mean: 0.15, lo: 0.11, hi: 0.19, note: 'Share of shots that are headers' },
+    outsideBox: { mean: 0.36, lo: 0.3, hi: 0.42, note: 'Share of shots from outside the penalty area' },
+    forwardShots: { mean: 0.5, lo: 0.4, hi: 0.62, note: 'Share of shots taken by players in forward positions' },
+    midfieldShots: { mean: 0.3, lo: 0.22, hi: 0.38, note: 'Share of shots taken by players in midfield positions' },
+    defenderShots: { mean: 0.15, lo: 0.09, hi: 0.2, note: 'Share of shots taken by players in defensive positions' },
+    topShooter: { mean: 0.32, lo: 0.26, hi: 0.4, note: "The leading shooter's share of his team's shots in a match" },
+    hatTricks: { mean: 0.03, lo: 0.015, hi: 0.05, note: 'Hat-tricks per match' },
+    distance: { mean: 10.6, lo: 9.6, hi: 11.6, note: 'Kilometres covered by an outfield player who plays the whole match' },
   },
 };
 

@@ -9,7 +9,7 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 import { simulateMatch, makeTeam } from '../src/engine/engine.js';
 import { fitOrderedLogit, outcomeProbs, spreadOfD } from '../src/lib/predictability.js';
 import { leagueTeams } from '../src/lib/league.js';
-import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, lineFromEngine } from '../src/lib/metrics.js';
+import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, lineFromEngine, matchFlow, compareFlow } from '../src/lib/metrics.js';
 
 // Worker side, for the odds check: matches at fixed strength gaps, to fit how results depend on the gap.
 function simulateGaps(jobs) {
@@ -26,7 +26,7 @@ function simulateRange(from, to) {
     const { home, away } = leagueTeams(s);
     const r = simulateMatch({ home, away, seed: s + 1, control: 'none' });
     const [h, a] = r.teamStats;
-    out.push({ gap: home.strength - away.strength, res: r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0, line: lineFromEngine(r.score, r.teamStats, r.halftimeScore), offsides: h.offsides + a.offsides, passes: h.passes + a.passes, passesOk: h.passesOk + a.passesOk });
+    out.push({ gap: home.strength - away.strength, res: r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0, line: lineFromEngine(r.score, r.teamStats, r.halftimeScore), offsides: h.offsides + a.offsides, passes: h.passes + a.passes, passesOk: h.passesOk + a.passesOk, flow: matchFlow(r) });
   }
   return out;
 }
@@ -113,6 +113,15 @@ async function main() {
   const off = offsides / N, pc = passesOk / passes;
   console.log(`${'Offsides / match'.padEnd(26)}${pad(fmt(off, 2), 9)}${pad('~' + fmt(est.offsides.mean, 1), 9)}   expected range ${est.offsides.lo}-${est.offsides.hi}${off >= est.offsides.lo && off <= est.offsides.hi ? '  ok' : '  CHECK'}`);
   console.log(`${'Pass completion %'.padEnd(26)}${pad(fmt(100 * pc, 1), 9)}${pad('~' + fmt(100 * est.passCompletion.mean, 0), 9)}   expected range ${100 * est.passCompletion.lo}-${100 * est.passCompletion.hi}${pc >= est.passCompletion.lo && pc <= est.passCompletion.hi ? '  ok' : '  CHECK'}`);
+
+  // Who takes the shots, how far players run, how the match flows: published averages, not the dataset.
+  const flowRows = compareFlow(est, results.map(r => r.flow));
+  console.log('\nMatch flow and players (published averages, not in the dataset):');
+  for (const m of flowRows) {
+    const k = m.pct ? 100 : 1, d = m.decimals;
+    console.log(`${(m.label + (m.pct ? ' %' : '')).padEnd(26)}${pad(fmt(k * m.engine, d), 9)}${pad('~' + fmt(k * m.real, d), 9)}   expected range ${fmt(k * m.lo, d)}-${fmt(k * m.hi, d)}${m.ok ? '  ok' : '  CHECK'}`);
+  }
+  console.log(`${flowRows.filter(m => m.ok).length} of ${flowRows.length} within the published ranges`);
 
   // How much squad quality decides results, against bookmaker odds for the same real matches.
   if (reference.odds) {

@@ -65,7 +65,7 @@ async function main() {
       avg('pass').toFixed(0).padStart(6) + avg('fouls').toFixed(1).padStart(7) + avg('cond').toFixed(2).padStart(6) + (note ? '   ' + note : ''),
     );
   });
-  console.log('\nA balanced side wins about 36% against another balanced side (the rest are draws and losses).');
+  console.log('\nA balanced side wins about 37% against another balanced side (the rest are draws and losses).');
   console.log(flagged ? `${flagged} option(s) look out of balance (win rate above 50% or below 27% against a balanced side).` : 'No tactic or formation is clearly dominant or useless.');
 }
 
