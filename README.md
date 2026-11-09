@@ -24,6 +24,7 @@ npm run dev        # http://localhost:3000
 | `npm run fetch-data` | Download real league results (about 8,900 matches) into `data/football-data/` |
 | `npm run build-reference` | Turn the downloaded results into `src/data/reference.json` |
 | `npm run calibrate -- 500` | Simulate 500 matches and compare them with the real data, including how predictable results are against bookmaker odds |
+| `npm run attributes -- 300` | Give one side +3 in a single attribute (same squads otherwise) and show what it changes |
 | `npm run balance -- 200` | Play every tactic option and formation against a balanced side, plus the style match-ups, and show win rates and what each option changes |
 
 `npm run simulate` also takes `--home-strength`, `--away-strength`, `--home-formation`, `--away-formation`, `--neutral` and `--events` (print every event, not just the key ones). `npm run calibrate` takes `--hist` to print the distributions.
@@ -40,22 +41,22 @@ The dataset has no offsides or passing data. Those two numbers are rough estimat
 
 Every simulated match uses a fresh pair of squads, with team quality varying like a real league (`src/lib/league.js`). Calibrating on two fixed squads gave misleading, squad-dependent results.
 
-How much squad quality decides results is checked against bookmaker odds for the same real matches. The odds (market average, margin removed) give every match's home-win and away-win probability. The spread of their difference over a league measures how predictable football is: 0.337 in the real data, where the favourite wins 53.8%. The engine fits how its results depend on the squad-strength gap, using matches at fixed gaps (`src/lib/predictability.js`), then reads the same spread off the league matchups. The quality spread in `league.js` is set so the two agree: the engine gives 0.339, and the favourite wins 54.0%. On that scale, a one-point stronger squad at home wins 61% of the time instead of 45%.
+How much squad quality decides results is checked against bookmaker odds for the same real matches. The odds (market average, margin removed) give every match's home-win and away-win probability. The spread of their difference over a league measures how predictable football is: 0.337 in the real data, where the favourite wins 53.8%. The engine fits how its results depend on the squad-strength gap, using matches at fixed gaps (`src/lib/predictability.js`), then reads the same spread off the league matchups. The quality spread in `league.js` is set so the two agree: the engine gives 0.336, and the favourite wins 53.3%. On that scale, a one-point stronger squad at home wins 68% of the time instead of 45%.
 
 Latest result, 6,000 matches: all 16 data-backed metrics are within tolerance (the 14 match statistics plus the two odds checks), and the distributions closely follow the real ones.
 
 | Metric | Engine | Real |
 | --- | --- | --- |
 | Goals per match | 2.76 | 2.81 |
-| Shots per match | 26.2 | 25.2 |
-| Shots on target | 34.5% | 34.9% |
-| Goals per shot | 10.6% | 11.2% |
-| Corners per match | 9.6 | 9.7 |
+| Shots per match | 25.0 | 25.2 |
+| Shots on target | 35.4% | 34.9% |
+| Goals per shot | 11.0% | 11.2% |
+| Corners per match | 9.7 | 9.7 |
 | Fouls per match | 23.2 | 23.8 |
-| Cards per match | 4.31 | 4.29 |
+| Cards per match | 4.36 | 4.29 |
 | Home / draw / away | 46% / 23% / 31% | 44% / 25% / 31% |
-| Spread of win chances (odds) | 0.339 | 0.337 |
-| Favourite wins | 54.0% | 53.8% |
+| Spread of win chances (odds) | 0.336 | 0.337 |
+| Favourite wins | 53.3% | 53.8% |
 
 Rarer events, per match (no reference in the dataset, checked against published league averages): penalties 0.25, own goals 0.05, red cards 0.20.
 
@@ -63,23 +64,43 @@ The numbers that were adjusted to get there (shot volume, accuracy, finishing, f
 
 ## Tactics, formations and balance
 
-Every option changes how a team plays, and none wins outright. `npm run balance` plays each option against a balanced side on a neutral ground (300 matches each). A balanced side wins about 40% of the time against another balanced side, and every tactic option and formation lands between 34% and 45%.
+Every option changes how a team plays, and none wins outright. `npm run balance` plays each option against a balanced side on a neutral ground (400 matches each). A balanced side wins about 40% of the time against another balanced side, and every tactic option and formation lands between 32% and 45%.
 
 | Setting | What it buys | What it costs |
 | --- | --- | --- |
-| Mentality: Attack | about 16 shots instead of 13, more xG | concedes better chances; fewer draws |
+| Mentality: Attack | about 15 shots instead of 12.5, more xG | concedes better chances; fewer draws |
 | Pressing: High | wins the ball higher | about 17 fouls instead of 6 at Low, more cards, legs gone by full time |
 | Line: High | more shots, squeezes the pitch | balls in behind; more chances conceded |
 | Width: Wide | more crosses and xG | leaves the middle open |
-| Tempo: Fast | more goals for | lower pass completion (78% against 82% at Slow), more conceded, more tiredness |
-| Passing: Short | keeps the ball (84% passes complete, more possession) | struggles against a high press |
-| Passing: Direct | better chances | gives the ball away more (77% completion) |
+| Tempo: Fast | more goals for | lower pass completion (79% against 83% at Slow), more conceded, more tiredness |
+| Passing: Short | keeps the ball (85% passes complete, more possession) | struggles against a high press |
+| Passing: Direct | better chances | gives the ball away more (78% completion) |
 
-Styles also counter each other. Direct passing beats a high line (45% against 37% for mixed passing), short passing loses to a high press (32% against 43%), and patient short passing picks apart a low block.
+Styles also counter each other. Direct passing beats a high line (45% against 34% for mixed passing), short passing loses to a high press (28% against 35%), and patient short passing picks apart a low block (49% against 40%).
 
 How it works: the 2D model already produces most of these effects through shape, pressing runs, pass length and risk, decision speed and stamina. It is too coarse to make every option cost something, though, so each setting also scales the quality of the chances a side creates and concedes. The match-ups and a small formation adjustment work the same way. All of these multipliers sit in `TACTIC_EDGE`, `MATCHUPS` and `FORMATION_EDGE` at the top of `src/engine/engine.js`. The match report names a match-up when it decided the game.
 
 Player selection matters too. Playing forwards in defence drops a side's win rate from about 40% to under 20%.
+
+## Player attributes
+
+Every attribute changes the thing it stands for, and every one moves results. `npm run attributes` gives both sides the same squad at a neutral ground, then gives one side +3 in a single attribute (every player; keeping for the keeper only), over 1,000 matches each:
+
+| +3 in | Wins (about 38% without) | Goal difference | What it changes |
+| --- | --- | --- | --- |
+| Pace | 47% | +0.44 | 14.2 shots against 10.6 |
+| Dribbling | 49% | +0.58 | gets into the box far more often |
+| Tackling | 46% | +0.37 | wins the ball more |
+| Heading | 43% | +0.32 | twice the headed goals |
+| Shooting | 41% | +0.22 | more of the same chances scored |
+| Vision | 40% | +0.19 | better chances from key passes, far fewer offsides |
+| Stamina | 42% | +0.19 | fresher at full time (85% condition against 81%) |
+| Positioning | 39% | +0.18 | keeps the opponent out of the box: 1.20 goals against instead of 1.38 |
+| Passing | 40% | +0.10 | 83% of passes complete against 81% |
+| Keeping (one player) | 39% | +0.10 | 1.22 goals against instead of 1.33 |
+| Everything | 89% | +2.93 | (a much stronger squad) |
+
+Measuring this found real problems, now fixed: passing and vision had no effect on results at all, and shooting barely did. A test for each attribute (`tests/attributes.test.ts`) now fails if any of them stops doing its job.
 
 ## Laws of the game
 
@@ -180,7 +201,7 @@ For a live view, call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(
 
 ## Status
 
-Complete first version. All deliverables work: the engine, the library API, the visualizer, the calibration and balance tools, and this README. There are 48 tests covering determinism, save and load, lineup validation, substitutions, a fuzz test, realism, the laws above, knockout ties and tactic effects. On top of that, 2,000 fuzzed matches with random squads, tactics and manager commands finished without a crash, a hang or a broken invariant.
+Complete first version. All deliverables work: the engine, the library API, the visualizer, the calibration and balance tools, and this README. There are 61 tests covering determinism, save and load, lineup validation, substitutions, a fuzz test, realism, the laws above, knockout ties, tactic effects, every player attribute and the pitch view. On top of that, 2,000 fuzzed matches with random squads, tactics and manager commands finished without a crash, a hang or a broken invariant.
 
 Known limits:
 

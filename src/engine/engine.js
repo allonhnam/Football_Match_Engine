@@ -8,15 +8,15 @@ const GOAL_HALF = 3.66, BOX_D = 16.5, BOX_HALF = 20.16;
 
 // Numbers adjusted by tools/calibrate.mjs so the engine matches real league data (see README).
 const TUNING = {
-  shotBase: 0.0088,      // chance a carrier shoots from a position of almost no value
-  shotSlope: 0.68,      // how quickly that chance rises with shot quality (xG)
-  finishing: 1.09,      // multiplier on the chance an on-target shot scores
+  shotBase: 0.0108,      // chance a carrier shoots from a position of almost no value
+  shotSlope: 0.72,      // how quickly that chance rises with shot quality (xG)
+  finishing: 0.96,      // multiplier on the chance an on-target shot scores
   foulBase: 0.08,      // chance a tackle attempt is a foul
   foulPress: 0.02,     // extra foul chance per level of pressing
   yellowBase: 0.186,     // chance a foul is booked
-  homeAdvantage: 0.55,   // attribute points the home side gains on every skill
-  onTarget: 0.25,        // base chance a shot is on target, before skill and shot quality
-  offsideTiming: 7.8,   // how badly forwards mistime runs (bigger means more offsides)
+  homeAdvantage: 0.45,   // attribute points the home side gains on every skill
+  onTarget: 0.045,        // base chance a shot is on target, before skill and shot quality
+  offsideTiming: 8.1,   // how badly forwards mistime runs (bigger means more offsides)
 };
 // Tactical trade-offs. The 2D model produces most effects of a tactic by itself (shape, pressing runs, pass
 // length, decision speed, stamina), but it is too coarse to make every option cost something, so each setting
@@ -36,7 +36,7 @@ const FORMATION_EDGE = { '4-3-3': [1, 1], '4-4-2': [1.09, 0.95], '4-2-3-1': [0.9
 // Rock-paper-scissors between styles: [our tactic, option, their tactic, option, multiplier on our chances]
 const MATCHUPS = [
   ['passing', 2, 'line', 2, 1.18, 'direct balls in behind a high line'],
-  ['passing', 0, 'pressing', 2, 0.86, 'playing out from the back into a high press'],
+  ['passing', 0, 'pressing', 2, 0.78, 'playing out from the back into a high press'],
   ['passing', 0, 'pressing', 0, 1.1, 'patient passing against a passive block'],
   ['passing', 2, 'line', 0, 0.88, 'long balls into a deep, crowded box'],
   ['tempo', 2, 'line', 0, 0.92, 'rushing against a set deep defence'],
@@ -181,7 +181,7 @@ function Match(config) {
   // Every field the match uses is created here, so the object keeps one shape (much faster in V8).
   this.stoppage = 0; this.goalsThisHalf = 0; this.injuries = 0; this.addedAnnounced = false; this.restartType = null;
   this.kickT = 0; this.subTimes = []; this._possSide = -1; this._ballKey = -99; this.restart = null; this.decisionT = 0;
-  this.lastPasser = -1; this.lastPasserT = -99; this._edge = [1, 1]; this._central = [1, 1]; this._crossEdge = [1, 1]; this._cutOut = [1, 1]; this._edgeSum = [0, 0]; this._edgeN = 0; this._side = [[], []];
+  this.lastPasser = -1; this.lastPasserT = -99; this._edge = [1, 1]; this._central = [1, 1]; this._crossEdge = [1, 1]; this._cutOut = [1, 1]; this._edgeSum = [0, 0]; this._edgeN = 0; this._keyPass = null; this._side = [[], []];
   this.gkHands = -1; this.gkHandsT = 0; this.advantage = null; this.pendingCards = [];
   this.events = []; this.commands = []; this.listeners = [];
   this.momentum = []; // per minute [homeThreat, awayThreat]
@@ -191,7 +191,7 @@ function Match(config) {
   this.teams = [config.home, config.away].map((sheet, s) => ({
     side: s, sheet, name: sheet.name, short: sheet.short, color: sheet.color, formation: sheet.formation,
     tactics: Object.assign({}, sheet.tactics), score: 0, subsUsed: 0, windowsUsed: 0, pending: [], windowStoppage: -1, aiChased: false, aiProtect: false, bench: null,
-    stats: { boxEntries: 0, f3Entries: 0, possession: 0, shots: 0, onTarget: 0, xg: 0, passes: 0, passesOk: 0, corners: 0, fouls: 0, yellows: 0, reds: 0, offsides: 0, tackles: 0, finalThirdWins: 0, saves: 0 },
+    stats: { boxEntries: 0, f3Entries: 0, possession: 0, shots: 0, onTarget: 0.045, xg: 0, passes: 0, passesOk: 0, corners: 0, fouls: 0, yellows: 0, reds: 0, offsides: 0, tackles: 0, finalThirdWins: 0, saves: 0 },
   }));
   this._updateEdges();
   this.players = [];
@@ -325,21 +325,22 @@ P._shoot = function (i, o) {
   const q = this.players[i], tm = this.teams[q.side], opp = this.teams[1 - q.side], d = this.dir(q.side), r = this.rng;
   const gx = d > 0 ? L : 0;
   const press = this._nearestOpp(q).d;
-  const xg = o.xg != null ? o.xg : this._xg(q.x, q.y, q.side, press) * (o.header ? 0.75 * this._crossEdge[1 - q.side] : 1);
+  const kp = this._keyPass && this._keyPass.i === i && this.clockSec() - this._keyPass.t < 4 ? 1 + (this._keyPass.vis - 12) * 0.035 : 1;
+  const xg = o.xg != null ? o.xg : clamp(this._xg(q.x, q.y, q.side, press) * (o.header ? 0.75 * this._crossEdge[1 - q.side] : 1) * kp, 0.005, 0.85);
   const shoot = (o.header ? this.eff(q, 'heading') : this.eff(q, 'shooting')) / 20;
   tm.stats.shots++; tm.stats.xg += xg; q.st.shots++; q.st.xg += xg;
   this._addThreat(q.side, xg);
   this.xgTimeline.push([this.clockSec(), this.teams[0].stats.xg, this.teams[1].stats.xg]);
   // blocked?
   let outcome, ty = W / 2;
-  const blockers = o.penalty || o.freekick ? 0 : this.players.filter(p => p.onPitch && p.side !== q.side && p.slot !== 0 && segDist(p.x, p.y, q.x, q.y, gx, W / 2) < 1.2 && (p.x - q.x) * d > 0).length;
+  const blockers = o.penalty || o.freekick ? 0 : this.players.filter(p => p.onPitch && p.side !== q.side && p.slot !== 0 && segDist(p.x, p.y, q.x, q.y, gx, W / 2) < 0.6 + this.eff(p, 'positioning') / 25 && (p.x - q.x) * d > 0).length;
   if (blockers && r() < 0.45) outcome = 'blocked';
   else {
-    const onT = o.penalty ? 0.82 : clamp(TUNING.onTarget + shoot * 0.22 + xg * 0.5 - (press < 1.5 ? 0.08 : 0), 0.15, 0.85);
+    const onT = o.penalty ? 0.82 : clamp(TUNING.onTarget + shoot * 0.5 + xg * 0.5 - (press < 1.5 ? 0.08 : 0), 0.15, 0.85);
     if (r() < onT) {
       const gk = this.players.find(p => p.onPitch && p.side !== q.side && p.slot === 0);
       const keep = gk ? this.eff(gk, 'keeping') / 20 : 0;
-      let pg = clamp((xg / onT) * (TUNING.finishing + (shoot - 0.55) * 0.6) * (1.2 - keep * 0.45), 0.02, 0.97);
+      let pg = clamp((xg / onT) * (TUNING.finishing + (shoot - 0.55) * 2) * (1.3 - keep * 0.6), 0.02, 0.97);
       if (o.penalty) pg = clamp(0.93 - keep * 0.12, 0.6, 0.95);
       outcome = r() < pg ? 'goal' : 'saved';
       ty = W / 2 + (r() * 2 - 1) * (GOAL_HALF - 0.4);
@@ -446,7 +447,7 @@ P._decide = function (i) {
     if (r() < p) { this._shoot(i, { header: this.ball.z > 1.2 }); return; }
   }
   const vis = this.eff(q, 'vision'), pas = this.eff(q, 'passing');
-  const noise = 0.03 + (20 - vis) * 0.004;
+  const noise = 0.03 + (20 - vis) * 0.008;
   const directW = [0.85, 1, 1.25][T.passing], maxLen = [32, 40, 55][T.passing], caution = [1.35, 1, 0.8][T.passing] * [1.15, 1, 0.9][T.tempo];
   const curV = this._value(q.side, q.x, q.y), loss = this._lossCost(q.side, q.x);
   let best = { u: -1e9 };
@@ -465,7 +466,7 @@ P._decide = function (i) {
     let tx = clamp(m.x + d * lead, 1, L - 1), ty = m.y;
     const D = dist(q.x, q.y, tx, ty);
     if (D < 6 || D > maxLen) continue;
-    const risk = this._passRisk(q, tx, ty) * (1.25 - pas / 40) + (D > 30 ? 0.08 : 0);
+    const risk = this._passRisk(q, tx, ty) * (1.5 - pas / 25) + (D > 30 ? 0.08 : 0);
     const rp = this._nearestOpp(m, tx, ty).d;
     const vt = this._value(q.side, tx, ty) * (rp < 2.5 ? 0.75 : 1);
     const prog = (vt - curV);
@@ -496,7 +497,7 @@ P._pass = function (i, j, tx, ty, isThrow) {
   if (!(rt === 'throwin' || rt === 'goalkick' || rt === 'corner')) {
     const lineX = this._offsideLine(q.side);
     const inOppHalf = d > 0 ? m.x > L / 2 : m.x < L / 2;
-    const gap = (m.x - lineX) * d, timing = (m.p.role === 'FW' || m.slot >= 7) && gap > -7 ? (r() - 0.05) * TUNING.offsideTiming : 0; // mistimed runs
+    const gap = (m.x - lineX) * d, timing = (m.p.role === 'FW' || m.slot >= 7) && gap > -7 ? (r() - 0.05) * TUNING.offsideTiming * (1.4 - this.eff(q, 'vision') / 30) : 0; // mistimed runs
     if (inOppHalf && gap + timing > 0.3 && (m.x - this.ball.x) * d > 0) {
       tm.stats.offsides++;
       this._emit({ type: 'offside', side: q.side, player: m.id, text: m.p.name + ' is caught offside', x: m.x, y: m.y });
@@ -507,7 +508,7 @@ P._pass = function (i, j, tx, ty, isThrow) {
   this.restartType = null;
   const D = dist(q.x, q.y, tx, ty);
   const pas = this.eff(q, 'passing'), press = this._nearestOpp(q).d;
-  const err = (0.04 + (20 - pas) * 0.006 + (press < 2 ? 0.05 : 0)) * D * (isThrow ? 0.5 : 1) * [0.85, 1, 1.2][tm.tactics.tempo] * [0.8, 1, 1.2][tm.tactics.passing];
+  const err = (0.04 + (20 - pas) * 0.011 + (press < 2 ? 0.05 : 0)) * D * (isThrow ? 0.5 : 1) * [0.85, 1, 1.2][tm.tactics.tempo] * [0.8, 1, 1.2][tm.tactics.passing];
   tx = clamp(tx + (r() - 0.5) * 2 * err, -2, L + 2); ty = clamp(ty + (r() - 0.5) * 2 * err, -2, W + 2);
   const lofted = D > 28 || isThrow;
   tm.stats.passes++; q.st.passes++;
@@ -515,15 +516,18 @@ P._pass = function (i, j, tx, ty, isThrow) {
 };
 P._kick = function (i, tx, ty, kind, j, h) {
   const q = this.players[i], b = this.ball, D = dist(q.x, q.y, tx, ty);
-  const speed = kind === 'clear' ? 22 : clamp(9 + D * 0.45, 10, 24);
+  const speed = kind === 'clear' ? 22 : clamp((9 + D * 0.45) * (0.8 + this.eff(q, 'passing') / 50), 10, 26); // a good passer zips it
   b.owner = -1; b.lastSide = q.side; b.lastIdx = i; this.lastPasser = i; this.lastPasserT = this.clockSec();
-  b.flight = { kind, sx: q.x, sy: q.y, tx, ty, dur: Math.max(0.2, D / speed), el: 0, h, passer: i, recv: j, speed };
+  b.flight = { kind, sx: q.x, sy: q.y, tx, ty, dur: Math.max(0.2, D / speed), el: 0, h, passer: i, recv: j, speed,
+    // a good passer weights the ball so it is harder to cut out
+    cutOut: kind === 'clear' ? 1 : Math.max(0.35, 1.85 - this.eff(q, 'passing') / 14) };
   q.carry = null; this.kickT = this.clockSec();
 };
 P._cross = function (i, open) {
   const q = this.players[i], d = this.dir(q.side), r = this.rng;
   const gx = d > 0 ? L : 0;
-  const tx = gx - d * (6 + r() * 7), ty = W / 2 + (r() - 0.5) * 14;
+  const acc = 1.5 - this.eff(q, 'passing') / 25; // a good crosser finds the danger area
+  const tx = gx - d * (6 + r() * 7 * acc), ty = W / 2 + (r() - 0.5) * 14 * acc;
   // best attacker for the header
   let j = -1, bd = 1e9;
   this.players.forEach((m, k) => { if (m.onPitch && m.side === q.side && k !== i && m.slot !== 0) { const dd = dist(m.x, m.y, tx, ty) - this.eff(m, 'heading') * 0.2; if (dd < bd) { bd = dd; j = k; } } });
@@ -811,7 +815,7 @@ P._targets = function () {
       if (a.slot === 0 || Math.abs(a.x - ownGoal) > 36) continue;
       let best = null, bd = range * range;
       for (let i = 0; i < mine.length; i++) { const q = mine[i]; if (q.slot === 0 || q.marking === tick) continue; const dx = q.tx - a.x, dy = q.ty - a.y, dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = q; } }
-      if (best) { best.marking = tick; best.tx = a.x - d * 1.6; best.ty = a.y + (W / 2 - a.y) * 0.08; best.urgent = dist(a.x, a.y, b.x, b.y) < 22 ? 0.7 : 0; }
+      if (best) { best.marking = tick; const gap = 2.6 - this.eff(best, 'positioning') / 12; best.tx = a.x - d * gap; best.ty = a.y + (W / 2 - a.y) * 0.08; best.urgent = dist(a.x, a.y, b.x, b.y) < 22 ? 0.7 : 0; }
     }
   }
   // pressing and ball chasing
@@ -1048,7 +1052,7 @@ P._flight = function () {
       const q = this.players[i];
       if (!q.onPitch || q.side === this.players[f.passer].side) continue;
       const dd = dist(q.x, q.y, b.x, b.y);
-      if (dd < 1.5 && r() < (q.slot === 0 ? 0.7 : 0.13 * (this.eff(q, 'tackling') + this.eff(q, 'positioning')) / 22 * this._cutOut[1 - q.side])) {
+      if (dd < 1.5 && r() < (q.slot === 0 ? 0.7 : 0.13 * (this.eff(q, 'tackling') + this.eff(q, 'positioning')) / 22 * this._cutOut[1 - q.side] * f.cutOut)) {
         if (q.slot === 0) { this._giveKeeper(i, false); return; }
         if (b.z > 1 && r() < (f.kind === 'cross' ? 0.008 : 0.003)) { this._foul(i, -1, 'handball'); return; } // arm in an unnatural position
         this._give(i); return;
@@ -1063,7 +1067,7 @@ P._flight = function () {
     if (b.x < 0 || b.x > L || b.y < 0 || b.y > W) { b.flight = null; b.vx = 0; b.vy = 0; this._checkOut(); return; }
     if (take >= 0) {
       const q = this.players[take];
-      if (q.side === passer.side && f.kind !== 'clear') { tm.stats.passesOk++; passer.st.passesOk++; }
+      if (q.side === passer.side && f.kind !== 'clear') { tm.stats.passesOk++; passer.st.passesOk++; this._keyPass = { i: take, t: this.clockSec(), vis: this.eff(passer, 'vision') }; }
       if (q.slot === 0 && !(f.kind === 'cross' && q.side === passer.side)) { this._giveKeeper(take, q.side === passer.side); return; }
       if (f.kind === 'cross' && q.side === passer.side && Math.abs(q.x - (this.dir(q.side) > 0 ? L : 0)) < 17) {
         // contested header

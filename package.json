@@ -15,7 +15,8 @@
     "calibrate": "node tools/calibrate.mjs",
     "fetch-data": "node tools/fetch-data.mjs",
     "build-reference": "node tools/build-reference.mjs",
-    "balance": "node tools/balance.mjs"
+    "balance": "node tools/balance.mjs",
+    "attributes": "node tools/attributes.mjs"
   },
   "engines": {
     "node": ">=20"
