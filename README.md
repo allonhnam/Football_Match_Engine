@@ -163,6 +163,7 @@ For a live view, call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(
 - The ball carrier chooses between shooting, passing, crossing, carrying and clearing using expected value, pressure and player attributes.
 - Laws: see [Laws of the game](#laws-of-the-game) above.
 - Fatigue lowers pace and skill. Pressing and tempo drain stamina faster. Injuries can happen in challenges.
+- The live view shows the referee working the diagonal and the two assistants level with the second-last defender (flag up after an offside), lines for shots and passes in flight, the ball's height, and a countdown ring when a keeper holds the ball (the 8-second rule). The officials come from the engine (`snapshot().officials`) but never touch the random numbers, so they cannot change a result, and headless runs skip them.
 - One seeded random number generator: the same inputs, seed and commands always give the same match.
 
 ## Project layout
