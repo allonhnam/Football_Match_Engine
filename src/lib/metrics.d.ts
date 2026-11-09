@@ -53,3 +53,13 @@ export function lineFromEngine(
   teamStats: { shots: number; onTarget: number; corners: number; fouls: number; yellows: number; reds: number }[],
   halftimeScore?: [number, number] | null,
 ): MatchLine;
+
+export interface MatchFlow {
+  passes: number; ballInPlay: number; throwIns: number; goalKicks: number; shots: number; headers: number; outside: number;
+  byPos: Record<'FW' | 'MF' | 'DF' | 'GK', number>; top: number[]; hatTricks: number; km: number[];
+}
+export interface FlowMetric { key: string; label: string; value: (flows: MatchFlow[]) => number; pct: boolean; decimals: number }
+export const FLOW_METRICS: FlowMetric[];
+export function matchFlow(r: import('@/engine/engine').MatchResult): MatchFlow;
+export function compareFlow(estimates: Record<string, { mean: number; lo: number; hi: number }>, flows: MatchFlow[]):
+  (FlowMetric & { engine: number; real: number; lo: number; hi: number; ok: boolean })[];

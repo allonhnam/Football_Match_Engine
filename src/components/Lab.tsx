@@ -8,7 +8,7 @@ import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, 
 import { runBatch } from '@/lib/batch';
 import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
-import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, histogram, lineFromEngine } from '@/lib/metrics';
+import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, histogram, lineFromEngine, compareFlow } from '@/lib/metrics';
 
 const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const pctFmt = (v) => fx(v * 100, 1) + '%';
@@ -50,6 +50,9 @@ export function buildTiles(out) {
     { k: 'offsides', label: 'Offsides / match', kind: 'estimate', engine: offsides, real: est.offsides.mean, lo: est.offsides.lo, hi: est.offsides.hi, ok: offsides >= est.offsides.lo && offsides <= est.offsides.hi, fmt: v => fx(v, 1) },
     { k: 'pass', label: 'Pass completion', kind: 'estimate', engine: passRate, real: est.passCompletion.mean, lo: est.passCompletion.lo, hi: est.passCompletion.hi, ok: passRate >= est.passCompletion.lo && passRate <= est.passCompletion.hi, fmt: pctFmt },
   );
+  // How matches flow and who takes the shots, against published league averages (also estimates, not the dataset).
+  const flows = out.map(r => r.flow).filter(Boolean);
+  if (flows.length) for (const f of compareFlow(est, flows)) tiles.push({ k: f.key, label: f.label, kind: 'estimate', engine: f.engine, real: f.real, lo: f.lo, hi: f.hi, ok: f.ok, fmt: f.pct ? pctFmt : (v: number) => fx(v, f.decimals) });
   return tiles;
 }
 

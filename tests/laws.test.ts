@@ -15,6 +15,36 @@ const lastEvent = (m: any, type: string) => m.events.filter((e: any) => e.type =
 const intoBox = (m: any, side: number) => { const d = m.dir(side); m.ball.x = d > 0 ? L - 8 : 8; m.ball.y = W / 2; };
 
 describe('laws of the game', () => {
+  it('takes every kick-off after a goal with all players in their own half (Law 8)', () => {
+    let kickoffs = 0;
+    const offenders: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const { home, away } = leagueTeams(i);
+      const m: any = new E.Match({ home, away, seed: i + 1, control: 'none', officials: false });
+      let afterGoal = false, prev: any = null;
+      m.on((e: any) => { if (e.type === 'goal') afterGoal = true; });
+      while (!m.finished) {
+        m.step();
+        if (prev && prev.type === 'kickoff' && !m.restart && afterGoal) {
+          kickoffs++; afterGoal = false;
+          m.players.forEach((q: any, k: number) => {
+            if (q.onPitch && k !== prev.taker && (q.x - L / 2) * m.dir(q.side) > 1) offenders.push(`match ${i}, ${m.minuteLabel()}: ${q.p.name}`);
+          });
+        }
+        prev = m.restart ? { type: m.restart.type, taker: m.restart.taker } : null;
+      }
+    }
+    expect(kickoffs).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
+  }, 60_000);
+
+  it('never gives two team-mates the same surname', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const surnames = E.generateSquad(seed, 'Club', 12).map(p => p.name.split('. ')[1]);
+      expect(new Set(surnames).size).toBe(surnames.length);
+    }
+  });
+
   it('awards a penalty for a handball in the defending penalty area (Law 12)', () => {
     const m = newMatch();
     intoBox(m, 0);

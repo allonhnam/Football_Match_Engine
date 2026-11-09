@@ -42,21 +42,24 @@ describe('player attributes', { timeout: 120_000 }, () => {
     const c = compare('shooting', (r, s) => r.score[s] / Math.max(1, r.teamStats[s].shots), 150);
     expect(c.mine).toBeGreaterThan(c.theirs * 1.1);
   });
-  it('heading: better headers score more headed goals', () => {
-    const c = compare('heading', (r, s) => events(r, s, e => e.type === 'goal' && /header/.test(e.text)));
-    expect(c.mine).toBeGreaterThan(c.theirs * 2);
+  it('heading: better headers win more headers and get more headed attempts', () => {
+    // headed goals are too rare (a few per hundred matches) to test directly; headed attempts follow won headers
+    const c = compare('heading', (r, s) => events(r, s, e => (e.type === 'shot' || e.type === 'goal') && e.header));
+    expect(c.mine).toBeGreaterThan(c.theirs * 1.3);
   });
-  it('tackling: better tacklers win the ball more', () => {
-    const c = compare('tackling', (r, s) => r.teamStats[s].tackles);
-    expect(c.mine).toBeGreaterThan(c.theirs * 1.03);
+  it('tackling: better tacklers win more of their challenges', () => {
+    // (not the raw count: a side that wins the ball sooner defends less, so it attempts fewer tackles)
+    const c = compare('tackling', (r, s) => r.teamStats[s].tackles / Math.max(1, r.teamStats[s].challenges));
+    expect(c.mine).toBeGreaterThan(c.theirs * 1.1);
   });
   it('positioning: well-positioned defenders keep the opponent out of the box', () => {
     const c = compare('positioning', (r, s) => r.teamStats[1 - s].boxEntries);
     expect(c.mine).toBeLessThan(c.theirs * 0.93);
   });
   it('keeping: a better keeper concedes fewer goals per shot on target', () => {
-    // only one player gets the boost, so this check uses more matches
-    const c = compare('keeping', (r, s) => r.score[1 - s] / Math.max(1, r.teamStats[1 - s].onTarget), 150);
+    // only one player gets the boost, so this check uses more matches (the effect is about 10%; 150 matches was
+    // close enough to noise to fail on an unlucky draw)
+    const c = compare('keeping', (r, s) => r.score[1 - s] / Math.max(1, r.teamStats[1 - s].onTarget), 300);
     expect(c.mine).toBeLessThan(c.theirs * 0.93);
   });
 });

@@ -163,3 +163,56 @@ export function lineFromEngine(score, teamStats, halftimeScore) {
     htH: halftimeScore ? halftimeScore[0] : NaN, htA: halftimeScore ? halftimeScore[1] : NaN,
   };
 }
+
+// ----- How a match flows and who does what -----
+// Not in the dataset: compared with published top-league averages (reference.estimates). The same code serves the
+// calibrate tool and the Engine Lab.
+
+/** Reduce an engine result to the numbers the match-flow checks need. */
+export function matchFlow(r) {
+  const [h, a] = r.teamStats, byPos = { FW: 0, MF: 0, DF: 0, GK: 0 };
+  let shots = 0, headers = 0, outside = 0;
+  for (const e of r.events) {
+    if (!(e.type === 'shot' || (e.type === 'goal' && !e.ownGoal)) || e.penalty) continue;
+    shots++; if (e.header) headers++;
+    const gx = e.x > 52.5 ? 105 : 0;
+    if (Math.abs(e.x - gx) > 16.5 || Math.abs(e.y - 34) > 20.16) outside++;
+  }
+  const top = [0, 1].map(s => {
+    const ps = r.playerStats.filter(p => p.side === s), t = ps.reduce((n, p) => n + p.shots, 0);
+    return t ? Math.max(...ps.map(p => p.shots)) / t : null;
+  }).filter(v => v != null);
+  for (const p of r.playerStats) byPos[p.position] = (byPos[p.position] || 0) + p.shots;
+  return {
+    passes: h.passes + a.passes, ballInPlay: r.ballInPlay / 60, throwIns: h.throwIns + a.throwIns, goalKicks: h.goalKicks + a.goalKicks,
+    shots, headers, outside, byPos, top, hatTricks: r.playerStats.filter(p => p.goals >= 3).length,
+    km: r.playerStats.filter(p => p.position !== 'GK' && p.minutes >= 90).map(p => p.distKm),
+  };
+}
+
+const share = (flows, f) => { const pos = flows.reduce((t, x) => t + x.byPos.FW + x.byPos.MF + x.byPos.DF + x.byPos.GK, 0) || 1; return flows.reduce((t, x) => t + f(x), 0) / pos; };
+const avg = a => (a.length ? a.reduce((t, v) => t + v, 0) / a.length : 0);
+const per = (flows, k) => flows.reduce((t, f) => t + f[k], 0) / (flows.length || 1);
+const ofShots = (flows, k) => flows.reduce((t, f) => t + f[k], 0) / (flows.reduce((t, f) => t + f.shots, 0) || 1);
+/** key in reference.estimates, label, how to aggregate, whether it is a share, decimals. */
+export const FLOW_METRICS = [
+  { key: 'passesPerTeam', label: 'Passes per team', value: fl => per(fl, 'passes') / 2, pct: false, decimals: 0 },
+  { key: 'ballInPlay', label: 'Ball in play (min)', value: fl => per(fl, 'ballInPlay'), pct: false, decimals: 1 },
+  { key: 'throwIns', label: 'Throw-ins / match', value: fl => per(fl, 'throwIns'), pct: false, decimals: 1 },
+  { key: 'goalKicks', label: 'Goal kicks / match', value: fl => per(fl, 'goalKicks'), pct: false, decimals: 1 },
+  { key: 'headerShare', label: 'Headed shots', value: fl => ofShots(fl, 'headers'), pct: true, decimals: 1 },
+  { key: 'outsideBox', label: 'Shots outside the box', value: fl => ofShots(fl, 'outside'), pct: true, decimals: 1 },
+  { key: 'forwardShots', label: 'Shots by forwards', value: fl => share(fl, x => x.byPos.FW), pct: true, decimals: 1 },
+  { key: 'midfieldShots', label: 'Shots by midfielders', value: fl => share(fl, x => x.byPos.MF), pct: true, decimals: 1 },
+  { key: 'defenderShots', label: 'Shots by defenders', value: fl => share(fl, x => x.byPos.DF), pct: true, decimals: 1 },
+  { key: 'topShooter', label: "Top shooter's share", value: fl => avg(fl.flatMap(f => f.top)), pct: true, decimals: 1 },
+  { key: 'hatTricks', label: 'Hat-tricks / match', value: fl => per(fl, 'hatTricks'), pct: false, decimals: 3 },
+  { key: 'distance', label: 'Km per outfield player', value: fl => avg(fl.flatMap(f => f.km)), pct: false, decimals: 1 },
+];
+/** Each flow metric against its published range. */
+export function compareFlow(estimates, flows) {
+  return FLOW_METRICS.filter(m => estimates[m.key]).map(m => {
+    const e = estimates[m.key], v = m.value(flows);
+    return { ...m, engine: v, real: e.mean, lo: e.lo, hi: e.hi, ok: v >= e.lo && v <= e.hi };
+  });
+}

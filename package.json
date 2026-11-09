@@ -1,6 +1,6 @@
 {
   "name": "match-engine",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Football match engine for a management game, with a Next.js front end",
@@ -16,7 +16,8 @@
     "fetch-data": "node tools/fetch-data.mjs",
     "build-reference": "node tools/build-reference.mjs",
     "balance": "node tools/balance.mjs",
-    "attributes": "node tools/attributes.mjs"
+    "attributes": "node tools/attributes.mjs",
+    "fit-pass-odds": "node tools/fit-pass-odds.mjs"
   },
   "engines": {
     "node": ">=20"

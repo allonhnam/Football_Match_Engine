@@ -129,13 +129,17 @@ export interface TeamStats {
   passes: number; passesOk: number; passPct: number;
   boxEntries: number; f3Entries: number;
   corners: number; fouls: number; yellows: number; reds: number;
-  offsides: number; tackles: number; finalThirdWins: number; saves: number;
+  offsides: number; tackles: number; /** Tackle attempts (tackles are the ones that won the ball). */ challenges: number; interceptions: number; finalThirdWins: number; saves: number;
+  /** Throw-ins and goal kicks the team was awarded. */
+  throwIns: number; goalKicks: number;
 }
 
 export interface PlayerStats {
   id: string; name: string; num: number; role: Role; side: Side;
+  /** The line of the formation slot he finished in (role is his natural position). */
+  position: Role;
   minutes: number; rating: number; goals: number; ownGoals: number; assists: number; shots: number;
-  xg: number; passes: number; passPct: number | null; tackles: number; saves: number;
+  xg: number; passes: number; passPct: number | null; tackles: number; interceptions: number; saves: number;
   distKm: number; endCondition: number; yellow: number; red: boolean;
   /** Why the player was sent off, or null. */
   redReason: string | null;
@@ -175,6 +179,8 @@ export interface MatchResult {
   extraTime: boolean;
   shootout: { score: [number, number]; first: Side; kicks: { side: Side; player: string; scored: boolean }[] } | null;
   abandoned: { reason: string; minute: number } | null;
+  /** Seconds the ball was in play. */
+  ballInPlay: number;
   events: MatchEvent[];
   teamStats: TeamStats[];
   playerStats: PlayerStats[];
