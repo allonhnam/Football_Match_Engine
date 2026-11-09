@@ -4,6 +4,7 @@ import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
 import { COUNT_METRICS, RATE_METRICS, HALF_METRICS, compareRate, compareHalf, compareScorelines, lineFromEngine } from '@/lib/metrics';
 import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 describe('league squads', () => {
   it('are repeatable and different from match to match', () => {
@@ -27,7 +28,7 @@ describe('league squads', () => {
   });
 });
 
-describe('agreement with real league data', () => {
+describeStatistical('agreement with real league data', () => {
   // A regression guard: if a change to the engine drags a headline statistic away from real football, this fails.
   // 150 matches keeps the test quick; the tolerance widens with the batch's own noise.
   it('keeps the headline statistics within tolerance of 8,900 real matches', async () => {

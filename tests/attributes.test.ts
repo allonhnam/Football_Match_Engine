@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 // Every attribute must change the thing it stands for. Both sides get the same squad at a neutral ground; one side
 // gets +6 in a single attribute and alternates home and away. `npm run attributes` runs the full-size version.
@@ -41,7 +42,7 @@ function scoringRate({ shooting, keeping }: { shooting: number; keeping: number 
 }
 const events = (r: any, side: number, pred: (e: any) => boolean) => r.events.filter((e: any) => e.side === side && pred(e)).length;
 
-describe('player attributes', () => {
+describeStatistical('player attributes', () => {
   it('pace: faster players get more shots', async () => {
     const c = await compare('pace', (r, s) => r.teamStats[s].shots);
     expect(c.mine).toBeGreaterThan(c.theirs * 1.2);
