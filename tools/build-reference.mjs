@@ -38,6 +38,8 @@ const NEEDED = ['FTHG', 'FTAG', 'HS', 'AS', 'HST', 'AST', 'HF', 'AF', 'HC', 'AC'
 const files = (await readdir(DATA).catch(() => [])).filter(f => f.endsWith('.csv')).sort();
 if (!files.length) { console.error('No CSV files in data/football-data/. Run `npm run fetch-data` first.'); process.exit(1); }
 
+const halfTime = (r, i) => (i === undefined || r[i] === undefined || r[i].trim() === '' ? NaN : Number(r[i]));
+
 const lines = [];
 // Bookmaker odds (market average, else Bet365), turned into probabilities with the margin removed. They say how
 // predictable real matches are, which is what the engine's squad-quality effect is calibrated against.
@@ -56,6 +58,8 @@ for (const file of files) {
     lines.push({
       goalsH: v.FTHG, goalsA: v.FTAG, shotsH: v.HS, shotsA: v.AS, onTargetH: v.HST, onTargetA: v.AST,
       cornersH: v.HC, cornersA: v.AC, foulsH: v.HF, foulsA: v.AF, yellowsH: v.HY, yellowsA: v.AY, redsH: v.HR, redsA: v.AR,
+      // Half-time goals: kept only when both are present, so a blank is never read as 0.
+      htH: halfTime(r, col.HTHG), htA: halfTime(r, col.HTAG),
     });
     seasons.add(season); leagues.add(league);
     const pick = keys => keys.map(k => Number(r[col[k]]));
@@ -109,5 +113,8 @@ const c = reference.counts;
 console.log(`${lines.length} matches from ${leagues.size} leagues, ${seasons.size} seasons (${skipped} incomplete rows skipped)`);
 console.log(`goals ${c.goals.mean.toFixed(2)}  shots ${c.shots.mean.toFixed(1)}  on target ${(100 * reference.ratios.onTargetPct).toFixed(1)}%  corners ${c.corners.mean.toFixed(1)}  fouls ${c.fouls.mean.toFixed(1)}  cards ${c.cards.mean.toFixed(2)}`);
 console.log(`home ${(100 * reference.rates.homeWin).toFixed(1)}%  draw ${(100 * reference.rates.draw).toFixed(1)}%  away ${(100 * reference.rates.awayWin).toFixed(1)}%  0-0 ${(100 * reference.rates.zeroZero).toFixed(1)}%`);
+const h = reference.half;
+console.log(`second-half goals ${(100 * h.secondHalfGoals).toFixed(1)}%  level at half-time ${(100 * h.htLevel).toFixed(1)}%  half-time leader wins ${(100 * h.leadHeld).toFixed(1)}% / draws ${(100 * h.leadDrawn).toFixed(1)}% / loses ${(100 * h.leadLost).toFixed(1)}%  (${lines.filter(l => Number.isFinite(l.htH) && Number.isFinite(l.htA)).length} matches with a half-time score)`);
+console.log('scorelines: ' + reference.scorelines.keys.map((k, i) => `${k} ${(100 * reference.scorelines.hist[i]).toFixed(1)}%`).join('  '));
 if (reference.odds) console.log(`odds: ${reference.odds.matches} matches, spread of home-minus-away win chance ${reference.odds.sdD.toFixed(3)}, favourite wins ${(100 * reference.odds.favouriteWin).toFixed(1)}%`);
 console.log(`Wrote ${path.relative(root, OUT)}`);

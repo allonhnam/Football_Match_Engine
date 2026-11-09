@@ -168,6 +168,8 @@ export interface MatchResult {
   seed: number;
   /** Goals in this match, including extra time but not the shootout. */
   score: [number, number];
+  /** Score at the end of the first half, or null if the match was abandoned before it. */
+  halftimeScore: [number, number] | null;
   /** Who won: 0 home, 1 away, null for a draw (never null in a knockout tie). */
   winner: Side | null;
   extraTime: boolean;

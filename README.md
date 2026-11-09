@@ -31,9 +31,9 @@ npm run dev        # http://localhost:3000
 
 ## Checking the engine against real football
 
-The engine is calibrated against real results from the top five European leagues (England, Germany, Spain, Italy, France), seasons 2021/22 to 2025/26, from [football-data.co.uk](https://www.football-data.co.uk/data.php): 8,907 matches with goals, shots, shots on target, corners, fouls and cards.
+The engine is calibrated against real results from the top five European leagues (England, Germany, Spain, Italy, France), seasons 2021/22 to 2025/26, from [football-data.co.uk](https://www.football-data.co.uk/data.php): 8,907 matches with full-time and half-time scores, shots, shots on target, corners, fouls and cards.
 
-`src/data/reference.json` holds the numbers computed from that data: means, spreads and full distributions for each count per match, plus home/draw/away rates and shot ratios. It is committed, so `npm run calibrate` and the Engine Lab work without downloading anything. The raw CSV files are not committed; `npm run fetch-data` and `npm run build-reference` rebuild the reference from scratch.
+`src/data/reference.json` holds the numbers computed from that data: means, spreads and full distributions for each count per match, home/draw/away rates, shot ratios, the distribution of final scores, and how matches unfold from half-time to full time. It is committed, so `npm run calibrate` and the Engine Lab work without downloading anything. The raw CSV files are not committed; `npm run fetch-data` and `npm run build-reference` rebuild the reference from scratch.
 
 Both the real data and the simulated matches go through the same code (`src/lib/metrics.js`), so every statistic is defined and binned identically. A metric passes when the engine's average is within 7% of the real one, or within 2.5 standard errors of its own batch, whichever is larger. The shape gap is the total variation distance between the engine's distribution and the real one (0 identical, 1 unrelated).
 
@@ -41,30 +41,51 @@ The dataset has no offsides or passing data. Those two numbers are rough estimat
 
 Every simulated match uses a fresh pair of squads, with team quality varying like a real league (`src/lib/league.js`). Calibrating on two fixed squads gave misleading, squad-dependent results.
 
-How much squad quality decides results is checked against bookmaker odds for the same real matches. The odds (market average, margin removed) give every match's home-win and away-win probability. The spread of their difference over a league measures how predictable football is: 0.337 in the real data, where the favourite wins 53.8%. The engine fits how its results depend on the squad-strength gap, using matches at fixed gaps (`src/lib/predictability.js`), then reads the same spread off the league matchups. The quality spread in `league.js` is set so the two agree: the engine gives 0.336, and the favourite wins 53.3%. On that scale, a one-point stronger squad at home wins 68% of the time instead of 45%.
+How much squad quality decides results is checked against bookmaker odds for the same real matches. The odds (market average, margin removed) give every match's home-win and away-win probability. The spread of their difference over a league measures how predictable football is: 0.337 in the real data, where the favourite wins 53.8%. The engine fits how its results depend on the squad-strength gap, using matches at fixed gaps (`src/lib/predictability.js`), then reads the same spread off the league matchups. The quality spread in `league.js` is set so the two agree: the engine gives 0.344, and the favourite wins 52.4%. On that scale, a one-point stronger squad at home wins 66% of the time instead of 42%.
 
-Latest result, 6,000 matches: all 16 data-backed metrics are within tolerance (the 14 match statistics plus the two odds checks), and the distributions closely follow the real ones.
+Latest result, 6,000 matches: all 24 data-backed metrics are within tolerance (15 match statistics, 7 checks on halves and scorelines, and the two odds checks), and the distributions closely follow the real ones.
 
 | Metric | Engine | Real |
 | --- | --- | --- |
-| Goals per match | 2.76 | 2.81 |
-| Shots per match | 25.0 | 25.2 |
+| Goals per match | 2.84 | 2.81 |
+| Shots per match | 25.2 | 25.2 |
 | Shots on target | 35.4% | 34.9% |
-| Goals per shot | 11.0% | 11.2% |
+| Goals per shot | 11.3% | 11.2% |
 | Corners per match | 9.7 | 9.7 |
 | Fouls per match | 23.2 | 23.8 |
-| Cards per match | 4.36 | 4.29 |
-| Home / draw / away | 46% / 23% / 31% | 44% / 25% / 31% |
-| Spread of win chances (odds) | 0.336 | 0.337 |
-| Favourite wins | 53.3% | 53.8% |
+| Cards per match | 4.35 | 4.29 |
+| Home / draw / away | 44% / 26% / 30% | 44% / 25% / 31% |
+| Goal margin | 1.32 | 1.36 |
+| Spread of win chances (odds) | 0.344 | 0.337 |
+| Favourite wins | 52.4% | 53.8% |
+
+### Scorelines and the two halves
+
+Matching the average goals is not enough: a management game's player sees every final score and every collapse. So the engine is also checked on how often each final score happens and on how matches unfold from half-time, using the half-time scores in the same dataset:
+
+| Metric | Engine | Real |
+| --- | --- | --- |
+| Goals scored after the break | 54.2% | 55.3% |
+| Level at half-time | 41.3% | 39.9% |
+| 0-0 at half-time | 28.6% | 28.2% |
+| Half-time leader wins | 75.1% | 73.1% |
+| Half-time leader draws | 17.3% | 17.9% |
+| Half-time leader loses | 7.6% | 9.1% |
+| Final scores (shape gap over 16 scorelines) | 0.033 | allowed 0.050 |
+
+A half-time metric passes within 2.5 percentage points (or 2.5 standard errors of the batch). The scoreline check compares the share of matches ending 0-0, 1-0, 0-1 and so on up to 2-3, plus everything else, and passes when the total variation distance is under 0.05 (or twice what sampling noise alone would give). `npm run calibrate -- 3000 --hist` prints the scorelines side by side.
+
+These checks found a real gap that the per-match totals hid. Goals were spread evenly over the two halves (48% after the break against 55% in real football), leads were too safe (a half-time leader won 82% of the time and lost only 5%), and there were too many 3-0s and too few 1-1s. Real matches open up as legs tire, and the side behind commits players forward while the leader drops off. The engine now models that game state for every side, whatever its tactics, in the `TUNING` block: chances improve through the match (`lateOpenness`), the trailing side creates more per goal behind (`chasing`), and the leading side slightly less (`sittingOn`). Home advantage was lowered from 0.45 to 0.38 attribute points to keep the home/away split right with these in place.
+
+Goal minutes are not in the dataset, so timing is checked by half only; the Engine Lab shows goals per 15-minute block from the engine alone.
 
 Rarer events, per match (no reference in the dataset, checked against published league averages): penalties 0.25, own goals 0.05, red cards 0.20.
 
-The numbers that were adjusted to get there (shot volume, accuracy, finishing, fouls, bookings, offside timing and home advantage) sit together in the `TUNING` block at the top of `src/engine/engine.js`. A regression test fails if a change to the engine pulls the headline statistics away from the real data.
+The numbers that were adjusted to get there (shot volume, accuracy, finishing, fouls, bookings, offside timing, home advantage and game state) sit together in the `TUNING` block at the top of `src/engine/engine.js`. A regression test fails if a change to the engine pulls the headline statistics away from the real data.
 
 ## Tactics, formations and balance
 
-Every option changes how a team plays, and none wins outright. `npm run balance` plays each option against a balanced side on a neutral ground (400 matches each). A balanced side wins about 40% of the time against another balanced side, and every tactic option and formation lands between 32% and 45%.
+Every option changes how a team plays, and none wins outright. `npm run balance` plays each option against a balanced side on a neutral ground (400 matches each). A balanced side wins about 36% of the time against another balanced side (28% are draws), and every tactic option and formation lands between 29% and 42%.
 
 | Setting | What it buys | What it costs |
 | --- | --- | --- |
@@ -76,7 +97,7 @@ Every option changes how a team plays, and none wins outright. `npm run balance`
 | Passing: Short | keeps the ball (85% passes complete, more possession) | struggles against a high press |
 | Passing: Direct | better chances | gives the ball away more (78% completion) |
 
-Styles also counter each other. Direct passing beats a high line (45% against 34% for mixed passing), short passing loses to a high press (28% against 35%), and patient short passing picks apart a low block (49% against 40%).
+Styles also counter each other. Direct passing beats a high line (45% against 35% for mixed passing), short passing loses to a high press (27% against 38%), and patient short passing picks apart a low block (44% against 39%).
 
 How it works: the 2D model already produces most of these effects through shape, pressing runs, pass length and risk, decision speed and stamina. It is too coarse to make every option cost something, though, so each setting also scales the quality of the chances a side creates and concedes. The match-ups and a small formation adjustment work the same way. All of these multipliers sit in `TACTIC_EDGE`, `MATCHUPS` and `FORMATION_EDGE` at the top of `src/engine/engine.js`. The match report names a match-up when it decided the game.
 
@@ -86,19 +107,19 @@ Player selection matters too. Playing forwards in defence drops a side's win rat
 
 Every attribute changes the thing it stands for, and every one moves results. `npm run attributes` gives both sides the same squad at a neutral ground, then gives one side +3 in a single attribute (every player; keeping for the keeper only), over 1,000 matches each:
 
-| +3 in | Wins (about 38% without) | Goal difference | What it changes |
+| +3 in | Wins (about 35% without) | Goal difference | What it changes |
 | --- | --- | --- | --- |
-| Pace | 47% | +0.44 | 14.2 shots against 10.6 |
-| Dribbling | 49% | +0.58 | gets into the box far more often |
-| Tackling | 46% | +0.37 | wins the ball more |
-| Heading | 43% | +0.32 | twice the headed goals |
-| Shooting | 41% | +0.22 | more of the same chances scored |
-| Vision | 40% | +0.19 | better chances from key passes, far fewer offsides |
-| Stamina | 42% | +0.19 | fresher at full time (85% condition against 81%) |
-| Positioning | 39% | +0.18 | keeps the opponent out of the box: 1.20 goals against instead of 1.38 |
-| Passing | 40% | +0.10 | 83% of passes complete against 81% |
-| Keeping (one player) | 39% | +0.10 | 1.22 goals against instead of 1.33 |
-| Everything | 89% | +2.93 | (a much stronger squad) |
+| Pace | 45% | +0.35 | 14.1 shots against 10.8 |
+| Dribbling | 48% | +0.53 | gets into the box far more often |
+| Tackling | 44% | +0.32 | wins the ball more |
+| Heading | 43% | +0.27 | nearly twice the headed goals |
+| Shooting | 39% | +0.23 | more of the same chances scored |
+| Vision | 39% | +0.18 | better chances from key passes, far fewer offsides |
+| Stamina | 38% | +0.15 | fresher at full time (85% condition against 81%) |
+| Positioning | 39% | +0.11 | keeps the opponent out of the box: 1.32 goals against instead of 1.44 |
+| Passing | 39% | +0.12 | 83% of passes complete against 81% |
+| Keeping (one player) | 37% | +0.09 | 1.26 goals against instead of 1.35 |
+| Everything | 90% | +2.77 | (a much stronger squad) |
 
 Measuring this found real problems, now fixed: passing and vision had no effect on results at all, and shooting barely did. A test for each attribute (`tests/attributes.test.ts`) now fails if any of them stops doing its job.
 
@@ -169,6 +190,7 @@ For a live view, call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(
 | Field | Contents |
 | --- | --- |
 | `score` | `[home, away]`, including extra time but not a shootout |
+| `halftimeScore` | `[home, away]` at the end of the first half (null if abandoned before it) |
 | `winner`, `extraTime`, `shootout` | Who won (null for a league draw), whether extra time was played, and the shootout score and kicks |
 | `events` | Every event with tick, clock, minute label, side, players, position and extra data (xG, shot result, own goal, kind of offence) |
 | `teamStats` | Possession, xG, shots, on target, passes, pass accuracy, box and final-third entries, corners, fouls, offsides, cards, saves |
@@ -201,7 +223,7 @@ For a live view, call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(
 
 ## Status
 
-Complete first version. All deliverables work: the engine, the library API, the visualizer, the calibration and balance tools, and this README. There are 61 tests covering determinism, save and load, lineup validation, substitutions, a fuzz test, realism, the laws above, knockout ties, tactic effects, every player attribute and the pitch view. On top of that, 2,000 fuzzed matches with random squads, tactics and manager commands finished without a crash, a hang or a broken invariant.
+Complete first version. All deliverables work: the engine, the library API, the visualizer, the calibration and balance tools, and this README. There are 66 tests covering determinism, save and load, lineup validation, substitutions, a fuzz test, realism (including scorelines and half-time leads), the laws above, knockout ties, tactic effects, every player attribute and the pitch view. On top of that, 2,000 fuzzed matches with random squads, tactics and manager commands finished without a crash, a hang or a broken invariant.
 
 Known limits:
 

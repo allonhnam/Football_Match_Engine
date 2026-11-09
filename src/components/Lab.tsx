@@ -8,16 +8,17 @@ import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, 
 import { runBatch } from '@/lib/batch';
 import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
-import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, compareCount, compareRate, compareRatio, histogram, lineFromEngine } from '@/lib/metrics';
+import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, histogram, lineFromEngine } from '@/lib/metrics';
 
 const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const pctFmt = (v) => fx(v * 100, 1) + '%';
 const mean = (a) => a.reduce((s, v) => s + v, 0) / (a.length || 1);
-const TILE_ORDER = ['goals', 'homeWin', 'draw', 'zeroZero', 'shots', 'onTargetPct', 'goalsPerShot', 'corners', 'fouls', 'cards'];
+const TILE_ORDER = ['goals', 'homeWin', 'draw', 'zeroZero', 'margin', 'shots', 'onTargetPct', 'goalsPerShot', 'corners', 'fouls', 'cards'];
+const HALF_TILES = ['secondHalfGoals', 'htLevel', 'leadHeld', 'leadLost'];
 
 /** Compare a batch of simulated matches with the real-data reference. */
 export function buildTiles(out) {
-  const lines = out.map(r => lineFromEngine(r.score, r.ts));
+  const lines = out.map(r => lineFromEngine(r.score, r.ts, r.ht));
   const tiles: any[] = TILE_ORDER.map((k): any => {
     const cm = COUNT_METRICS.find(m => m.key === k);
     if (cm) {
@@ -35,6 +36,12 @@ export function buildTiles(out) {
     const c = compareRatio(reference.ratios[k], lines.reduce((s, l) => s + tm.num(l), 0) / lines.reduce((s, l) => s + tm.den(l), 0));
     return { k, label: tm.label, kind: 'share', engine: c.mean, real: reference.ratios[k], tol: c.tol, ok: c.ok, fmt: k === 'goalsPerShot' ? v => fx(v, 3) : pctFmt };
   });
+  // How matches unfold between half-time and full time.
+  for (const k of HALF_TILES) {
+    const hm = HALF_METRICS.find(m => m.key === k);
+    const c = compareHalf(hm, reference.half[k], lines);
+    tiles.push({ k, label: hm.label, kind: 'share', engine: c.mean, real: reference.half[k], tol: c.tol, ok: c.ok, fmt: pctFmt });
+  }
   // The dataset has no offsides or passing data, so these two are checked against rough estimates and labelled as such.
   const est = reference.estimates;
   const offsides = mean(out.map(r => r.ts[0].offsides + r.ts[1].offsides));
@@ -89,6 +96,28 @@ function Tile({ t }: any) {
     </div>
   );
 }
+/** Every final score side by side with real football: how often each one happens. */
+function Scorelines({ s }: any) {
+  const real = reference.scorelines.hist, mx = Math.max(...s.hist, ...real, 0.0001);
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">Final scores (home–away)</span>
+        <span className={`text-[9.5px] font-bold tracking-[.12em] rounded-[3px] px-1.5 py-0.5 border ${s.ok ? 'text-good border-good/50' : 'text-warn border-warn/50'}`}>{s.ok ? 'PASS' : 'CHECK'}</span>
+      </div>
+      <div className="flex items-end gap-1 h-24 mt-3">
+        {s.hist.map((v, i) => (
+          <div key={i} className="relative flex-1 h-full flex items-end" title={`${SCORELINES[i]}: engine ${pct(v)}, real ${pct(real[i])}`}>
+            <div className="w-full rounded-t-[2px]" style={{ height: `${Math.max(3, (v / mx) * 100)}%`, background: 'rgb(var(--c-accent) / .55)' }} />
+            <div className="absolute left-0 right-0 h-[2px] bg-ink/80" style={{ bottom: `${(real[i] / mx) * 100}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1 mt-1 font-mono text-[9px] text-dim">{SCORELINES.map(k => <span key={k} className="flex-1 text-center truncate">{k}</span>)}</div>
+      <div className="text-[10.5px] text-dim mt-1.5">Shape gap {fx(s.tv, 3)} · allowed {fx(s.tol, 3)}</div>
+    </div>
+  );
+}
 export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(500), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
@@ -100,8 +129,9 @@ export function Lab() {
     // A fresh, varied pair of squads for every match, like the many teams of a real league.
     const out = (await runBatch(Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i, gap), seed: 1 + i, control: 'none' })), setProg)).filter(r => r && !r.errors);
     const tiles = buildTiles(out);
+    const scorelines = compareScorelines(reference.scorelines.hist, out.map(r => lineFromEngine(r.score, r.ts, r.ht)));
     const byBlock = Array(6).fill(0); out.forEach(r => r.goalTimes.forEach(t => byBlock[Math.min(5, Math.floor(t / 900))]++));
-    setRes({ n: out.length, tiles, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap }); setProg(0);
+    setRes({ n: out.length, tiles, scorelines, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap }); setProg(0);
   };
   const balance = async () => {
     setBal(null); setProg(0.01); const per = Math.max(60, Math.floor(n / 3)); const jobs = [], opt = [];
@@ -138,6 +168,7 @@ export function Lab() {
             {tab === 'realism' && (!res ? <Empty text="Run the realism test to simulate a batch of matches and compare every number with real football." /> :
               <div className="flex flex-col gap-3">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{res.tiles.map(t => <Tile key={t.k} t={t} />)}</div>
+                <Scorelines s={res.scorelines} />
                 <p className="text-[11.5px] text-dim">Bars show how often the engine produced each value per match; the white line marks real football. "Allowed" is how far the engine's average may sit from the real one: 7% or 2.5 standard errors of the batch, whichever is larger. Shape gap is the total variation distance between the two distributions (0 identical, 1 unrelated).</p>
               </div>)}
             {tab === 'balance' && (!bal ? <Empty text="Pick a tactic and run. Each option plays the same balanced opponent at a neutral venue, so differences come from the tactic alone." /> :
@@ -152,7 +183,7 @@ export function Lab() {
               </div>)}
             {tab === 'perf' && (!perf ? <Empty text="Run the performance test to time single-thread simulation and worker throughput, and to check that seeds and save/load reproduce matches exactly." /> :
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {[['Per match, one thread', `${fx(perf.ms, 0)} ms`, `${fx(perf.mps, 1)} matches / s`], ['Worker pool throughput', `${fx(perf.par, 1)} / s`, 'background, UI stays responsive'], ['A 380-match season', `${fx(perf.season, 0)} s`, 'at worker throughput'], ['Same seed twice', perf.h1 === perf.h2 ? 'Identical' : 'Different', `hash ${perf.h1} · ${perf.events} events`, perf.h1 === perf.h2], ['Save at 37′, load, finish', perf.h1 === perf.h3 ? 'Identical' : 'Different', `hash ${perf.h3}`, perf.h1 === perf.h3], ['Hard tick cap', 'On', 'runToEnd stops after 60,000 ticks; never hangs', true]].map(([l, v, s, g]) => <div key={String(l)} className="rounded-lg border border-line bg-surface p-4"><div className="text-[12.5px] font-semibold">{l}</div><div className={`font-display font-bold text-[30px] leading-tight mt-2 ${g === true ? 'text-good' : g === false ? 'text-bad' : ''}`}>{v}</div><div className="text-[10.5px] text-dim font-mono mt-1">{s}</div></div>)}
+                {[['Per match, one thread', `${fx(perf.ms, 0)} ms`, `${fx(perf.mps, 1)} matches / s`], ['Worker pool throughput', `${fx(perf.par, 1)} / s`, 'background, UI stays responsive'], ['A 380-match season', `${fx(perf.season, 0)} s`, 'at worker throughput'], ['Same seed twice', perf.h1 === perf.h2 ? 'Identical' : 'Different', `hash ${perf.h1} · ${perf.events} events`, perf.h1 === perf.h2], ['Save at 37′, load, finish', perf.h1 === perf.h3 ? 'Identical' : 'Different', `hash ${perf.h3}`, perf.h1 === perf.h3], ['Hard tick cap', 'On', 'runToEnd stops after 80,000 ticks; never hangs', true]].map(([l, v, s, g]) => <div key={String(l)} className="rounded-lg border border-line bg-surface p-4"><div className="text-[12.5px] font-semibold">{l}</div><div className={`font-display font-bold text-[30px] leading-tight mt-2 ${g === true ? 'text-good' : g === false ? 'text-bad' : ''}`}>{v}</div><div className="text-[10.5px] text-dim font-mono mt-1">{s}</div></div>)}
               </div>)}
           </div>
         </div>

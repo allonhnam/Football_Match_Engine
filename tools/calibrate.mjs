@@ -9,7 +9,7 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 import { simulateMatch, makeTeam } from '../src/engine/engine.js';
 import { fitOrderedLogit, outcomeProbs, spreadOfD } from '../src/lib/predictability.js';
 import { leagueTeams } from '../src/lib/league.js';
-import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, compareCount, compareRate, compareRatio, lineFromEngine } from '../src/lib/metrics.js';
+import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, lineFromEngine } from '../src/lib/metrics.js';
 
 // Worker side, for the odds check: matches at fixed strength gaps, to fit how results depend on the gap.
 function simulateGaps(jobs) {
@@ -26,7 +26,7 @@ function simulateRange(from, to) {
     const { home, away } = leagueTeams(s);
     const r = simulateMatch({ home, away, seed: s + 1, control: 'none' });
     const [h, a] = r.teamStats;
-    out.push({ gap: home.strength - away.strength, res: r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0, line: lineFromEngine(r.score, r.teamStats), offsides: h.offsides + a.offsides, passes: h.passes + a.passes, passesOk: h.passesOk + a.passesOk });
+    out.push({ gap: home.strength - away.strength, res: r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0, line: lineFromEngine(r.score, r.teamStats, r.halftimeScore), offsides: h.offsides + a.offsides, passes: h.passes + a.passes, passesOk: h.passesOk + a.passesOk });
   }
   return out;
 }
@@ -99,6 +99,15 @@ async function main() {
     row(m.label, 100 * c.mean, 100 * reference.ratios[m.key], 100 * c.tol, null, c.ok, 1);
   }
 
+  // How matches unfold: the half-time score against the final one, and the full scoreline distribution.
+  console.log('\nHalves and scorelines:');
+  for (const m of HALF_METRICS) {
+    const c = compareHalf(m, reference.half[m.key], lines);
+    row(m.label + ' %', 100 * c.mean, 100 * reference.half[m.key], 100 * c.tol, null, c.ok, 1);
+  }
+  const sl = compareScorelines(reference.scorelines.hist, lines);
+  row('Scorelines (shape gap)', sl.tv, 0, sl.tol, sl.tv, sl.ok, 3);
+
   console.log('\nNot in the dataset (rough estimates, not data):');
   const est = reference.estimates;
   const off = offsides / N, pc = passesOk / passes;
@@ -123,6 +132,11 @@ async function main() {
   console.log('Shape gap is the total variation distance between the engine and real distributions (0 identical, 1 unrelated).');
 
   if (showHist) {
+    console.log('\nScorelines  (engine / real, % of matches)');
+    SCORELINES.forEach((k, i) => {
+      const e = 100 * sl.hist[i], r = 100 * reference.scorelines.hist[i];
+      console.log(`${k.padStart(6)}  ${'#'.repeat(Math.round(e)).padEnd(16)} ${fmt(e, 1).padStart(5)} / ${fmt(r, 1).padStart(5)}`);
+    });
     for (const m of COUNT_METRICS.filter(x => ['goals', 'shots', 'corners', 'fouls', 'cards'].includes(x.key))) {
       const real = reference.counts[m.key];
       const values = lines.map(m.value);
