@@ -38,6 +38,11 @@ export function cssVar(name) { return getComputedStyle(document.documentElement)
 // Real clubs and their real squads, from the latest season of each league (built by `npm run build-teams`).
 const DATA: any = TEAM_DATA;
 export const LEAGUES: { code: string; name: string; season: string; teams: any[] }[] = DATA.leagues;
+/** A league by its football-data code (E0, SP1, D1, I1, F1), and a club in it by name. */
+export const findLeague = (code?: string) => LEAGUES.find(l => l.code === code);
+export const findClub = (code: string | undefined, name: string) => findLeague(code)?.teams.find(t => t.name === name);
+/** A random seed for a new match or batch: 0 up to (not including) max. */
+export const randomSeed = (max = 16777215) => Math.floor(Math.random() * max);
 // A club's squad seed is fixed by its name, so picking the same club always gives the same squad.
 const nameSeed = (n: string) => { let h = 7; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 1000000; };
 // Squad numbers are not in the data: keepers wear 1 and 13, everyone else 2 to 21 in squad order (skipping 13).
@@ -100,14 +105,14 @@ export function pickXI(team: any, formation: string) {
   return { xi, bench: team.players.filter((p: any) => !used.has(p.id) && !p.unavailable).slice(0, 9).map((p: any) => p.id) };
 }
 export function realTeam(league: string, name: string, keep: any = {}) {
-  const l = LEAGUES.find(x => x.code === league), t = l && l.teams.find(x => x.name === name);
+  const t = findClub(league, name);
   if (!t) return null;
   const team: any = { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league, crest: t.crest };
   return { ...team, ...pickXI(team, team.formation) };
 }
 // The built-in attributes of a real player, for "reset" after editing (null for generated players).
 export function realAttrs(league: string | undefined, club: string, id: string) {
-  const t = LEAGUES.find(x => x.code === league)?.teams.find(x => x.name === club);
+  const t = findClub(league, club);
   const row = t && t.players.find((r: any[]) => 'tm' + r[0] === id);
   return row ? Object.fromEntries(DATA.attrs.map((k: string, i: number) => [k, row[9][i]])) : null;
 }

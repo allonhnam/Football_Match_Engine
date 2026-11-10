@@ -1,9 +1,8 @@
 'use client';
 /* eslint-disable */
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, crestUrl } from '@/lib/util';
+import { pct, club, textOn, crestUrl } from '@/lib/util';
 
 export const I = {
   play: <path d="M7 5l12 7-12 7z" fill="currentColor" />, pause: <g fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></g>,

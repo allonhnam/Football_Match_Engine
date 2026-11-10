@@ -1,4 +1,4 @@
-import { LEAGUES, realTeam, pickXI, clone } from '@/lib/util';
+import { findLeague, realTeam, pickXI, clone } from '@/lib/util';
 import type { PlayerLine } from '@/lib/summarise';
 
 // Between matchdays, as a club would manage its squad:
@@ -53,7 +53,7 @@ function sheetFor(base: any, status: Map<string, Status>) {
  * `run` plays a list of matches and returns their summaries (runBatch in the browser).
  */
 export async function playSeason(leagueCode: string, seed: number, run: (jobs: any[]) => Promise<any[]>, onProgress?: (f: number) => void, maxRounds = Infinity) {
-  const l = LEAGUES.find(x => x.code === leagueCode);
+  const l = findLeague(leagueCode);
   if (!l) return null;
   const bases = l.teams.map(t => realTeam(l.code, t.name) as any);
   const status = new Map<string, Status>();
@@ -102,7 +102,7 @@ export type PlayerTotal = {
 
 /** Add up a season's results into the league table and every player's totals. */
 export function tallySeason(leagueCode: string, jobs: any[], results: any[], status?: Map<string, Status>) {
-  const l = LEAGUES.find(x => x.code === leagueCode)!;
+  const l = findLeague(leagueCode)!;
   const realOrder = l.teams.map(t => t.name); // teams.json lists each league in its real final order
   const rows = new Map<string, TableRow>(l.teams.map(t => [t.name, { name: t.name, short: t.short, color: t.color, crest: t.crest, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0, realPts: t.points, realPos: realOrder.indexOf(t.name) + 1 }]));
   const players = new Map<string, PlayerTotal>();
@@ -131,7 +131,7 @@ export function tallySeason(leagueCode: string, jobs: any[], results: any[], sta
 
 /** All fixtures at once, every squad at full strength (no carry-over); kept for quick checks. */
 export function seasonFixtures(leagueCode: string, seed: number) {
-  const l = LEAGUES.find(x => x.code === leagueCode);
+  const l = findLeague(leagueCode);
   if (!l) return [];
   const sheets = new Map(l.teams.map(t => [t.name, realTeam(l.code, t.name)]));
   const jobs: any[] = [];
