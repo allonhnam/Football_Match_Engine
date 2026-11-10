@@ -47,12 +47,12 @@
   </g>
   <text class="m" x="169" y="166" fill="#3E7DB3">/</text>
   <text class="t" x="166" y="196">Matchday</text>
-  <text class="s" x="166" y="216">Setup → LiveMatch</text>
+  <text class="s" x="166" y="216">96 real clubs → LiveMatch</text>
   <text class="s" x="166" y="234">4 speeds · subs · tactics</text>
 
   <text class="m" x="394" y="166">/tactics</text>
   <text class="t" x="391" y="196">Tactics board</text>
-  <text class="s" x="391" y="216">squad · formation</text>
+  <text class="s" x="391" y="216">edit players · formation</text>
   <text class="s" x="391" y="234">six tactic settings</text>
 
   <text class="m" x="619" y="166">/report</text>
@@ -97,7 +97,7 @@
   <!-- ================= NODE TOOLS ================= -->
   <g filter="url(#sh)"><rect x="1000" y="104" width="400" height="320" rx="22" fill="#FFEBDD" stroke="#EAA676" stroke-width="2"/></g>
   <text class="h" x="1024" y="134" fill="#C0743D">NODE CLI TOOLS</text>
-  <text class="hs" x="1180" y="134">tools/*.mjs · 7 tools · worker threads</text>
+  <text class="hs" x="1180" y="134">tools/*.mjs · 8 tools · worker threads</text>
 
   <g filter="url(#sh)">
     <rect class="card" stroke="#EAA676" x="1020" y="150" width="176" height="58" rx="29"/>
@@ -106,7 +106,8 @@
     <rect class="card" stroke="#EAA676" x="1206" y="216" width="176" height="58" rx="29"/>
     <rect class="card" stroke="#EAA676" x="1020" y="282" width="176" height="58" rx="29"/>
     <rect class="card" stroke="#EAA676" x="1206" y="282" width="176" height="58" rx="29"/>
-    <rect class="card" stroke="#EAA676" x="1113" y="348" width="176" height="58" rx="29"/>
+    <rect class="card" stroke="#EAA676" x="1020" y="348" width="176" height="58" rx="29"/>
+    <rect class="card" stroke="#EAA676" x="1206" y="348" width="176" height="58" rx="29"/>
   </g>
   <text class="m" x="1108" y="174" style="font-size:13px;font-weight:700">simulate</text>
   <text class="s" x="1108" y="194">one match, headless</text>
@@ -120,8 +121,10 @@
   <text class="s" x="1108" y="326">download CSVs</text>
   <text class="m" x="1294" y="306" style="font-size:13px;font-weight:700">build-reference</text>
   <text class="s" x="1294" y="326">CSV → reference.json</text>
-  <text class="m" x="1201" y="372" style="font-size:13px;font-weight:700">fit-pass-odds</text>
-  <text class="s" x="1201" y="392">refit PASS_ODDS</text>
+  <text class="m" x="1108" y="372" style="font-size:13px;font-weight:700">fit-pass-odds</text>
+  <text class="s" x="1108" y="392">refit PASS_ODDS</text>
+  <text class="m" x="1294" y="372" style="font-size:13px;font-weight:700">build-teams</text>
+  <text class="s" x="1294" y="392">squads → teams.json</text>
 
   <!-- ================= SHARED LIB ================= -->
   <g filter="url(#sh)"><rect x="40" y="480" width="290" height="290" rx="22" fill="#E3F6EC" stroke="#84C8A2" stroke-width="2"/></g>
@@ -145,7 +148,7 @@
   <!-- ================= ENGINE ================= -->
   <g filter="url(#sh)"><rect x="370" y="480" width="590" height="290" rx="22" fill="#EEE8FD" stroke="#A893E0" stroke-width="2.5"/></g>
   <text class="h" x="394" y="510" fill="#7559C4">MATCH ENGINE · v0.6.0</text>
-  <text class="hs" x="580" y="510">src/engine/engine.js · ~1,820 lines · no dependencies · engine.d.ts</text>
+  <text class="hs" x="604" y="510">src/engine/engine.js · ~1,820 lines · no dependencies · engine.d.ts</text>
 
   <!-- API hexagon band -->
   <g filter="url(#sh)"><polygon points="408,524 922,524 942,562 922,600 408,600 388,562" fill="#E3DAFB" stroke="#8C76D1" stroke-width="2"/></g>
@@ -206,7 +209,8 @@
   <g filter="url(#sh)" transform="translate(76,0)"><path d="M1130,572 a24,24 0 0 1 6,-46 a34,34 0 0 1 64,-8 a28,28 0 0 1 48,12 a22,22 0 0 1 14,42 z" fill="#FFFFFF" stroke="#D9BE5C" stroke-width="1.6"/></g>
   <text class="t" x="1272" y="552" style="font-size:13.5px">football-data.co.uk</text>
   <text class="s" x="1272" y="567" style="font-size:11.5px">top-5 leagues · 2021–26</text>
-  <text class="sl" x="1024" y="560" style="font-size:12px">+ bookmaker odds</text>
+  <text class="sl" x="1024" y="552" style="font-size:12px">+ bookmaker odds</text>
+  <text class="sl" x="1024" y="568" style="font-size:12px">+ transfermarkt squads</text>
 
   <line class="dl" x1="1250" y1="574" x2="1250" y2="602" marker-end="url(#ar)"/>
   <text class="al" x="1260" y="594">fetch-data</text>
@@ -216,19 +220,19 @@
     <path d="M1060,616 v34 a140,11 0 0 0 280,0 v-34" fill="#FFFFFF" stroke="#D9BE5C" stroke-width="1.6"/>
     <ellipse cx="1200" cy="616" rx="140" ry="11" fill="#FFFBEA" stroke="#D9BE5C" stroke-width="1.6"/>
   </g>
-  <text class="m" x="1200" y="642">data/football-data/*.csv</text>
-  <text class="s" x="1200" y="659">8,907 matches · not committed</text>
+  <text class="m" x="1200" y="642">data/football-data · data/transfermarkt</text>
+  <text class="s" x="1200" y="659">8,907 matches · 2025/26 squads · not committed</text>
 
   <line class="dl" x1="1200" y1="662" x2="1200" y2="690" marker-end="url(#ar)"/>
-  <text class="al" x="1210" y="682">build-reference</text>
+  <text class="al" x="1210" y="682">build-reference · build-teams</text>
 
   <!-- reference cylinder -->
   <g filter="url(#sh)">
     <path d="M1060,704 v36 a140,11 0 0 0 280,0 v-36" fill="#FFF1B8" stroke="#D1B23F" stroke-width="1.8"/>
     <ellipse cx="1200" cy="704" rx="140" ry="11" fill="#FFF8D6" stroke="#D1B23F" stroke-width="1.8"/>
   </g>
-  <text class="m" x="1200" y="730" style="font-weight:700">src/data/reference.json</text>
-  <text class="s" x="1200" y="747">committed · the targets</text>
+  <text class="m" x="1200" y="730" style="font-weight:700">reference.json · teams.json</text>
+  <text class="s" x="1200" y="747">src/data · committed · targets and real squads</text>
 
   <!-- ================= QUALITY ================= -->
   <g filter="url(#sh)"><rect x="40" y="830" width="1360" height="220" rx="22" fill="#FDE7F0" stroke="#DE93B4" stroke-width="2"/></g>

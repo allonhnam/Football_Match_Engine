@@ -77,10 +77,31 @@ export function matchKits(home: any, away: any) {
 }
 // Club crests are the clubs' trademarks, so they are not stored here: the browser loads them from transfermarkt.
 export const crestUrl = (id: number | string) => `https://tmssl.akamaized.net/images/wappen/head/${id}.png`;
+// The best XI and bench. For a real club it also prefers a player who plays on the slot's side (a natural full-back
+// or winger out wide, a central player in the middle), since real squads say which side each player plays on. Other
+// teams use the engine's own pick, the one the engine is calibrated with.
+export function pickXI(team: any, formation: string) {
+  if (!team.league) return E.autoPick(team.players, formation as any);
+  const used = new Set<string>(), xi: string[] = [];
+  const side = (sy: number) => sy < 0.3 ? 'L' : sy > 0.7 ? 'R' : 'C';
+  E.FORMATIONS[formation].forEach((slot: any, i: number) => {
+    const ss = side(slot[2]);
+    let best: any = null, bs = -Infinity;
+    for (const p of team.players) {
+      if (used.has(p.id) || p.unavailable) continue;
+      const bonus = ss === 'C' ? (p.side === 'C' ? 2 : 0) : p.side === ss ? 5 : 0;
+      const sc = E.positionFit(p, formation as any, i) * 100 + E.roleRating(p) + bonus;
+      if (sc > bs) { bs = sc; best = p; }
+    }
+    if (best) { used.add(best.id); xi.push(best.id); }
+  });
+  return { xi, bench: team.players.filter((p: any) => !used.has(p.id) && !p.unavailable).slice(0, 9).map((p: any) => p.id) };
+}
 export function realTeam(league: string, name: string, keep: any = {}) {
   const l = LEAGUES.find(x => x.code === league), t = l && l.teams.find(x => x.name === name);
   if (!t) return null;
-  return { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league, crest: t.crest };
+  const team: any = { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league, crest: t.crest };
+  return { ...team, ...pickXI(team, team.formation) };
 }
 // The built-in attributes of a real player, for "reset" after editing (null for generated players).
 export function realAttrs(league: string | undefined, club: string, id: string) {
