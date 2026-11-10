@@ -4,8 +4,10 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
+import { LEAGUES } from '@/lib/util';
+import { seasonFixtures, tallySeason } from '@/lib/season';
 import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
 import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, histogram, lineFromEngine, compareFlow } from '@/lib/metrics';
@@ -215,6 +217,88 @@ function MatchList({ matches, pick, setPick, groups }: any) {
   );
 }
 
+/** The simulated league table, with where each club really finished. */
+function SeasonTable({ table }: any) {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-baseline justify-between gap-2"><span className="text-[12.5px] font-semibold">League table</span><span className="text-[10.5px] text-dim">Real: where the club finished in 2025/26, and its points</span></div>
+      <div className="mt-3 overflow-x-auto scroll-thin">
+        <table className="w-full text-[12px] tnum">
+          <thead className="text-dim text-left"><tr>{['', 'Club', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts', 'Real'].map(h => <th key={h} className={`px-1.5 py-1 font-semibold ${h === 'Club' || h === '' ? '' : 'text-right'}`}>{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-line">
+            {table.map((r, i) => (
+              <tr key={r.name}>
+                <td className="px-1.5 py-1 text-dim w-6">{i + 1}</td>
+                <td className="px-1.5 py-1"><span className="flex items-center gap-2 min-w-[140px]"><Badge color={r.color} label={r.short} size={20} crest={r.crest} /><span className="truncate font-medium">{r.name}</span></span></td>
+                {[r.p, r.w, r.d, r.l, r.gf, r.ga, (r.gd > 0 ? '+' : '') + r.gd].map((v, k) => <td key={k} className="px-1.5 py-1 text-right">{v}</td>)}
+                <td className="px-1.5 py-1 text-right font-bold">{r.pts}</td>
+                <td className="px-1.5 py-1 text-right text-dim whitespace-nowrap">{r.realPos}. · {r.realPts}</td>
+              </tr>))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const PLAYER_STATS = [['goals', 'Goals'], ['assists', 'Assists'], ['yellows', 'Yellow cards'], ['reds', 'Red cards'], ['injuries', 'Injuries']] as const;
+
+/** The top five in each player stat. */
+function SeasonLeaders({ players }: any) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {PLAYER_STATS.map(([k, label]) => {
+        const top = players.filter(p => p[k] > 0).sort((a, b) => b[k] - a[k] || a.minutes - b.minutes || a.name.localeCompare(b.name)).slice(0, 5);
+        return (
+          <div key={k} className="rounded-lg border border-line bg-surface p-4">
+            <div className="text-[12.5px] font-semibold">{label}</div>
+            {top.length ? <ol className="mt-2 flex flex-col gap-1.5">{top.map((p, i) => (
+              <li key={p.id} className="flex items-center gap-2 text-[12px]">
+                <span className="w-4 text-dim tnum">{i + 1}</span><Flag code={p.flag} title={p.nation} h={10} />
+                <span className="min-w-0 flex-1"><span className="block truncate font-medium">{p.name}</span><span className="block truncate text-[10.5px] text-dim">{p.club} · {p.apps} apps</span></span>
+                <b className="font-display text-[18px] tnum">{p[k]}</b>
+              </li>))}</ol> : <p className="text-[11.5px] text-dim mt-2">None this season.</p>}
+          </div>);
+      })}
+    </div>
+  );
+}
+
+/** Every player who played: search by name or club, sort by any column. */
+function PlayerTable({ players }: any) {
+  const [sort, setSort] = useState('goals'), [q, setQ] = useState('');
+  const cols = [['apps', 'Apps'], ['minutes', 'Mins'], ['goals', 'Goals'], ['assists', 'Ast'], ['yellows', 'Yel'], ['reds', 'Red'], ['injuries', 'Inj'], ['rating', 'Avg rating']];
+  const needle = q.trim().toLowerCase();
+  const shown = players.filter(p => !needle || p.name.toLowerCase().includes(needle) || p.club.toLowerCase().includes(needle))
+    .sort((a, b) => b[sort] - a[sort] || a.name.localeCompare(b.name));
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">Every player · {thousands(shown.length)} of {thousands(players.length)}</span>
+        <input id="season-search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search player or club" aria-label="Search player or club" className="h-8 w-56 max-w-full rounded-md border border-line bg-bg px-2 text-[12px] outline-none focus:border-accent" />
+      </div>
+      <p className="text-[10.5px] text-dim mt-1">Click a column to sort by it.</p>
+      <div className="mt-2 max-h-[460px] overflow-auto scroll-thin rounded-md border border-line">
+        <table className="w-full text-[11.5px] tnum">
+          <thead className="sticky top-0 bg-surface2 text-dim text-left"><tr>
+            <th className="px-2 py-1.5 font-semibold">Player</th><th className="px-2 py-1.5 font-semibold">Club</th><th className="px-2 py-1.5 font-semibold">Pos</th>
+            {cols.map(([k, l]) => <th key={k} className="px-2 py-1.5 font-semibold text-right"><button onClick={() => setSort(k)} className={sort === k ? 'text-accent' : 'hover:text-ink'}>{l}{sort === k ? ' ↓' : ''}</button></th>)}
+          </tr></thead>
+          <tbody className="divide-y divide-line">
+            {shown.map(p => (
+              <tr key={p.id} className="hover:bg-surface2/60">
+                <td className="px-2 py-1"><span className="flex items-center gap-1.5 min-w-[150px]"><Flag code={p.flag} title={p.nation} h={10} /><span className="truncate">{p.name}</span></span></td>
+                <td className="px-2 py-1 text-dim whitespace-nowrap">{p.club}</td><td className="px-2 py-1 text-dim">{p.role}</td>
+                {cols.map(([k]) => <td key={k} className={`px-2 py-1 text-right ${sort === k ? 'font-bold' : ''}`}>{k === 'rating' ? fx(p.rating, 1) : p[k]}</td>)}
+              </tr>))}
+          </tbody>
+        </table>
+        {!shown.length && <div className="text-dim text-[12px] text-center py-6">No player matches that search.</div>}
+      </div>
+    </div>
+  );
+}
+
 // One row per simulated match, for the lists above.
 const matchRow = (r: any, job: any, i: number, group?: string) => ({ i, group, seed: job.seed, str: [job.home.strength, job.away.strength], score: r.score, ht: r.ht, shots: [r.ts[0].shots, r.ts[1].shots], xg: [r.ts[0].xg, r.ts[1].xg] });
 
@@ -222,6 +306,7 @@ export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(1000), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
   const [pick, setPick] = useState(null); // a scoreline picked in the table, to filter the match list
+  const [league, setLeague] = useState('E0'), [seasonSeed, setSeasonSeed] = useState(2026), [season, setSeason] = useState(null);
   const teamsFor = (i, g) => { const sw = i % 2; return { home: E.makeTeam({ name: 'Lab Home', seed: sw ? 202 : 101, strength: 12 + Math.ceil(g / 2) }), away: E.makeTeam({ name: 'Lab Away', seed: sw ? 101 : 202, strength: 12 - Math.floor(g / 2) }) }; };
   const hash = r => { let h = 0; const s = JSON.stringify([r.score, r.events.map(e => [e.tick, e.type, e.player])]); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(16).toUpperCase(); };
   useEffect(() => { const t = setTimeout(() => { const cfg = { ...teamsFor(0, 0), seed: 4242 }; const a = E.simulateMatch(cfg), b = E.simulateMatch(cfg); const m = new E.Match(cfg); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd(); setDet({ ok: hash(a) === hash(b) && hash(a) === hash(c), h: hash(a) }); }, 300); return () => clearTimeout(t); }, []);
@@ -252,20 +337,32 @@ export function Lab() {
     const a = E.simulateMatch({ ...t, seed: 4242 }), b = E.simulateMatch({ ...t, seed: 4242 }); const m = new E.Match({ ...t, seed: 4242 }); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd();
     setPerf({ ms: ms / k, mps: 1000 / (ms / k), par: 48 / (par / 1000), season: 380 / (48 / (par / 1000)), h1: hash(a), h2: hash(b), h3: hash(c), events: (a as any).events.length }); setProg(0);
   };
-  const run = tab === 'realism' ? realism : tab === 'balance' ? balance : perfRun;
+  // A full season of a real league: every fixture home and away, each match with both clubs' real squads at full
+  // strength (fatigue, injuries and bans between matches are left to the game, which gets them in carryOver).
+  const seasonRun = async () => {
+    setSeason(null); setProg(0.01);
+    const jobs = seasonFixtures(league, seasonSeed), t0 = performance.now();
+    const out = await runBatch(jobs, setProg);
+    setSeason({ league, seed: seasonSeed, secs: (performance.now() - t0) / 1000, ...tallySeason(league, jobs, out) }); setProg(0);
+  };
+  const run = tab === 'realism' ? realism : tab === 'balance' ? balance : tab === 'season' ? seasonRun : perfRun;
   return (
     <div className="glow-bg min-h-[calc(100vh-56px)]">
       <div className="gutter mx-auto max-w-[1320px] py-8 flex flex-col gap-6">
         <PageHead eyebrow="Engine calibration" title="Engine Lab" sub={`Test realism, tactical balance and simulation performance without leaving the browser. Realism is checked against ${thousands(reference.source.matches)} real matches from the top five European leagues (${reference.source.seasons.length} seasons, football-data.co.uk). Batches run in background workers.`}
           right={<div className={`rounded-md border px-4 py-3 flex items-center gap-3 ${det ? (det.ok ? 'border-good/50 bg-good/10' : 'border-bad/50 bg-bad/10') : 'border-line'}`}><span className={det && det.ok ? 'text-good' : 'text-dim'}><Icon n="check" s={18} /></span><div><div className="eyebrow !text-[9.5px]">Determinism check</div><div className={`text-[12px] font-bold tracking-[.1em] ${det ? (det.ok ? 'text-good' : 'text-bad') : 'text-dim'}`}>{det ? (det.ok ? 'SEEDS MATCH' : 'MISMATCH') : 'CHECKING…'}</div></div></div>} />
-        <Tabs value={tab} onChange={setTab} items={[['realism', 'Realism'], ['balance', 'Balance'], ['perf', 'Performance']]} />
+        <Tabs value={tab} onChange={setTab} items={[['realism', 'Realism'], ['balance', 'Balance'], ['season', 'Season'], ['perf', 'Performance']]} />
         <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)] items-start">
           <div className="rounded-lg border border-line bg-surface p-4 flex flex-col gap-5">
             <div className="eyebrow">Run configuration</div>
-            {tab !== 'perf' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Matches</div><Seg id="lab-n" value={[200, 1000, 2000].indexOf(n)} options={['200', '1,000', '2,000']} onChange={i => setN([200, 1000, 2000][i])} size="sm" /></div>}
-            {tab !== 'perf' && <div><div className="flex justify-between"><span className="eyebrow !text-[9.5px]">Squad strength gap</span><span className="font-mono text-[11px]">{gap === 0 ? 'Equal' : `Home +${gap}`}</span></div><input id="lab-gap" type="range" min="0" max="6" value={gap} onChange={e => setGap(+e.target.value)} className="w-full mt-1.5" /></div>}
+            {tab === 'season' && <>
+              <div><div className="eyebrow !text-[9.5px] mb-1.5">League</div><select id="season-league" value={league} onChange={e => setLeague(e.target.value)} className="w-full h-9 rounded-md border border-line bg-bg px-2 text-[12.5px]">{LEAGUES.map(l => <option key={l.code} value={l.code}>{l.name} {l.season} · {l.teams.length * (l.teams.length - 1)} matches</option>)}</select></div>
+              <div><div className="eyebrow !text-[9.5px] mb-1.5">Season seed</div><div className="flex gap-2"><input id="season-seed" type="number" value={seasonSeed} onChange={e => setSeasonSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full min-w-0 h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setSeasonSeed(Math.floor(Math.random() * 1e6))}>Random</Btn></div><p className="text-[10.5px] text-dim mt-1.5">The same seed plays the same season again.</p></div>
+            </>}
+            {(tab === 'realism' || tab === 'balance') && <div><div className="eyebrow !text-[9.5px] mb-1.5">Matches</div><Seg id="lab-n" value={[200, 1000, 2000].indexOf(n)} options={['200', '1,000', '2,000']} onChange={i => setN([200, 1000, 2000][i])} size="sm" /></div>}
+            {(tab === 'realism' || tab === 'balance') && <div><div className="flex justify-between"><span className="eyebrow !text-[9.5px]">Squad strength gap</span><span className="font-mono text-[11px]">{gap === 0 ? 'Equal' : `Home +${gap}`}</span></div><input id="lab-gap" type="range" min="0" max="6" value={gap} onChange={e => setGap(+e.target.value)} className="w-full mt-1.5" /></div>}
             {tab === 'balance' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Tactic to test</div><select id="lab-dim" value={dim} onChange={e => setDim(e.target.value)} className="w-full h-9 rounded-md border border-line bg-bg px-2 text-[12.5px]">{E.TACTIC_KEYS.map(k => <option key={k} value={k}>{TACTIC_META[k].label}</option>)}</select></div>}
-            <Btn kind="primary" className="w-full h-10" disabled={prog > 0} onClick={run}>{prog > 0 ? 'Running…' : `Run ${tab === 'perf' ? 'performance' : tab} test`}</Btn>
+            <Btn kind="primary" className="w-full h-10" disabled={prog > 0} onClick={run}>{prog > 0 ? 'Running…' : tab === 'season' ? 'Play the season' : `Run ${tab === 'perf' ? 'performance' : tab} test`}</Btn>
             {prog > 0 && <Progress v={prog} />}
             {tab === 'realism' && res && <div className="text-[11.5px] text-dim">Goals by 15-minute block<div className="flex items-end gap-1 h-16 mt-2">{res.byBlock.map((v, i) => <div key={i} className="flex-1 bg-accent/70 rounded-t-[2px]" style={{ height: `${v / 0.3 * 100}%` }} title={pct(v)} />)}</div><div className="flex justify-between font-mono text-[9.5px] mt-1"><span>0'</span><span>45'</span><span>90'</span></div><div className="mt-3">Injuries {fx(res.inj, 2)} per match · {res.n} matches</div></div>}
           </div>
@@ -292,6 +389,13 @@ export function Lab() {
                   <ScorelineTable matches={bal.matches} pick={pick} onPick={setPick} />
                   <MatchList matches={bal.matches} pick={pick} setPick={setPick} groups={TACTIC_META[bal.dim].opts} />
                 </div>
+              </div>)}
+            {tab === 'season' && (!season ? <Empty text="Pick a league and play its whole season with the real clubs and squads: every club meets every other club home and away. You get the league table and every player's goals, assists, yellow and red cards and injuries. Each match is played with full-strength squads; carrying fatigue, injuries and suspensions from one match to the next is left to the game." /> :
+              <div className="flex flex-col gap-3">
+                <div className="text-[11.5px] text-dim">{LEAGUES.find(l => l.code === season.league)?.name} · {thousands(season.played)} matches · seed {season.seed} · played in {fx(season.secs, 1)} s</div>
+                <SeasonTable table={season.table} />
+                <SeasonLeaders players={season.players} />
+                <PlayerTable players={season.players} />
               </div>)}
             {tab === 'perf' && (!perf ? <Empty text="Run the performance test to time single-thread simulation and worker throughput, and to check that seeds and save/load reproduce matches exactly." /> :
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
