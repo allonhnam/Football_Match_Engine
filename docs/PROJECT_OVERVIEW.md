@@ -2,7 +2,7 @@
 
 > **In short:** a football match engine for a management game. It plays a full 11 v 11 match on a 2D pitch in 0.25-second steps, follows the IFAB Laws of the Game 2026/27, and is tuned so its numbers match 8,907 real top-flight matches. A Next.js visualizer plays the 96 real clubs of the five top European leagues live, with their real 2025/26 squads, and command-line tools and tests check the engine.
 >
-> Version **0.6.0** · `main` · author Hyun · 9 November 2026
+> Version **0.6.0** · `main` · author Hyun · 9 November 2026 · live demo: https://mainline-markets-interview.vercel.app
 
 | Part | At a glance |
 | :-- | :-- |
@@ -144,6 +144,10 @@ Each option gets one value: **chance it works × value of the new position − c
 | 18 | Real clubs and squads: league and club picker, 2025/26 players, national flags, kit colours, a player editor (PR #16) |
 | 19 | Club crests, no kit clashes, README and 8 tests for the real squads (PR #17) |
 | 20 | Natural full-backs and wingers in real clubs' XIs, a new seed after every match, this overview updated (PR #18) |
+| 21 | Generated squads keep the engine's own auto-pick; only real clubs prefer natural wide players (PR #19) |
+| 22 | The Matchday seed box shows the whole seed (PR #20) |
+| 23 | A command given at the very tick a match was saved now applies on load; the Matchday code sample uses the clubs picked (PR #21) |
+| 24 | README balance range corrected to what the runs show (PR #22) |
 
 ### How close it is to real football (3,000 simulated matches)
 
@@ -169,6 +173,22 @@ Nobody publishes 1–20 ratings, so `npm run build-teams` derives them: each clu
 | Goals per match | 2.73 | 2.63 | ~2.8 |
 | Shots per match | 23.4 | 23.6 | ~25 |
 | Stronger side wins | 56% | 52% | – |
+
+### Decisions matter (`npm run balance -- 400`, `npm run attributes -- 300`, 9 November 2026)
+
+A balanced side wins 40% against another balanced side in this run. Every tactic setting lands between 35% and 42%; nothing is flagged.
+
+| Setting | Gains | Costs |
+| :-- | :-- | :-- |
+| Attacking mentality | 14.3 shots instead of 12.8 | concedes 1.65 goals instead of 1.39 |
+| High press | concedes least (1.27) | 17.9 fouls instead of 6.7; legs at 74% by full time instead of 86% |
+| High line | 14.7 shots instead of 11.2 with a deep line | balls in behind: 1.62 goals against instead of 1.28 |
+| Short passing | 87% pass completion, 55% possession | fewer goals (1.20 instead of 1.42) |
+| Direct passing | more goals (1.47) | 76% completion, 47% possession |
+
+**Formations:** 4-4-2 43%, 4-3-3 40%, 4-2-3-1 40%, 5-3-2 39%, 3-5-2 37%. With every formation bonus switched off they land at 35-40%, so 4-4-2's lead comes from its `FORMATION_EDGE` entry; PR #15 trims it to `[1.03, 0.98]` (41%).
+
+**Attributes (+3 for every player, win rate against 33% with no boost):** pace 54%, passing 47%, tackling 46%, stamina 42%, dribbling 42%, heading 42%, positioning 39%, shooting 38%, keeping 36%, vision 34%. Vision and keeping sit near the tool's DEAD line, and which one gets flagged changes from run to run. Most keepers start at 18-20, so the +3 is mostly lost to the cap of 20; PR #15 makes the tool always compare a real 3-point gap, after which keeping wins 39% and vision 36%, and nothing is flagged.
 
 ### Match flow (published averages; not in the dataset)
 
@@ -204,6 +224,7 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 
 ## 6. What's left
 
+- [ ] Merge PR #15: trims the 4-4-2 bonus (43% to 41% wins) and makes `npm run attributes` compare a real 3-point gap at the cap of 20 (engine 0.6.1).
 - [ ] The leading shooter takes 39% of his team's shots (real: about 32%). Hat-tricks and goal kicks are also near the edges of their ranges.
 - [ ] Offsides and pass completion are only checked against rough estimates, because the dataset has none.
 - [ ] Goal timing is checked by half only; the dataset has no goal minutes.
