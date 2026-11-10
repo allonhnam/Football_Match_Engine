@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Abbr } from '@/components/ui';
 import { drawPitch } from '@/lib/pitch';
 import { liveStats, eventTitle, DOT, buildInsight, whyItMatters } from '@/lib/liveHelpers';
 import { Momentum, StatRows } from '@/components/LiveParts';
@@ -129,7 +129,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
                   <div className="flex gap-2 justify-center mt-5"><Btn kind="primary" size="lg" onClick={kick}>{replay ? 'Play replay' : 'Kick off'} <Icon n="play" s={14} /></Btn><Btn size="lg" onClick={onNewMatch}>Back to setup</Btn></div>
                   <p className="text-[11px] text-dim mt-4 font-mono">SPACE play · 1–4 speed · N next event · E skip · F follow ball · M manager</p></>}
                 {overlay === 'halftime' && <><div className="eyebrow-accent">{m.half === 2 ? 'Level: extra time' : m.half === 3 ? 'Half-time in extra time' : 'Half-time'}</div><div className="font-display font-bold text-[48px] tnum leading-none mt-2">{h.score} – {a.score}</div>
-                  <div className="grid grid-cols-3 text-[12px] gap-y-1.5 mt-4">{[[fx(ts[0].xg, 2), 'xG', fx(ts[1].xg, 2)], [ts[0].shots, 'Shots', ts[1].shots], [ts[0].possessionPct + '%', 'Possession', ts[1].possessionPct + '%']].map(([x, l, y]) => <React.Fragment key={l}><b className="tnum">{x}</b><span className="text-dim">{l}</span><b className="tnum">{y}</b></React.Fragment>)}</div>
+                  <div className="grid grid-cols-3 text-[12px] gap-y-1.5 mt-4">{[[fx(ts[0].xg, 2), 'xG', fx(ts[1].xg, 2)], [ts[0].shots, 'Shots', ts[1].shots], [ts[0].possessionPct + '%', 'Possession', ts[1].possessionPct + '%']].map(([x, l, y]) => <React.Fragment key={l}><b className="tnum">{x}</b><span className="text-dim"><Abbr up>{l}</Abbr></span><b className="tnum">{y}</b></React.Fragment>)}</div>
                   <div className="flex gap-2 justify-center mt-5">{!replay && control !== 'none' && <Btn onClick={() => setTab('manager')}>Make changes</Btn>}<Btn kind="primary" onClick={startSecond}>{m.half === 2 ? 'Start extra time' : 'Start second half'}</Btn></div></>}
                 {overlay === 'fulltime' && <><div className="eyebrow-accent">{m.abandoned ? 'Abandoned' : 'Full time'}</div><div className="font-display font-bold text-[52px] tnum leading-none mt-2">{h.score} – {a.score}</div>
                   {m.shootout && <p className="font-mono text-[13px] mt-1">{m.shootout.score[0]} – {m.shootout.score[1]} on penalties</p>}
@@ -187,7 +187,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
               {m.players.filter(q => q.side === s && (q.onPitch || q.st.onAt != null)).sort((x, y) => (y.onPitch - x.onPitch) || x.slot - y.slot).map(q => { const r = ratings && ratings.get(q.id); const status = q.red ? 'Sent off' : q.injured ? 'Injured' : q.subOff ? 'Substituted' : q.st.goals ? `${q.st.goals} goal${q.st.goals > 1 ? 's' : ''}` : q.st.assists ? `${q.st.assists} assist${q.st.assists > 1 ? 's' : ''}` : 'Playing'; const kc = q.slot === 0 ? (s === 0 ? '#FFD23C' : '#3DDC97') : m.teams[s].color; return (
                 <div key={q.id} className={`flex items-center gap-2.5 py-1.5 border-b border-line/60 ${q.onPitch ? '' : 'opacity-45'}`}>
                   <span className="w-6 h-6 grid place-items-center rounded-full text-[10.5px] font-bold shrink-0" style={{ background: kc, color: textOn(kc) }}>{q.p.num}</span>
-                  <span className="flex-1 min-w-0"><span className="block text-[12.5px] truncate">{q.p.name}</span><span className={`block text-[10.5px] ${status === 'Playing' ? 'text-dim' : q.red || q.injured ? 'text-bad' : 'text-accent'}`}>{posLabel(m.teams[s].formation, q.slot)} · {status}</span></span>
+                  <span className="flex-1 min-w-0"><span className="block text-[12.5px] truncate">{q.p.name}</span><span className={`block text-[10.5px] ${status === 'Playing' ? 'text-dim' : q.red || q.injured ? 'text-bad' : 'text-accent'}`}><Abbr up>{posLabel(m.teams[s].formation, q.slot)}</Abbr> · {status}</span></span>
                   {q.yellow > 0 && <CardIcon n={q.yellow} />}<CondBar v={q.cond} w="w-10" />
                   <span className={`w-9 text-center rounded-[3px] text-[12px] font-bold tnum py-0.5 ${r && r.rating >= 7.5 ? 'bg-accent text-accentink' : 'bg-surface2'}`}>{r ? fx(r.rating, 1) : '–'}</span>
                 </div>); })}

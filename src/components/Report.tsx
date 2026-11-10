@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 import { StatRows } from '@/components/LiveParts';
 
@@ -48,7 +48,7 @@ export function Report({ report, onReplay, onBack }: any) {
   const pname = id => (R.playerStats.find(p => p.id === id) || {}).name || '';
   const scorers = s => R.events.filter(e => e.type === 'goal' && e.side === s).map(e => `${lastName(pname(e.player))}${e.ownGoal ? ' (og)' : ''} ${e.minute}`).join(', ');
   const rows = R.playerStats.slice().sort((a, b) => { const va = a[sort.k], vb = b[sort.k]; return (typeof va === 'string' ? va.localeCompare(vb) : (va ?? -1) - (vb ?? -1)) * sort.d; });
-  const th = (k, l, cls = '') => <th className={`py-2 px-1.5 font-semibold text-[10.5px] tracking-[.1em] uppercase text-dim cursor-pointer select-none whitespace-nowrap ${cls}`} onClick={() => setSort(s => ({ k, d: s.k === k ? -s.d : -1 }))}>{l}{sort.k === k ? (sort.d < 0 ? ' ↓' : ' ↑') : ''}</th>;
+  const th = (k, l, cls = '') => <th className={`py-2 px-1.5 font-semibold text-[10.5px] tracking-[.1em] uppercase text-dim cursor-pointer select-none whitespace-nowrap ${cls}`} onClick={() => setSort(s => ({ k, d: s.k === k ? -s.d : -1 }))}><Abbr>{l}</Abbr>{sort.k === k ? (sort.d < 0 ? ' ↓' : ' ↑') : ''}</th>;
   const runResim = async () => { setResP(0.01); const N = 120; const res = await runBatch(Array.from({ length: N }, (_, i) => ({ ...config, seed: 50000 + i, control: 'none' })), setResP); let same = 0, w = 0, d = 0, l = 0; res.forEach(r => { if (!r || r.errors) return; if (r.score[0] === R.score[0] && r.score[1] === R.score[1]) same++; if (r.score[0] > r.score[1]) w++; else if (r.score[0] < r.score[1]) l++; else d++; }); setResim({ same: same / N, w: w / N, d: d / N, l: l / N, N }); setResP(0); };
   const json = JSON.stringify(R.carryOver, null, 2);
   const copy = async () => { try { await navigator.clipboard.writeText(json); setCopied('ok'); } catch (e) { setCopied('select'); } };
