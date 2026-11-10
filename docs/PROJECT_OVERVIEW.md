@@ -1,6 +1,6 @@
 # Match Engine: scope and progress
 
-> **In short:** a football match engine for a management game. It plays a full 11 v 11 match on a 2D pitch in 0.25-second steps, follows the IFAB Laws of the Game 2026/27, and is tuned so its numbers match 8,907 real top-flight matches. A Next.js visualizer shows the match live, and command-line tools and tests check the engine.
+> **In short:** a football match engine for a management game. It plays a full 11 v 11 match on a 2D pitch in 0.25-second steps, follows the IFAB Laws of the Game 2026/27, and is tuned so its numbers match 8,907 real top-flight matches. A Next.js visualizer plays the 96 real clubs of the five top European leagues live, with their real 2025/26 squads, and command-line tools and tests check the engine.
 >
 > Version **0.6.0** · `main` · author Hyun · 9 November 2026
 
@@ -8,8 +8,9 @@
 | :-- | :-- |
 | **Engine** | `src/engine/engine.js`, about 1,820 lines, no dependencies, typed by `engine.d.ts` |
 | **Visualizer** | 4 routes: `/` matchday, `/tactics`, `/report`, `/lab` |
-| **Tools** | 7 Node command-line tools in `tools/` |
-| **Tests** | 88 tests in 7 files, 40 of them on the rules of football; CI runs 4 jobs on Linux, Windows and macOS |
+| **Real clubs** | 96 clubs and 1,920 real players (2025/26), national flags, kit colours, crests, editable ratings |
+| **Tools** | 8 Node command-line tools in `tools/` |
+| **Tests** | 97 tests in 8 files, 40 of them on the rules of football; CI is set up for 4 jobs on Linux, Windows and macOS, but the account has no Actions minutes, so every change is checked locally |
 | **Realism** | 24 of 24 real-data checks pass, and 12 of 12 match-flow numbers sit in their published ranges |
 | **Speed** | about 250 ms per match on one core; about 18 matches a second in the browser's worker pool |
 
@@ -35,7 +36,7 @@ The brief (version 1.0, November 2026) asks for four deliverables and scores the
 | 1 | Does it follow the Laws of the Game 2026/27? | Restarts, offside, fouls, cards, advantage, the keeper's 8 seconds, 5-second countdowns, treatment, dropped balls, substitution windows, extra time, shootouts | 40 rule tests: 32 in `tests/laws.test.ts` (8 on offside), plus lineup, substitution and cup-tie rules in `engine.test.ts` and `knockout.test.ts` |
 | 2 | Do its statistics match real football (distributions, not just averages)? | `npm run calibrate` compares full distributions with 8,907 real matches | 24 of 24 pass, plus 12 of 12 match-flow ranges |
 | 3 | Can it be plugged into a game? | Run to a minute or event, pause, resume, substitute, change tactics, save and load, headless batches, `carryOver` | `tests/engine.test.ts` (determinism, save and load, fuzz) |
-| 4 | Does it look like football? | Live 2D pitch with officials, ball flight, players walking off, countdown rings | The visualizer at `/` |
+| 4 | Does it look like football? | Live 2D pitch with officials, ball flight, players walking off, countdown rings; real clubs and players, crests, and kits that never clash | The visualizer at `/` |
 | 5 | Do decisions, attributes and tactics matter? | Every tactic and formation has a cost and a benefit (`TACTIC_EDGE`, `FORMATION_EDGE`, `MATCHUPS`); every attribute moves results | `npm run balance`, `npm run attributes`, `tests/attributes.test.ts` |
 
 ### What the game needs from the engine
@@ -68,9 +69,9 @@ The engine sits in the middle. The visualizer, the tools and the tests all call 
 | :-- | :-- | :-- |
 | **Engine** | `src/engine/engine.js` + `engine.d.ts` | The whole simulation: the tick loop, player decisions, the laws and the tuning tables. Uses one seeded random number generator. |
 | **Visualizer** | `src/app`, `src/components` | Next.js routes `/`, `/tactics`, `/report` and `/lab`. `AppProvider` keeps state between pages. Batches run in a pool of up to 6 Web Workers. |
-| **Shared library** | `src/lib` | `metrics.js` computes stats the same way for real and simulated matches. `league.js` spreads squad quality like a real league. `predictability.js` fits results to bookmaker odds. |
-| **Tools** | `tools/*.mjs` | `simulate`, `calibrate`, `balance`, `attributes`, `fetch-data`, `build-reference`, `fit-pass-odds`. Batches run on worker threads. |
-| **Data** | `src/data/reference.json` | Real-football targets from football-data.co.uk (top five leagues, 2021/22 to 2025/26). The file is committed; the raw CSVs are not. |
+| **Shared library** | `src/lib` | `metrics.js` computes stats the same way for real and simulated matches. `league.js` spreads squad quality like a real league. `predictability.js` fits results to bookmaker odds. `util.ts` turns `teams.json` into team sheets (`realTeam`), picks real clubs' XIs (`pickXI`), applies rating edits (`setAttr`) and settles kits at kick-off (`matchKits`). |
+| **Tools** | `tools/*.mjs` | `simulate`, `calibrate`, `balance`, `attributes`, `fetch-data`, `build-reference`, `build-teams`, `fit-pass-odds`. Batches run on worker threads. |
+| **Data** | `src/data/reference.json`, `src/data/teams.json` | Real-football targets from football-data.co.uk (top five leagues, 2021/22 to 2025/26), and the real clubs and squads from the CC0 transfermarkt-datasets with derived ratings. Both files are committed; the raw downloads are not. Crests are loaded from transfermarkt at runtime, not stored. |
 | **Quality** | `tests/`, `.github/workflows/ci.yml` | Vitest tests, and CI that runs typecheck, tests, one headless match and the production build. |
 
 ---
@@ -109,7 +110,9 @@ Each option gets one value: **chance it works × value of the new position − c
 | `PASS_ODDS` | The fitted pass-completion model |
 | `ENGINE_VERSION` | Saved matches record it; a save only replays exactly on the same version |
 | `carryOver` | What the game keeps after a match: minutes, condition, injuries, cards, suspensions |
-| `QUICK_TESTS` | Set to `1` to skip the 17 statistical tests (71 tests run in about 17 s) |
+| `QUICK_TESTS` | Set to `1` to skip the 18 statistical tests (79 tests run in about 9 s) |
+| `teams.json` | The 96 real clubs: strength, kit colours, crest id and 20 players each, ratings derived by `build-teams` |
+| `pickXI`, `matchKits` | The app's XI pick for real clubs (natural full-backs and wingers out wide) and its kit-clash rule |
 | `describeStatistical`, `itStatistical` | Test helpers in `tests/statistical.ts` that `QUICK_TESTS` skips |
 | `breathe()` | Test helper in `tests/breathe.ts` that lets long test loops yield between matches |
 
@@ -137,6 +140,10 @@ Each option gets one value: **chance it works × value of the new position − c
 | 14 | CI cut from 6 jobs to 4, with quick tests on Windows and macOS (PR #11) |
 | 15 | Overview and diagrams brought up to engine 0.6.0 (PR #12) |
 | 16 | Offside tests: 8 cases for Law 11, so every major law has a direct test (PR #13) |
+| 17 | Final review: saves record the engine version, steadier Engine Lab checks (PR #14) |
+| 18 | Real clubs and squads: league and club picker, 2025/26 players, national flags, kit colours, a player editor (PR #16) |
+| 19 | Club crests, no kit clashes, README and 8 tests for the real squads (PR #17) |
+| 20 | Natural full-backs and wingers in real clubs' XIs, a new seed after every match, this overview updated (PR #18) |
 
 ### How close it is to real football (3,000 simulated matches)
 
@@ -152,6 +159,16 @@ Each option gets one value: **chance it works × value of the new position − c
 | Goals in the second half | 54.2% | 55.3% | pass |
 | Half-time leader wins | 73.5% | 73.1% | pass |
 | Favourite wins (against odds) | 52.2% | 53.8% | pass |
+
+### Real squads
+
+Nobody publishes 1–20 ratings, so `npm run build-teams` derives them: each club's strength from its real results, put on the spread the engine is calibrated on (centred on 12, standard deviation about 0.6); each player's level from his market value against his own position group, corrected for age; his profile from his exact position, height and age. Checked over 1,000 league matches:
+
+| Metric | Real squads | Generated squads | Real football |
+| :-- | --: | --: | --: |
+| Goals per match | 2.73 | 2.63 | ~2.8 |
+| Shots per match | 23.4 | 23.6 | ~25 |
+| Stronger side wins | 56% | 52% | – |
 
 ### Match flow (published averages; not in the dataset)
 
@@ -176,12 +193,12 @@ Each option gets one value: **chance it works × value of the new position − c
 
 | Job | Tests |
 | :-- | :-- |
-| Ubuntu, Node 20 | all 88 |
-| Ubuntu, Node 22 | all 88 |
-| Windows, Node 20 | 71 quick tests (`QUICK_TESTS=1`) |
-| macOS, Node 22 | 71 quick tests (`QUICK_TESTS=1`) |
+| Ubuntu, Node 20 | all 97 |
+| Ubuntu, Node 22 | all 97 |
+| Windows, Node 20 | 79 quick tests (`QUICK_TESTS=1`) |
+| macOS, Node 22 | 79 quick tests (`QUICK_TESTS=1`) |
 
-Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on pull requests and pushes to `main`, skips changes that only touch `.md` files, and a new push cancels the old run.
+Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on pull requests and pushes to `main`, skips changes that only touch `.md` files, and a new push cancels the old run. Since PR #14 the account has no Actions minutes, so the jobs stop before they start; every change since has been checked locally (typecheck, all tests, the build, and the calibration when the engine changed).
 
 ---
 
@@ -192,6 +209,8 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 - [ ] Goal timing is checked by half only; the dataset has no goal minutes.
 - [ ] Speed: the engine is about twice as slow as at PR #5, because of the richer off-ball positioning (`_findSpace`). Re-planning less often would fix it but changes results, so it needs a re-calibration.
 - [ ] Saves record `ENGINE_VERSION`; a match saved on 0.5.x does not replay exactly on 0.6.0.
+- [ ] Real players' ratings are derived, not published, and each league is rated on its own scale: the best clubs of every league are about equally strong. Squad numbers are assigned, and the squads are those of July 2026.
+- [ ] Some real clubs' data lists their wide players as central, so their XIs still put central players out wide (216 of 576 wide slots across the 96 clubs in 4-3-3).
 
 ---
 
@@ -200,12 +219,13 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 ```bash
 npm install
 npm run dev                 # http://localhost:3000
-npm test                    # 88 tests
-QUICK_TESTS=1 npm test      # 71 quick tests
+npm test                    # 97 tests
+QUICK_TESTS=1 npm test      # 79 quick tests
 npm run simulate -- --seed 42
 npm run calibrate -- 3000   # compare with real football
 npm run balance -- 200      # tactic and formation win rates
 npm run attributes -- 300   # what each attribute changes
+npm run build-teams         # rebuild the real squads (after npm run fetch-data)
 ```
 
 <sub>Diagrams: <code>docs/flowchart.svg</code> and <code>docs/system-design.svg</code>, both hand-written SVG. They open in any browser, and GitHub shows them inline.</sub>
