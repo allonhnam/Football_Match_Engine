@@ -127,7 +127,7 @@ const outcome = (s: number[]) => (s[0] > s[1] ? 'H' : s[0] < s[1] ? 'A' : 'D');
 const OUTCOME_LABEL = { H: 'Home wins', D: 'Draws', A: 'Away wins' };
 
 /** Home wins, draws and away wins as counts and shares, next to real football. */
-function ResultsSummary({ matches }: any) {
+function ResultsSummary({ matches, seed }: any) {
   const n = matches.length, c = { H: 0, D: 0, A: 0 };
   let goals = 0;
   for (const m of matches) { c[outcome(m.score)]++; goals += m.score[0] + m.score[1]; }
@@ -135,7 +135,7 @@ function ResultsSummary({ matches }: any) {
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-[12.5px] font-semibold">Results of all {thousands(n)} matches</span>
+        <span className="text-[12.5px] font-semibold">Results of all {thousands(n)} matches{seed != null && <span className="font-normal text-dim"> · seed <span className="font-mono">{seed}</span></span>}</span>
         <span className="text-[11px] text-dim tnum">{thousands(goals)} goals · {fx(goals / (n || 1), 2)} per match (real {fx(reference.counts.goals.mean, 2)})</span>
       </div>
       <div className="flex h-8 rounded overflow-hidden text-[11.5px] font-bold mt-3">
@@ -349,29 +349,36 @@ export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(1000), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
   const [pick, setPick] = useState(null); // a scoreline picked in the table, to filter the match list
-  const [league, setLeague] = useState('E0'), [seasonSeed, setSeasonSeed] = useState(2026), [season, setSeason] = useState(null);
+  const [league, setLeague] = useState('E0'), [season, setSeason] = useState(null);
+  // Every run uses the seed shown, then a new one is drawn, so each run is a fresh batch; typing a seed repeats a run
+  // exactly. A run's matches use seeds spread out from it (seed × 4099 + match number), so two seeds never share a match.
+  const [labSeed, setLabSeed] = useState(1);
+  const newSeed = () => Math.floor(Math.random() * 1e6);
+  useEffect(() => { setLabSeed(newSeed()); }, []);
+  const spread = (sd: number) => sd * 4099;
   const teamsFor = (i, g) => { const sw = i % 2; return { home: E.makeTeam({ name: 'Lab Home', seed: sw ? 202 : 101, strength: 12 + Math.ceil(g / 2) }), away: E.makeTeam({ name: 'Lab Away', seed: sw ? 101 : 202, strength: 12 - Math.floor(g / 2) }) }; };
   const hash = r => { let h = 0; const s = JSON.stringify([r.score, r.events.map(e => [e.tick, e.type, e.player])]); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(16).toUpperCase(); };
   useEffect(() => { const t = setTimeout(() => { const cfg = { ...teamsFor(0, 0), seed: 4242 }; const a = E.simulateMatch(cfg), b = E.simulateMatch(cfg); const m = new E.Match(cfg); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd(); setDet({ ok: hash(a) === hash(b) && hash(a) === hash(c), h: hash(a) }); }, 300); return () => clearTimeout(t); }, []);
   const realism = async () => {
     setRes(null); setProg(0.01);
     // A fresh, varied pair of squads for every match, like the many teams of a real league.
-    const jobs = Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i, gap), seed: 1 + i, control: 'none' }));
+    const sd = labSeed, base = spread(sd);
+    const jobs = Array.from({ length: n }, (_, i) => ({ ...leagueTeams(base + i, gap), seed: base + i + 1, control: 'none' }));
     const raw = await runBatch(jobs, setProg);
     const matches = raw.map((r, i) => (r && !r.errors ? matchRow(r, jobs[i], i) : null)).filter(Boolean);
     const out = raw.filter(r => r && !r.errors);
     const tiles = buildTiles(out);
     const scorelines = compareScorelines(reference.scorelines.hist, out.map(r => lineFromEngine(r.score, r.ts, r.ht)));
     const byBlock = Array(6).fill(0); out.forEach(r => r.goalTimes.forEach(t => byBlock[Math.min(5, Math.floor(t / 900))]++));
-    setRes({ n: out.length, tiles, scorelines, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap, matches }); setPick(null); setProg(0);
+    setRes({ n: out.length, tiles, scorelines, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap, matches, seed: sd }); setPick(null); setProg(0); setLabSeed(newSeed());
   };
   const balance = async () => {
-    setBal(null); setProg(0.01); const per = Math.max(60, Math.floor(n / 3)); const jobs = [], opt = [];
-    [0, 1, 2].forEach(o => { for (let i = 0; i < per; i++) { const t = teamsFor(i, gap); t.home.tactics = { ...t.home.tactics, [dim]: o }; jobs.push({ ...t, seed: 7000 + i, control: 'none', neutral: true }); opt.push(o); } });
+    setBal(null); setProg(0.01); const per = Math.max(60, Math.floor(n / 3)); const jobs = [], opt = []; const sd = labSeed, base = spread(sd);
+    [0, 1, 2].forEach(o => { for (let i = 0; i < per; i++) { const t = teamsFor(i, gap); t.home.tactics = { ...t.home.tactics, [dim]: o }; jobs.push({ ...t, seed: base + i, control: 'none', neutral: true }); opt.push(o); } });
     const out = await runBatch(jobs, setProg);
     const rows = [0, 1, 2].map(o => { const rs = out.filter((r, i) => opt[i] === o && r && !r.errors); const nw = rs.filter(r => r.score[0] > r.score[1]).length, nd = rs.filter(r => r.score[0] === r.score[1]).length; const w = nw / rs.length, d = nd / rs.length; const avg = f => rs.reduce((s, r) => s + f(r), 0) / rs.length; return { o, n: rs.length, nw, nd, nl: rs.length - nw - nd, w, d, l: 1 - w - d, gf: avg(r => r.score[0]), ga: avg(r => r.score[1]), xg: avg(r => r.ts[0].xg), pos: avg(r => r.ts[0].pos), fouls: avg(r => r.ts[0].fouls) }; });
     const matches = out.map((r, i) => (r && !r.errors ? matchRow(r, jobs[i], i, TACTIC_META[dim].opts[opt[i]]) : null)).filter(Boolean);
-    setBal({ dim, rows, per, matches }); setPick(null); setProg(0);
+    setBal({ dim, rows, per, matches, seed: sd }); setPick(null); setProg(0); setLabSeed(newSeed());
   };
   const perfRun = async () => {
     setPerf(null); setProg(0.01); const t = teamsFor(0, 0); const k = 12; let ms = 0;
@@ -384,8 +391,9 @@ export function Lab() {
   const seasonRun = async () => {
     setSeason(null); setProg(0.01);
     const t0 = performance.now();
-    const s = await playSeason(league, seasonSeed, jobs => runBatch(jobs), f => setProg(Math.max(0.01, f)));
-    setSeason({ league, seed: seasonSeed, secs: (performance.now() - t0) / 1000, ...tallySeason(league, s.jobs, s.results, s.status) }); setProg(0);
+    const sd = labSeed;
+    const s = await playSeason(league, spread(sd), jobs => runBatch(jobs), f => setProg(Math.max(0.01, f)));
+    setSeason({ league, seed: sd, secs: (performance.now() - t0) / 1000, ...tallySeason(league, s.jobs, s.results, s.status) }); setProg(0); setLabSeed(newSeed());
   };
   const run = tab === 'realism' ? realism : tab === 'balance' ? balance : tab === 'season' ? seasonRun : perfRun;
   return (
@@ -399,11 +407,11 @@ export function Lab() {
             <div className="eyebrow">Run configuration</div>
             {tab === 'season' && <>
               <div><div className="eyebrow !text-[9.5px] mb-1.5">League</div><select id="season-league" value={league} onChange={e => setLeague(e.target.value)} className="w-full h-9 rounded-md border border-line bg-bg px-2 text-[12.5px]">{LEAGUES.map(l => <option key={l.code} value={l.code}>{l.name} {l.season} · {l.teams.length * (l.teams.length - 1)} matches</option>)}</select></div>
-              <div><div className="eyebrow !text-[9.5px] mb-1.5">Season seed</div><div className="flex gap-2"><input id="season-seed" type="number" value={seasonSeed} onChange={e => setSeasonSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full min-w-0 h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setSeasonSeed(Math.floor(Math.random() * 1e6))}>Random</Btn></div><p className="text-[10.5px] text-dim mt-1.5">The same seed plays the same season again.</p></div>
             </>}
             {(tab === 'realism' || tab === 'balance') && <div><div className="eyebrow !text-[9.5px] mb-1.5">Matches</div><Seg id="lab-n" value={[200, 1000, 2000].indexOf(n)} options={['200', '1,000', '2,000']} onChange={i => setN([200, 1000, 2000][i])} size="sm" /></div>}
             {(tab === 'realism' || tab === 'balance') && <div><div className="flex justify-between"><span className="eyebrow !text-[9.5px]">Squad strength gap</span><span className="font-mono text-[11px]">{gap === 0 ? 'Equal' : `Home +${gap}`}</span></div><input id="lab-gap" type="range" min="0" max="6" value={gap} onChange={e => setGap(+e.target.value)} className="w-full mt-1.5" /></div>}
             {tab === 'balance' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Tactic to test</div><select id="lab-dim" value={dim} onChange={e => setDim(e.target.value)} className="w-full h-9 rounded-md border border-line bg-bg px-2 text-[12.5px]">{E.TACTIC_KEYS.map(k => <option key={k} value={k}>{TACTIC_META[k].label}</option>)}</select></div>}
+            {tab !== 'perf' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Seed</div><div className="flex gap-2"><input id="lab-seed" type="number" value={labSeed} onChange={e => setLabSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full min-w-0 h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setLabSeed(newSeed())}>Random</Btn></div><p className="text-[10.5px] text-dim mt-1.5">A new seed is drawn after every run, so each run is a fresh batch. Type a seed to repeat a run exactly.</p></div>}
             <Btn kind="primary" className="w-full h-10" disabled={prog > 0} onClick={run}>{prog > 0 ? 'Running…' : tab === 'season' ? 'Play the season' : `Run ${tab === 'perf' ? 'performance' : tab} test`}</Btn>
             {prog > 0 && <Progress v={prog} />}
             {tab === 'realism' && res && <div className="text-[11.5px] text-dim">Goals by 15-minute block<div className="flex items-end gap-1 h-16 mt-2">{res.byBlock.map((v, i) => <div key={i} className="flex-1 bg-accent/70 rounded-t-[2px]" style={{ height: `${v / 0.3 * 100}%` }} title={pct(v)} />)}</div><div className="flex justify-between font-mono text-[9.5px] mt-1"><span>0'</span><span>45'</span><span>90'</span></div><div className="mt-3">Injuries {fx(res.inj, 2)} per match · {res.n} matches</div></div>}
@@ -411,7 +419,7 @@ export function Lab() {
           <div className="min-w-0">
             {tab === 'realism' && (!res ? <Empty text="Run the realism test to simulate a batch of matches and compare every number with real football. Small batches are noisy: 1,000 matches or more give a fair verdict (the command-line check uses 3,000)." /> :
               <div className="flex flex-col gap-3">
-                <ResultsSummary matches={res.matches} />
+                <ResultsSummary matches={res.matches} seed={res.seed} />
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{res.tiles.map(t => <Tile key={t.k} t={t} />)}</div>
                 <Scorelines s={res.scorelines} />
                 <ScorelineTable matches={res.matches} pick={pick} onPick={setPick} />
@@ -420,7 +428,7 @@ export function Lab() {
               </div>)}
             {tab === 'balance' && (!bal ? <Empty text="Pick a tactic and run. Each option plays the same balanced opponent at a neutral venue, so differences come from the tactic alone." /> :
               <div className="rounded-lg border border-line bg-surface p-5">
-                <div className="eyebrow">{bal.per} matches per option · neutral venue</div><h2 className="font-display font-bold text-[26px] mt-1">{TACTIC_META[bal.dim].label}: does every option matter?</h2>
+                <div className="eyebrow">{bal.per} matches per option · neutral venue · seed {bal.seed}</div><h2 className="font-display font-bold text-[26px] mt-1">{TACTIC_META[bal.dim].label}: does every option matter?</h2>
                 <div className="flex flex-col gap-4 mt-4">{bal.rows.map(r => <div key={r.o} className="grid gap-2 md:grid-cols-[110px_1fr_310px] items-center">
                   <b className="font-display font-bold text-[20px] uppercase">{TACTIC_META[bal.dim].opts[r.o]}</b>
                   <div className="flex h-8 rounded overflow-hidden text-[11.5px] font-bold"><div className="grid place-items-center bg-accent text-accentink" style={{ width: pct(r.w) }}>W {pct(r.w)}</div><div className="grid place-items-center bg-surface2" style={{ width: pct(r.d) }}>D {pct(r.d)}</div><div className="grid place-items-center bg-bad text-white" style={{ width: pct(r.l) }}>L {pct(r.l)}</div></div>

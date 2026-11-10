@@ -29,7 +29,7 @@ npm run dev        # visualizer at http://localhost:3000
 | `npm run build-teams` | Rebuild the real clubs and squads in `src/data/teams.json` from the downloaded data (already committed) |
 | `npm run fit-pass-odds -- 40` | Refit the pass-completion model players use to judge passes (`--write` stores it in the engine) |
 
-The visualizer has four screens: matchday setup (pick any real club, or make your own squad), a tactics board where you can click any player and set each of his ten ratings, the live match (pitch view, four playback speeds, step to the next event, skip to full time, substitutions and tactic changes from the touchline) with a post-match report, and an Engine Lab that runs the realism, balance and performance checks in the browser, with every simulated match and scoreline, and plays a full season of a real league matchday by matchday, with injuries and bans carried over (league table and every player's goals, assists, cards, injuries and matches missed).
+The visualizer has four screens: matchday setup (pick any real club, or make your own squad), a tactics board where you can click any player and set each of his ten ratings, the live match (pitch view, four playback speeds, step to the next event, skip to full time, substitutions and tactic changes from the touchline) with a post-match report, and an Engine Lab that runs the realism, balance and performance checks in the browser (each run uses a new random seed, shown with its results; type a seed to repeat a run), with every simulated match and scoreline, and plays a full season of a real league matchday by matchday, with injuries and bans carried over (league table and every player's goals, assists, cards, injuries and matches missed).
 
 ## Using the engine
 
