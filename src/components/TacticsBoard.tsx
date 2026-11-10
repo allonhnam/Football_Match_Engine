@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, setAttr, realAttrs, ageOf, pickXI } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr, GLOSSARY } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
 const ROLE_NAME = { GK: 'Goalkeeper', DF: 'Defender', MF: 'Midfielder', FW: 'Forward' };
@@ -94,7 +94,7 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
                 <li key={p.id} draggable={!p.unavailable} onDragStart={e => e.dataTransfer.setData('text/plain', p.id)} onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)} onClick={() => { if (sel != null && !p.unavailable) { place(sel, p.id); setSel(null); } else setEditId(editId === p.id ? null : p.id); }}
                   className={`group flex items-center gap-2 px-1.5 py-1.5 cursor-pointer hover:bg-surface2 ${editId === p.id ? 'bg-surface2' : ''} ${p.unavailable ? 'opacity-45' : ''}`}>
                   <span className="w-7 h-7 grid place-items-center rounded-full text-[11px] font-bold shrink-0" style={st === 'XI' ? { background: t.color, color: textOn(t.color) } : { border: '1px solid var(--line)' }}>{p.num}</span>
-                  <span className="flex-1 min-w-0"><span className="flex items-center gap-1.5 text-[12.5px] font-medium"><Flag code={p.flag} title={p.nation} h={10} /><span className="truncate">{p.name}</span></span><span className="block text-[10.5px] text-dim uppercase tracking-wide">{p.role}{p.side !== 'C' ? ' · ' + p.side : ''} · {p.unavailable ? <span className="text-bad">{p.unavailable}</span> : st}</span></span>
+                  <span className="flex-1 min-w-0"><span className="flex items-center gap-1.5 text-[12.5px] font-medium"><Flag code={p.flag} title={p.nation} h={10} /><span className="truncate">{p.name}</span></span><span className="block text-[10.5px] text-dim uppercase tracking-wide"><Abbr>{p.role}</Abbr>{p.side !== 'C' ? <> · <Abbr t={p.side === 'L' ? 'Plays on the left' : 'Plays on the right'}>{p.side}</Abbr></> : ''} · {p.unavailable ? <span className="text-bad">{p.unavailable}</span> : st}</span></span>
                   <span className="font-display font-bold text-[17px] tnum w-6 text-right">{ovr(p)}</span>
                   <button onClick={e => { e.stopPropagation(); setEditId(editId === p.id ? null : p.id); }} title="Edit attributes" aria-label={`Edit ${p.name}`} className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[11px] text-dim hover:text-accent w-5">✎</button>
                   <button onClick={e => { e.stopPropagation(); toggleUnavailable(p.id); }} title={p.unavailable ? 'Mark available' : 'Mark suspended (tests validation)'} className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[11px] text-dim hover:text-bad w-5">{p.unavailable ? '↺' : '⊘'}</button>
@@ -121,6 +121,7 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
                   const fill = p ? (s[0] === 'GK' ? '#FFD23C' : t.color) : 'rgba(0,0,0,.3)';
                   return (
                     <g key={i} style={{ cursor: 'pointer' }} onClick={() => setSel(sel === i ? null : i)} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) place(i, id); setSel(null); }}>
+                      <title>{posLabel(t.formation, i)}{GLOSSARY[posLabel(t.formation, i)] ? ` · ${GLOSSARY[posLabel(t.formation, i)]}` : ''}{p ? `: ${p.name}` : ': empty, click to pick a player'}</title>
                       {sel === i && <circle cx={x} cy={y} r="22" fill="none" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" />}
                       <circle cx={x} cy={y} r="15" fill={fill} stroke={ring} strokeWidth="3" />
                       <text x={x} y={y + 4.5} textAnchor="middle" fontSize="12" fontWeight="700" fill={p ? textOn(fill) : '#fff'} fontFamily="Inter">{p ? p.num : '+'}</text>

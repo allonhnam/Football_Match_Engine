@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 import { LEAGUES } from '@/lib/util';
 import { playSeason, tallySeason } from '@/lib/season';
@@ -182,8 +182,48 @@ function ScorelineTable({ matches, pick, onPick }: any) {
 }
 
 /** Every simulated match, one row each, filterable by result, scoreline or option. */
+/** One match's players: who played, scored, assisted, was booked or injured, and their ratings. */
+function MatchPlayers({ m }: any) {
+  const sides = [m.job.home, m.job.away];
+  return (
+    <div className="grid gap-3 md:grid-cols-2 py-2">
+      {[0, 1].map(side => {
+        const sheet = sides[side], byId = new Map(sheet.players.map((p: any) => [p.id, p]));
+        const lines = (m.players || []).filter((l: any) => l[1] === side)
+          .sort((a: any, b: any) => b[3] - a[3] || b[4] - a[4] || b[8] - a[8]);
+        return (
+          <div key={side} className="min-w-0">
+            <div className="flex items-center justify-between text-[11.5px] font-semibold mb-1"><span>{sheet.name === (side ? 'Away' : 'Home') ? sheet.name : `${side ? 'Away' : 'Home'} · ${sheet.name}`}</span><span className="font-mono">{m.score[side]}</span></div>
+            <table className="w-full text-[11px] tnum">
+              <thead className="text-dim text-left"><tr>
+                <th className="py-0.5 pr-1 font-semibold">Player</th>
+                {['Pos', 'Min', 'G', 'A'].map(h => <th key={h} className="py-0.5 px-1 font-semibold text-right"><Abbr>{h}</Abbr></th>)}
+                <th className="py-0.5 px-1 font-semibold text-right"><Abbr t="Yellow and red cards">Cards</Abbr></th>
+                <th className="py-0.5 px-1 font-semibold text-right"><Abbr t="Injured during the match">Inj</Abbr></th>
+                <th className="py-0.5 pl-1 font-semibold text-right"><Abbr>Rtg</Abbr></th>
+              </tr></thead>
+              <tbody>
+                {lines.map(([id, , mins, g, a, y, red, inj, rating]: any) => { const p: any = byId.get(id) || {}; return (
+                  <tr key={id} className="border-t border-line/50">
+                    <td className="py-0.5 pr-1 truncate max-w-[150px]">{p.name || id}</td>
+                    <td className="py-0.5 px-1 text-right text-dim">{p.role}</td>
+                    <td className="py-0.5 px-1 text-right">{mins}</td>
+                    <td className={`py-0.5 px-1 text-right ${g ? 'font-bold text-accent' : 'text-dim'}`}>{g || '·'}</td>
+                    <td className={`py-0.5 px-1 text-right ${a ? 'font-bold' : 'text-dim'}`}>{a || '·'}</td>
+                    <td className="py-0.5 px-1 text-right"><span className="inline-flex gap-0.5 justify-end">{y > 0 && <CardIcon n={y} />}{red ? <CardIcon red /> : null}{!y && !red ? <span className="text-dim">·</span> : null}</span></td>
+                    <td className={`py-0.5 px-1 text-right ${inj ? 'text-bad font-bold' : 'text-dim'}`}>{inj ? '+' : '·'}</td>
+                    <td className="py-0.5 pl-1 text-right">{fx(rating, 1)}</td>
+                  </tr>); })}
+              </tbody>
+            </table>
+          </div>);
+      })}
+    </div>
+  );
+}
+
 function MatchList({ matches, pick, setPick, groups }: any) {
-  const [res, setRes] = useState('all'), [grp, setGrp] = useState('all');
+  const [res, setRes] = useState('all'), [grp, setGrp] = useState('all'), [open, setOpen] = useState(null);
   const shown = matches.filter(m => (res === 'all' || outcome(m.score) === res) && (!pick || `${m.score[0]}-${m.score[1]}` === pick) && (grp === 'all' || m.group === grp));
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
@@ -195,20 +235,23 @@ function MatchList({ matches, pick, setPick, groups }: any) {
           {pick && <button onClick={() => setPick(null)} className="h-8 rounded-md border border-line px-2 text-[12px] text-dim hover:text-ink">Clear {pick.replace('-', '–')}</button>}
         </div>
       </div>
-      <div className="mt-3 max-h-[420px] overflow-auto scroll-thin rounded-md border border-line">
+      <p className="text-[10.5px] text-dim mt-1">Click a match to see its players: who scored, assisted, was booked or injured.</p>
+      <div className="mt-2 max-h-[480px] overflow-auto scroll-thin rounded-md border border-line">
         <table className="w-full text-[11.5px] tnum">
-          <thead className="sticky top-0 bg-surface2 text-dim text-left"><tr>
-            <th className="px-2 py-1.5 font-semibold">#</th>{groups && <th className="px-2 py-1.5 font-semibold">Option</th>}<th className="px-2 py-1.5 font-semibold">Seed</th><th className="px-2 py-1.5 font-semibold">Strength H v A</th>
-            <th className="px-2 py-1.5 font-semibold">Half-time</th><th className="px-2 py-1.5 font-semibold">Full time</th><th className="px-2 py-1.5 font-semibold">Result</th><th className="px-2 py-1.5 font-semibold">Shots</th><th className="px-2 py-1.5 font-semibold">xG</th>
+          <thead className="sticky top-0 z-10 bg-surface2 text-dim text-left"><tr>
+            <th className="px-2 py-1.5 font-semibold">#</th>{groups && <th className="px-2 py-1.5 font-semibold">Option</th>}<th className="px-2 py-1.5 font-semibold">Seed</th><th className="px-2 py-1.5 font-semibold"><Abbr t="Squad strength of the home and away sides (12 is a mid-table side)">Strength H v A</Abbr></th>
+            <th className="px-2 py-1.5 font-semibold">Half-time</th><th className="px-2 py-1.5 font-semibold">Full time</th><th className="px-2 py-1.5 font-semibold">Result</th><th className="px-2 py-1.5 font-semibold">Shots</th><th className="px-2 py-1.5 font-semibold"><Abbr>xG</Abbr></th>
           </tr></thead>
           <tbody className="divide-y divide-line">
-            {shown.map(m => (
-              <tr key={m.i} className="hover:bg-surface2/60">
+            {shown.map(m => (<React.Fragment key={m.i}>
+              <tr onClick={() => setOpen(open === m.i ? null : m.i)} aria-expanded={open === m.i} className={`cursor-pointer hover:bg-surface2/60 ${open === m.i ? 'bg-surface2/60' : ''}`}>
                 <td className="px-2 py-1 text-dim">{m.i + 1}</td>{groups && <td className="px-2 py-1">{m.group}</td>}<td className="px-2 py-1 font-mono text-dim">{m.seed}</td><td className="px-2 py-1">{fx(m.str[0], 1)} v {fx(m.str[1], 1)}</td>
                 <td className="px-2 py-1 font-mono">{m.ht ? `${m.ht[0]}–${m.ht[1]}` : '–'}</td><td className="px-2 py-1 font-mono font-bold">{m.score[0]}–{m.score[1]}</td>
                 <td className={`px-2 py-1 font-semibold ${outcome(m.score) === 'H' ? 'text-good' : outcome(m.score) === 'A' ? 'text-bad' : 'text-dim'}`}>{outcome(m.score) === 'H' ? 'Home' : outcome(m.score) === 'A' ? 'Away' : 'Draw'}</td>
-                <td className="px-2 py-1">{m.shots[0]}–{m.shots[1]}</td><td className="px-2 py-1">{fx(m.xg[0], 2)}–{fx(m.xg[1], 2)}</td>
-              </tr>))}
+                <td className="px-2 py-1">{m.shots[0]}–{m.shots[1]}</td><td className="px-2 py-1">{fx(m.xg[0], 2)}–{fx(m.xg[1], 2)}<span className="float-right text-dim">{open === m.i ? '▴' : '▾'}</span></td>
+              </tr>
+              {open === m.i && <tr className="bg-bg"><td colSpan={groups ? 10 : 9} className="px-3"><MatchPlayers m={m} /></td></tr>}
+            </React.Fragment>))}
           </tbody>
         </table>
         {!shown.length && <div className="text-dim text-[12px] text-center py-6">No matches with that filter.</div>}
@@ -224,7 +267,7 @@ function SeasonTable({ table }: any) {
       <div className="flex items-baseline justify-between gap-2"><span className="text-[12.5px] font-semibold">League table</span><span className="text-[10.5px] text-dim">Real: where the club finished in 2025/26, and its points</span></div>
       <div className="mt-3 overflow-x-auto scroll-thin">
         <table className="w-full text-[12px] tnum">
-          <thead className="text-dim text-left"><tr>{['', 'Club', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts', 'Real'].map(h => <th key={h} className={`px-1.5 py-1 font-semibold ${h === 'Club' || h === '' ? '' : 'text-right'}`}>{h}</th>)}</tr></thead>
+          <thead className="text-dim text-left"><tr>{['', 'Club', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts', 'Real'].map(h => <th key={h} className={`px-1.5 py-1 font-semibold ${h === 'Club' || h === '' ? '' : 'text-right'}`}><Abbr>{h}</Abbr></th>)}</tr></thead>
           <tbody className="divide-y divide-line">
             {table.map((r, i) => (
               <tr key={r.name}>
@@ -281,8 +324,8 @@ function PlayerTable({ players }: any) {
       <div className="mt-2 max-h-[460px] overflow-auto scroll-thin rounded-md border border-line">
         <table className="w-full text-[11.5px] tnum">
           <thead className="sticky top-0 bg-surface2 text-dim text-left"><tr>
-            <th className="px-2 py-1.5 font-semibold">Player</th><th className="px-2 py-1.5 font-semibold">Club</th><th className="px-2 py-1.5 font-semibold">Pos</th>
-            {cols.map(([k, l]) => <th key={k} className="px-2 py-1.5 font-semibold text-right"><button onClick={() => setSort(k)} className={sort === k ? 'text-accent' : 'hover:text-ink'}>{l}{sort === k ? ' ↓' : ''}</button></th>)}
+            <th className="px-2 py-1.5 font-semibold">Player</th><th className="px-2 py-1.5 font-semibold">Club</th><th className="px-2 py-1.5 font-semibold"><Abbr>Pos</Abbr></th>
+            {cols.map(([k, l]) => <th key={k} className="px-2 py-1.5 font-semibold text-right"><button onClick={() => setSort(k)} className={sort === k ? 'text-accent' : 'hover:text-ink'}><Abbr>{l}</Abbr>{sort === k ? ' ↓' : ''}</button></th>)}
           </tr></thead>
           <tbody className="divide-y divide-line">
             {shown.map(p => (
@@ -300,7 +343,7 @@ function PlayerTable({ players }: any) {
 }
 
 // One row per simulated match, for the lists above.
-const matchRow = (r: any, job: any, i: number, group?: string) => ({ i, group, seed: job.seed, str: [job.home.strength, job.away.strength], score: r.score, ht: r.ht, shots: [r.ts[0].shots, r.ts[1].shots], xg: [r.ts[0].xg, r.ts[1].xg] });
+const matchRow = (r: any, job: any, i: number, group?: string) => ({ i, group, job, players: r.players, seed: job.seed, str: [job.home.strength, job.away.strength], score: r.score, ht: r.ht, shots: [r.ts[0].shots, r.ts[1].shots], xg: [r.ts[0].xg, r.ts[1].xg] });
 
 export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(1000), [gap, setGap] = useState(0), [prog, setProg] = useState(0);

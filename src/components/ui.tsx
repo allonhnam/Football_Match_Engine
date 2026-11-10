@@ -77,3 +77,31 @@ export function Flag({ code, title, h = 12 }: { code?: string | null; title?: st
   if (!code) return null;
   return <span className={`fi fi-${code} shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.25)]`} title={title} aria-label={title} role="img" style={{ width: h * 4 / 3, height: h, lineHeight: h + 'px', backgroundSize: 'cover' }} />;
 }
+
+// What every short label in the app stands for, shown when the label is hovered or focused.
+export const GLOSSARY: Record<string, string> = {
+  Rtg: 'Match rating, out of 10', Min: 'Minutes played', Mins: 'Minutes played', G: 'Goals', A: 'Assists', Ast: 'Assists',
+  xG: 'Expected goals: how many goals the chances were worth', 'Pass%': 'Passes completed', Tkl: 'Tackles won',
+  km: 'Distance run, in kilometres', Cond: 'Condition at the end: 100% is fully fresh', Apps: 'Appearances',
+  Yel: 'Yellow cards', Red: 'Red cards', Inj: 'Injuries', 'Out inj': 'Matches missed through injury', Banned: 'Matches missed through suspension',
+  Pos: 'Position: GK goalkeeper, DF defender, MF midfielder, FW forward', P: 'Played', W: 'Won', D: 'Drawn', L: 'Lost',
+  GF: 'Goals for', GA: 'Goals against', GD: 'Goal difference', Pts: 'Points: 3 for a win, 1 for a draw',
+  'Avg rating': 'Average match rating, out of 10', Real: 'Where the club really finished in 2025/26, and its real points',
+  H: 'Home wins', XI: 'Starting eleven', OVR: 'Overall rating for his position',
+  GK: 'Goalkeeper', DF: 'Defender', MF: 'Midfielder', FW: 'Forward',
+  CB: 'Centre-back', LB: 'Left-back', RB: 'Right-back', LWB: 'Left wing-back', RWB: 'Right wing-back',
+  DM: 'Defensive midfielder', CM: 'Central midfielder', AM: 'Attacking midfielder', LM: 'Left midfielder', RM: 'Right midfielder',
+  LW: 'Left winger', RW: 'Right winger', ST: 'Striker',
+};
+
+/** A short label with a caption saying what it means, on hover or keyboard focus. Unknown labels show as they are. */
+export function Abbr({ children, t, up = false }: { children: React.ReactNode; t?: string; up?: boolean }) {
+  const text = t || (typeof children === 'string' ? GLOSSARY[children] : undefined);
+  if (!text) return <>{children}</>;
+  return (
+    <span tabIndex={0} aria-label={`${typeof children === 'string' ? children + ': ' : ''}${text}`} className="relative group/abbr inline-block cursor-help underline decoration-dotted decoration-1 underline-offset-[3px] outline-none focus-visible:ring-1 focus-visible:ring-accent rounded-[2px]">
+      {children}
+      <span role="tooltip" className={`pointer-events-none absolute z-50 left-1/2 -translate-x-1/2 ${up ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} w-max max-w-[220px] whitespace-normal rounded-md border border-line bg-surface2 px-2 py-1 text-left text-[11px] font-medium normal-case tracking-normal text-ink shadow-lg opacity-0 transition-opacity duration-100 group-hover/abbr:opacity-100 group-focus/abbr:opacity-100`}>{text}</span>
+    </span>
+  );
+}
