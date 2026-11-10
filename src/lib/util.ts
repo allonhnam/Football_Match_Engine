@@ -1,10 +1,11 @@
 import * as E from '@/engine/engine';
+import TEAM_DATA from '@/data/teams.json';
 
 export const clone = o => JSON.parse(JSON.stringify(o));
 export const fx = (v, d = 1) => Number(v || 0).toFixed(d);
 export const pct = v => Math.round((v || 0) * 100) + '%';
 export const lastName = n => (n.split(' ').slice(1).join(' ') || n);
-export const club = t => t.name.split(' ')[0];
+export const club = t => t.name.replace(/\s+(FC|CF|AFC|SC)$/i, '').trim();
 export const hexSeed = s => (s >>> 0).toString(16).toUpperCase().padStart(6, '0').slice(-6);
 export const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
@@ -34,10 +35,57 @@ export function posLabel(formation, slot) {
 }
 export function textOn(hex) { const c = (hex || '#000').replace('#', ''); const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#0B0F0E' : '#FFFFFF'; }
 export function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+// Real clubs and their real squads, from the latest season of each league (built by `npm run build-teams`).
+const DATA: any = TEAM_DATA;
+export const LEAGUES: { code: string; name: string; season: string; teams: any[] }[] = DATA.leagues;
+// A club's squad seed is fixed by its name, so picking the same club always gives the same squad.
+const nameSeed = (n: string) => { let h = 7; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 1000000; };
+// Squad numbers are not in the data: keepers wear 1 and 13, everyone else 2 to 21 in squad order (skipping 13).
+function realPlayers(t: any) {
+  let gk = 0, n = 2;
+  return t.players.map(([id, name, role, side, flag, nation, born, height, foot, attrs]: any[]) => {
+    let num: number;
+    if (role === 'GK') num = gk++ ? 13 : 1;
+    else { if (n === 13) n++; num = n++; }
+    return {
+      id: 'tm' + id, name, num, role, side, condition: 1, unavailable: null,
+      attrs: Object.fromEntries(DATA.attrs.map((k: string, i: number) => [k, attrs[i]])),
+      flag, nation, born, height, foot,
+    };
+  });
+}
+export function realTeam(league: string, name: string, keep: any = {}) {
+  const l = LEAGUES.find(x => x.code === league), t = l && l.teams.find(x => x.name === name);
+  if (!t) return null;
+  return { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league };
+}
+// The built-in attributes of a real player, for "reset" after editing (null for generated players).
+export function realAttrs(league: string | undefined, club: string, id: string) {
+  const t = LEAGUES.find(x => x.code === league)?.teams.find(x => x.name === club);
+  const row = t && t.players.find((r: any[]) => 'tm' + r[0] === id);
+  return row ? Object.fromEntries(DATA.attrs.map((k: string, i: number) => [k, row[9][i]])) : null;
+}
+// Age in whole years today, from a "YYYY-MM-DD" birth date.
+export const ageOf = (born?: string | null) => born ? Math.floor((Date.now() - Date.parse(born)) / (365.25 * 864e5)) : null;
+// A copy of the team with one player's attribute set (1 to 20).
+export function setAttr(team: any, id: string, key: string, value: number) {
+  const v = Math.max(1, Math.min(20, Math.round(value)));
+  return { ...team, players: team.players.map((p: any) => p.id === id ? { ...p, attrs: { ...p.attrs, [key]: v } } : p) };
+}
 export function defaultTeams() {
+  const l = LEAGUES[0];
   return {
-    home: E.makeTeam({ name: 'Northbridge FC', short: 'NBR', seed: 11, strength: 13, color: '#C6F432', formation: '4-3-3' }),
-    away: E.makeTeam({ name: 'Harbour City', short: 'HBR', seed: 22, strength: 12, color: '#6E8CFF', formation: '4-2-3-1' }),
+    home: realTeam(l.code, l.teams[0].name, { formation: '4-3-3' }) as any,
+    away: realTeam(l.code, l.teams[1].name, { formation: '4-2-3-1' }) as any,
   };
 }
-export function rebuildSquad(team, patch) { return E.makeTeam({ name: team.name, short: team.short, color: team.color, seed: patch.seed ?? team.seed, strength: patch.strength ?? team.strength, formation: team.formation, tactics: team.tactics }); }
+// A real squad keeps its players when the strength slider moves (every attribute shifts by the same amount, keeping
+// the lineup); a new random squad replaces them with generated players, so the team is no longer the real club.
+export function rebuildSquad(team, patch) {
+  if (team.league && patch.seed == null && patch.strength != null) {
+    const d = patch.strength - team.strength;
+    const players = team.players.map(p => ({ ...p, attrs: Object.fromEntries(Object.entries(p.attrs).map(([k, v]: any) => [k, k === 'keeping' && p.role !== 'GK' ? v : Math.max(1, Math.min(20, Math.round(v + d)))])) }));
+    return { ...team, strength: patch.strength, players };
+  }
+  return { ...E.makeTeam({ name: team.name, short: team.short, color: team.color, color2: team.color2, seed: patch.seed ?? team.seed, strength: patch.strength ?? team.strength, formation: team.formation, tactics: team.tactics }), league: patch.seed != null ? undefined : team.league };
+}

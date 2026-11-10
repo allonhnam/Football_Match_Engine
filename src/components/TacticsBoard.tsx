@@ -3,13 +3,50 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
+import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, setAttr, realAttrs, ageOf } from '@/lib/util';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
+
+const ROLE_NAME = { GK: 'Goalkeeper', DF: 'Defender', MF: 'Midfielder', FW: 'Forward' };
+
+// Edit one player's ten attributes (1 to 20). Every change goes straight into the team sheet the engine plays.
+function PlayerEditor({ p, team, onSet, onReset, onClose }: any) {
+  const base = realAttrs(team.league, team.name, p.id);
+  const changed = base && E.ATTRS.some(k => base[k] !== p.attrs[k]);
+  const age = ageOf(p.born);
+  return (
+    <div className="rounded-md border border-accent/50 bg-bg p-3">
+      <div className="flex items-start gap-2">
+        <Flag code={p.flag} title={p.nation} h={18} />
+        <div className="min-w-0 flex-1">
+          <b className="block text-[13.5px] leading-tight truncate">{p.name}</b>
+          <span className="block text-[10.5px] text-dim uppercase tracking-wide">#{p.num} · {ROLE_NAME[p.role]}{p.side !== 'C' ? ' · ' + p.side : ''}{p.nation ? ' · ' + p.nation : ''}</span>
+          {(age != null || p.height || p.foot) && <span className="block text-[10.5px] text-dim">{[age != null && `${age} yrs`, p.height && `${p.height} cm`, p.foot && `${p.foot} foot`].filter(Boolean).join(' · ')}</span>}
+        </div>
+        <span className="font-display font-bold text-[22px] tnum leading-none" title="Overall for his position">{ovr(p)}</span>
+        <button onClick={onClose} aria-label="Close editor" className="text-dim hover:text-ink -mr-1"><Icon n="x" s={14} /></button>
+      </div>
+      <div className="flex flex-col gap-1.5 mt-3">
+        {E.ATTRS.map(k => (
+          <div key={k} className="flex items-center gap-2 text-[11.5px]">
+            <label htmlFor={`attr-${p.id}-${k}`} className={`w-[74px] ${base && base[k] !== p.attrs[k] ? 'text-accent' : 'text-dim'}`}>{ATTR_LABEL[k]}</label>
+            <button onClick={() => onSet(k, p.attrs[k] - 1)} disabled={p.attrs[k] <= 1} aria-label={`Lower ${ATTR_LABEL[k]}`} className="w-5 h-5 rounded border border-line text-dim hover:text-ink disabled:opacity-30 leading-none">−</button>
+            <input id={`attr-${p.id}-${k}`} type="range" min="1" max="20" value={p.attrs[k]} onChange={e => onSet(k, +e.target.value)} className="flex-1 min-w-0" />
+            <button onClick={() => onSet(k, p.attrs[k] + 1)} disabled={p.attrs[k] >= 20} aria-label={`Raise ${ATTR_LABEL[k]}`} className="w-5 h-5 rounded border border-line text-dim hover:text-ink disabled:opacity-30 leading-none">+</button>
+            <span className="font-mono w-5 text-right tnum">{p.attrs[k]}</span>
+          </div>))}
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-3">
+        <span className="text-[10.5px] text-dim">{base ? 'Ratings derived from position, age, height and market value.' : 'Generated player.'}</span>
+        {changed && <Btn size="sm" onClick={() => onReset(base)}>Reset</Btn>}
+      </div>
+    </div>
+  );
+}
 
 export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
   const t = teams[side];
-  const [sel, setSel] = useState(null), [sort, setSort] = useState('role'), [hover, setHover] = useState(null);
+  const [sel, setSel] = useState(null), [sort, setSort] = useState('role'), [hover, setHover] = useState(null), [editId, setEditId] = useState(null);
   const errs = E.validateLineup(t);
   const byId = useMemo(() => new Map<string, any>(t.players.map(p => [p.id, p] as [string, any])), [t]);
   const slots = E.FORMATIONS[t.formation];
@@ -21,6 +58,7 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
   const autoPick = () => setTeam(tm => { const pick = E.autoPick(tm.players, tm.formation); return { ...tm, xi: pick.xi, bench: pick.bench }; });
   const roleOrder = { GK: 0, DF: 1, MF: 2, FW: 3 };
   const list = t.players.slice().sort((a, b) => sort === 'role' ? roleOrder[a.role] - roleOrder[b.role] || ovr(b) - ovr(a) : sort === 'rating' ? ovr(b) - ovr(a) : a.condition - b.condition);
+  const editP = editId ? byId.get(editId) : null;
   const status = p => t.xi.includes(p.id) ? 'XI' : t.bench.includes(p.id) ? 'Bench' : 'Reserve';
   const [pred, setPred] = useState(null), [predP, setPredP] = useState(0); const runId = useRef(0);
   useEffect(() => {
@@ -44,20 +82,21 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
     <div className="glow-bg min-h-[calc(100vh-56px)]">
       <div className="gutter mx-auto max-w-[1440px] py-8 flex flex-col gap-5">
         <PageHead eyebrow={`Squad & tactics · ${side}`} title={<span className="flex items-center gap-3"><Badge color={t.color} label={t.short} size={44} />{t.name}</span>}
-          right={<div className="flex gap-2 items-center flex-wrap"><div className="w-56"><Seg id="board-side" value={side === 'home' ? 0 : 1} options={[teams.home.short + ' · home', teams.away.short + ' · away']} onChange={i => { setSide(i ? 'away' : 'home'); setSel(null); }} /></div><Btn onClick={autoPick}>Auto-pick best XI</Btn></div>} />
+          right={<div className="flex gap-2 items-center flex-wrap"><div className="w-56"><Seg id="board-side" value={side === 'home' ? 0 : 1} options={[teams.home.short + ' · home', teams.away.short + ' · away']} onChange={i => { setSide(i ? 'away' : 'home'); setSel(null); setEditId(null); }} /></div><Btn onClick={autoPick}>Auto-pick best XI</Btn></div>} />
         <div className={`rounded-md px-4 py-2.5 text-[12.5px] flex flex-wrap gap-x-4 gap-y-1 items-center border ${errs.length ? 'border-bad/50 bg-bad/10' : 'border-good/40 bg-good/10'}`}>
           {errs.length ? <><b className="text-bad">{errs.length} issue{errs.length > 1 ? 's' : ''} · kick-off is disabled</b>{errs.map((e, i) => <span key={i} className="text-bad">• {e.message}</span>)}</> : <b className="text-good flex items-center gap-1.5"><Icon n="check" s={14} />Lineup is legal: 11 starters, one goalkeeper, {t.bench.length} on the bench</b>}
         </div>
         <div className="grid gap-4 lg:grid-cols-[330px_minmax(0,1fr)_340px]">
           <Card eyebrow={`${t.players.length} players`} title="Squad" right={<select id="squad-sort" value={sort} onChange={e => setSort(e.target.value)} className="h-8 rounded-md border border-line bg-bg px-2 text-[12px]"><option value="role">By position</option><option value="rating">By rating</option><option value="cond">By condition</option></select>}>
-            <p className="text-dim text-[11.5px] mb-2">Drag a player onto a shirt, or click a shirt then a player. Hover for attributes.</p>
+            <p className="text-dim text-[11.5px] mb-2">Drag a player onto a shirt, or click a shirt then a player. Click a player to edit his attributes.</p>
             <ul className="flex flex-col max-h-[380px] lg:max-h-[640px] overflow-y-auto scroll-thin pr-1 divide-y divide-line">
               {list.map(p => { const st = status(p); return (
-                <li key={p.id} draggable={!p.unavailable} onDragStart={e => e.dataTransfer.setData('text/plain', p.id)} onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)} onClick={() => { if (sel != null && !p.unavailable) { place(sel, p.id); setSel(null); } }}
-                  className={`group flex items-center gap-2 px-1.5 py-1.5 ${sel != null && !p.unavailable ? 'cursor-pointer hover:bg-surface2' : 'cursor-grab'} ${p.unavailable ? 'opacity-45' : ''}`}>
+                <li key={p.id} draggable={!p.unavailable} onDragStart={e => e.dataTransfer.setData('text/plain', p.id)} onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)} onClick={() => { if (sel != null && !p.unavailable) { place(sel, p.id); setSel(null); } else setEditId(editId === p.id ? null : p.id); }}
+                  className={`group flex items-center gap-2 px-1.5 py-1.5 cursor-pointer hover:bg-surface2 ${editId === p.id ? 'bg-surface2' : ''} ${p.unavailable ? 'opacity-45' : ''}`}>
                   <span className="w-7 h-7 grid place-items-center rounded-full text-[11px] font-bold shrink-0" style={st === 'XI' ? { background: t.color, color: textOn(t.color) } : { border: '1px solid var(--line)' }}>{p.num}</span>
-                  <span className="flex-1 min-w-0"><span className="block truncate text-[12.5px] font-medium">{p.name}</span><span className="block text-[10.5px] text-dim uppercase tracking-wide">{p.role}{p.side !== 'C' ? ' · ' + p.side : ''} · {p.unavailable ? <span className="text-bad">{p.unavailable}</span> : st}</span></span>
+                  <span className="flex-1 min-w-0"><span className="flex items-center gap-1.5 text-[12.5px] font-medium"><Flag code={p.flag} title={p.nation} h={10} /><span className="truncate">{p.name}</span></span><span className="block text-[10.5px] text-dim uppercase tracking-wide">{p.role}{p.side !== 'C' ? ' · ' + p.side : ''} · {p.unavailable ? <span className="text-bad">{p.unavailable}</span> : st}</span></span>
                   <span className="font-display font-bold text-[17px] tnum w-6 text-right">{ovr(p)}</span>
+                  <button onClick={e => { e.stopPropagation(); setEditId(editId === p.id ? null : p.id); }} title="Edit attributes" aria-label={`Edit ${p.name}`} className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[11px] text-dim hover:text-accent w-5">✎</button>
                   <button onClick={e => { e.stopPropagation(); toggleUnavailable(p.id); }} title={p.unavailable ? 'Mark available' : 'Mark suspended (tests validation)'} className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[11px] text-dim hover:text-bad w-5">{p.unavailable ? '↺' : '⊘'}</button>
                 </li>); })}
             </ul>
@@ -107,6 +146,10 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
               </div>}
             </div>
           </section>
+          <div className="flex flex-col gap-4 min-w-0">
+          {editP && <PlayerEditor p={editP} team={t} onClose={() => setEditId(null)}
+            onSet={(k, v) => setTeam(tm => setAttr(tm, editP.id, k, v))}
+            onReset={base => setTeam(tm => ({ ...tm, players: tm.players.map(q => q.id === editP.id ? { ...q, attrs: { ...base } } : q) }))} />}
           <Card eyebrow="Team instructions" title="Tactics">
             <div className="flex flex-col gap-4">
               {E.TACTIC_KEYS.map(k => <div key={k}>
@@ -114,11 +157,12 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
                 <Seg id={`tac-${k}`} value={t.tactics[k]} options={TACTIC_META[k].opts} onChange={i => setTeam(tm => ({ ...tm, tactics: { ...tm.tactics, [k]: i } }))} size="sm" />
               </div>)}
             </div>
-            {hover && <div className="mt-4 rounded-md border border-line bg-bg p-3">
-              <div className="flex items-center justify-between"><b className="text-[12.5px]">{hover.name}</b><span className="font-display font-bold text-[18px]">{ovr(hover)}</span></div>
+            {hover && hover.id !== editId && <div className="mt-4 rounded-md border border-line bg-bg p-3">
+              <div className="flex items-center justify-between"><b className="text-[12.5px] flex items-center gap-1.5"><Flag code={hover.flag} title={hover.nation} h={10} />{hover.name}</b><span className="font-display font-bold text-[18px]">{ovr(hover)}</span></div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">{E.ATTRS.filter(k => hover.role === 'GK' || k !== 'keeping').map(k => <div key={k} className="flex items-center gap-2 text-[11px]"><span className="w-[72px] text-dim">{ATTR_LABEL[k]}</span><span className="flex-1 h-1 rounded bg-surface2"><span className="block h-1 rounded bg-accent" style={{ width: pct(hover.attrs[k] / 20) }} /></span><span className="font-mono w-5 text-right tnum">{hover.attrs[k]}</span></div>)}</div>
             </div>}
           </Card>
+          </div>
         </div>
       </div>
     </div>

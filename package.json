@@ -15,6 +15,7 @@
     "calibrate": "node tools/calibrate.mjs",
     "fetch-data": "node tools/fetch-data.mjs",
     "build-reference": "node tools/build-reference.mjs",
+    "build-teams": "node tools/build-teams.mjs",
     "balance": "node tools/balance.mjs",
     "attributes": "node tools/attributes.mjs",
     "fit-pass-odds": "node tools/fit-pass-odds.mjs"
@@ -23,6 +24,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "flag-icons": "^7.2.3",
     "next": "^16.4.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

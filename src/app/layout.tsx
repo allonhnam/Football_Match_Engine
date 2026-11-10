@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import 'flag-icons/css/flag-icons.min.css';
 import './globals.css';
 import { AppProvider } from '@/components/AppProvider';
 import { TopBar, SettingsPanel } from '@/components/TopBar';

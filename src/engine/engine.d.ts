@@ -24,6 +24,12 @@ export interface Player {
   condition: number;
   /** Reason the player cannot play (for example "suspended"), or null. */
   unavailable: string | null;
+  /** Optional details the game may carry; the engine ignores them. Flag is an ISO 3166 code (gb-eng for England). */
+  flag?: string | null;
+  nation?: string;
+  born?: string | null;
+  height?: number | null;
+  foot?: string | null;
 }
 
 export interface TeamSheet {

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
+import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, LEAGUES, realTeam } from '@/lib/util';
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
@@ -22,8 +22,18 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
           <label className="relative cursor-pointer" title="Kit colour"><Badge color={t.color} label={t.short} size={48} /><input id={`kit-${side}`} type="color" value={t.color} onChange={e => upd(side, { color: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" aria-label={`${t.name} kit colour`} /></label>
           <div className="min-w-0 flex-1">
             <div className="eyebrow">{side === 'home' ? 'Home' : 'Away'} · {t.formation}</div>
-            <input id={`name-${side}`} value={t.name} onChange={e => upd(side, { name: e.target.value || ' ', short: (e.target.value || 'XXX').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() })} className="w-full bg-transparent font-display font-bold uppercase text-[26px] leading-tight outline-none border-b border-transparent focus:border-line" />
+            <input id={`name-${side}`} value={t.name} onChange={e => upd(side, { league: undefined, name: e.target.value || ' ', short: (e.target.value || 'XXX').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() })} className="w-full bg-transparent font-display font-bold uppercase text-[26px] leading-tight outline-none border-b border-transparent focus:border-line" />
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <select id={`league-${side}`} aria-label={`${side} league`} value={t.league || ''} onChange={e => { const l = LEAGUES.find(x => x.code === e.target.value); if (l) setTeams(tt => ({ ...tt, [side]: realTeam(l.code, l.teams[0].name, tt[side]) })); }} className="h-9 rounded-md border border-line bg-bg px-2 text-[12.5px] outline-none focus:border-accent">
+            {!t.league && <option value="">Custom</option>}
+            {LEAGUES.map(l => <option key={l.code} value={l.code}>{l.name} {l.season}</option>)}
+          </select>
+          <select id={`club-${side}`} aria-label={`${side} club`} value={t.league ? t.name : ''} disabled={!t.league} onChange={e => setTeams(tt => ({ ...tt, [side]: realTeam(t.league, e.target.value, tt[side]) }))} className="h-9 rounded-md border border-line bg-bg px-2 text-[12.5px] outline-none focus:border-accent disabled:opacity-50">
+            {!t.league && <option value="">Pick a league</option>}
+            {(LEAGUES.find(l => l.code === t.league)?.teams || []).map(c => <option key={c.name} value={c.name}>{c.name} ({c.strength})</option>)}
+          </select>
         </div>
         <div className="grid grid-cols-3 border border-line rounded-md divide-x divide-line">
           {[[fx(avg, 1), 'XI rating'], [t.formation, 'Formation'], [TACTIC_META.mentality.opts[t.tactics.mentality], 'Mentality']].map(([v, l]) => <div key={l} className="py-2.5 px-3"><div className="font-display font-bold text-[22px] tnum leading-none">{v}</div><div className="eyebrow mt-1 !text-[9.5px]">{l}</div></div>)}
@@ -64,8 +74,8 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
           <Card eyebrow="For game developers" title="Use the engine in code">
             <pre className="text-[11px] leading-[1.6] font-mono bg-bg border border-line rounded-md p-3 overflow-x-auto scroll-thin text-dim">{`import { Match, makeTeam, validateLineup } from '@/engine/engine';
 
-const home = makeTeam({ name: 'Northbridge FC', seed: 11 });
-const away = makeTeam({ name: 'Harbour City', seed: 22 });
+const home = makeTeam({ name: 'Arsenal', seed: 11 });
+const away = makeTeam({ name: 'Man City', seed: 22 });
 validateLineup(home);          // → [] or typed errors
 
 const m = new Match({ home, away, seed: ${seed} });

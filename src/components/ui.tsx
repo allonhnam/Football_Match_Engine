@@ -63,3 +63,9 @@ export function Tabs({ value, onChange, items }: any) {
 
 
 export function Empty({ text }: any) { return <div className="rounded-lg border border-dashed border-line p-12 text-center text-dim text-[13px]">{text}</div>; }
+
+// A national flag (flag-icons SVGs, so it looks the same on every OS). `code` is ISO 3166, gb-eng for England.
+export function Flag({ code, title, h = 12 }: { code?: string | null; title?: string; h?: number }) {
+  if (!code) return null;
+  return <span className={`fi fi-${code} shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.25)]`} title={title} aria-label={title} role="img" style={{ width: h * 4 / 3, height: h, lineHeight: h + 'px', backgroundSize: 'cover' }} />;
+}

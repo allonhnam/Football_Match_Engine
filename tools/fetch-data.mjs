@@ -3,6 +3,8 @@
 //
 // Files go into data/football-data/ (not committed). Run `npm run build-reference` afterwards to turn
 // them into src/data/reference.json, the numbers the calibration tools compare the engine against.
+// It also downloads the real squads (players and clubs, CC0, github.com/dcaribou/transfermarkt-datasets) into
+// data/transfermarkt/ for `npm run build-teams`.
 import { mkdir, writeFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -39,5 +41,24 @@ for (const season of SEASONS) {
     await sleep(400); // be polite to the free service
   }
 }
-console.log(`\n${ok} downloaded, ${skipped} already present, ${failed} failed. Files are in data/football-data/`);
+
+// Real squads: players and clubs from transfermarkt-datasets (CC0), used by `npm run build-teams`.
+const TM = path.join(OUT, '..', 'transfermarkt');
+await mkdir(TM, { recursive: true });
+for (const name of ['players', 'clubs']) {
+  const file = path.join(TM, name + '.csv.gz');
+  if (!force && await exists(file)) { skipped++; continue; }
+  try {
+    const res = await fetch(`https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/${name}.csv.gz`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    await writeFile(file, buf);
+    console.log(`transfermarkt ${name.padEnd(8)} ${(buf.length / 1e6).toFixed(1)} MB`);
+    ok++;
+  } catch (err) {
+    console.warn(`transfermarkt ${name} failed: ${err.message}`);
+    failed++;
+  }
+}
+console.log(`\n${ok} downloaded, ${skipped} already present, ${failed} failed. Files are in data/football-data/ and data/transfermarkt/`);
 if (failed && !ok && !skipped) process.exit(1);
