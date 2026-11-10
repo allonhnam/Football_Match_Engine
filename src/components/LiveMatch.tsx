@@ -95,7 +95,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
   const ratings = tab === 'players' ? new Map<string, any>(m.result().playerStats.map(p => [p.id, p] as [string, any])) : null;
   const teamHead = (t, s, right = false) => (
     <div className={`flex items-center gap-3 min-w-0 ${right ? 'flex-row-reverse text-right' : ''}`}>
-      <Badge color={t.color} label={t.short} size={38} />
+      <Badge color={t.color} label={t.short} size={38} crest={t.sheet?.crest} />
       <div className="min-w-0 hidden sm:block"><div className={`flex items-center gap-2 ${right ? 'justify-end' : ''}`}><span className="font-display font-bold uppercase text-[19px] leading-none truncate">{t.name}</span>{Array.from({ length: reds(s) }).map((_, i) => <CardIcon key={i} red />)}</div><div className="text-[10.5px] text-dim tracking-[.12em] mt-1">{s === 0 ? 'HOME' : 'AWAY'} · {t.formation.replace(/-/g, '–')}</div></div>
     </div>);
   const card = (eyebrow, title, body, color = undefined) => (

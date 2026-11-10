@@ -54,10 +54,12 @@ function realPlayers(t: any) {
     };
   });
 }
+// Club crests are the clubs' trademarks, so they are not stored here: the browser loads them from transfermarkt.
+export const crestUrl = (id: number | string) => `https://tmssl.akamaized.net/images/wappen/head/${id}.png`;
 export function realTeam(league: string, name: string, keep: any = {}) {
   const l = LEAGUES.find(x => x.code === league), t = l && l.teams.find(x => x.name === name);
   if (!t) return null;
-  return { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league };
+  return { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league, crest: t.crest };
 }
 // The built-in attributes of a real player, for "reset" after editing (null for generated players).
 export function realAttrs(league: string | undefined, club: string, id: string) {
@@ -87,5 +89,5 @@ export function rebuildSquad(team, patch) {
     const players = team.players.map(p => ({ ...p, attrs: Object.fromEntries(Object.entries(p.attrs).map(([k, v]: any) => [k, k === 'keeping' && p.role !== 'GK' ? v : Math.max(1, Math.min(20, Math.round(v + d)))])) }));
     return { ...team, strength: patch.strength, players };
   }
-  return { ...E.makeTeam({ name: team.name, short: team.short, color: team.color, color2: team.color2, seed: patch.seed ?? team.seed, strength: patch.strength ?? team.strength, formation: team.formation, tactics: team.tactics }), league: patch.seed != null ? undefined : team.league };
+  return { ...E.makeTeam({ name: team.name, short: team.short, color: team.color, color2: team.color2, seed: patch.seed ?? team.seed, strength: patch.strength ?? team.strength, formation: team.formation, tactics: team.tactics }), league: patch.seed != null ? undefined : team.league, crest: patch.seed != null ? undefined : team.crest };
 }

@@ -81,7 +81,7 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
   return (
     <div className="glow-bg min-h-[calc(100vh-56px)]">
       <div className="gutter mx-auto max-w-[1440px] py-8 flex flex-col gap-5">
-        <PageHead eyebrow={`Squad & tactics · ${side}`} title={<span className="flex items-center gap-3"><Badge color={t.color} label={t.short} size={44} />{t.name}</span>}
+        <PageHead eyebrow={`Squad & tactics · ${side}`} title={<span className="flex items-center gap-3"><Badge color={t.color} label={t.short} size={44} crest={t.crest} />{t.name}</span>}
           right={<div className="flex gap-2 items-center flex-wrap"><div className="w-56"><Seg id="board-side" value={side === 'home' ? 0 : 1} options={[teams.home.short + ' · home', teams.away.short + ' · away']} onChange={i => { setSide(i ? 'away' : 'home'); setSel(null); setEditId(null); }} /></div><Btn onClick={autoPick}>Auto-pick best XI</Btn></div>} />
         <div className={`rounded-md px-4 py-2.5 text-[12.5px] flex flex-wrap gap-x-4 gap-y-1 items-center border ${errs.length ? 'border-bad/50 bg-bad/10' : 'border-good/40 bg-good/10'}`}>
           {errs.length ? <><b className="text-bad">{errs.length} issue{errs.length > 1 ? 's' : ''} · kick-off is disabled</b>{errs.map((e, i) => <span key={i} className="text-bad">• {e.message}</span>)}</> : <b className="text-good flex items-center gap-1.5"><Icon n="check" s={14} />Lineup is legal: 11 starters, one goalkeeper, {t.bench.length} on the bench</b>}
