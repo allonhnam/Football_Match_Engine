@@ -49,7 +49,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const h = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), date: Date.now(), score: R.score,
       names: [cfg.home.name, cfg.away.name], shorts: [cfg.home.short, cfg.away.short],
-      colors: [cfg.home.color, cfg.away.color], config: cfg, commands,
+      colors: [cfg.home.color, cfg.away.color], config: cfg, commands, engineVersion: R.engineVersion,
     };
     setHistory(prev => { const next = [h, ...prev].slice(0, 8); store.set('me-history', next); return next; });
   };

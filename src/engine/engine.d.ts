@@ -260,9 +260,14 @@ export class Match {
   setFormation(side: Side, formation: FormationName, replay?: boolean): CommandAck;
   cancelPending(side: Side, index: number): void;
 
-  /** JSON of the inputs plus the manager command log. */
+  /** JSON of the engine version, the inputs and the manager command log. */
   save(): string;
+  /** Rebuild a saved match. It replays exactly when it was saved on this engine version; otherwise it still loads,
+   * with replayExact false (the same inputs then give a different match). */
   static load(saved: string): Match;
+  /** Set by load: the engine version the save came from (null for saves older than 0.6), and whether it matches. */
+  savedEngineVersion?: string | null;
+  replayExact?: boolean;
   /** Rebuild a match from its inputs and command log, optionally up to a tick. */
   static replay(config: MatchConfig, commands: ManagerCommand[], untilTick?: number): Match;
 }

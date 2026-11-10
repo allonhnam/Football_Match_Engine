@@ -48,18 +48,18 @@ m.runUntil({ minute: 60 });                // or { event: 'goal' }, { event: 'ke
 m.substitute(0, outId, inId);              // applied at the next stoppage
 m.setTactics(0, { pressing: 2, mentality: 2 });
 m.setFormation(0, '4-4-2');
-const saved = m.save();                    // inputs + manager command log
+const saved = m.save();                    // engine version, inputs + manager command log
 const final = m.runToEnd();
 
 // Exact replay from the saved inputs, seed and commands
-const again = Match.load(saved).runToEnd();
+const again = Match.load(saved).runToEnd();  // replayExact is false if saved on another engine version
 ```
 
 - **Teams.** A `TeamSheet` holds the squad (each player with ten attributes from 1 to 20: pace, stamina, passing, vision, dribbling, shooting, heading, tackling, positioning, keeping), the starting XI in formation order, the bench, the formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 5-3-2) and six tactics (mentality, pressing, defensive line, width, tempo, passing), each with three settings. Each player's `condition` (fitness carried in) and `unavailable` (injured, suspended) come from the game.
 - **Errors.** Illegal lineups come back as typed errors (`validateLineup`, and `errors` on a `Match` or `simulateMatch` result), never thrown. Illegal manager commands return `{ ok: false, error }`.
 - **Live view.** Call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(...)` from a timer at any speed, draw `m.snapshot()`, and listen to events with `m.on(e => ...)`.
 - **Cup ties.** Pass `knockout: true`, or `knockout: { aggregate: [2, 1] }` for a second leg. The result then always has a `winner`, plus `extraTime` and `shootout`.
-- **Background matches.** `simulateMatch` takes about 130 ms per match on one core. The visualizer spreads batches over Web Workers (`src/lib/batch.ts`): a 380-match season takes about 13 s. A hard tick cap means a match can never hang.
+- **Background matches.** `simulateMatch` takes about 120 ms per match on one core. The visualizer spreads batches over Web Workers (`src/lib/batch.ts`): a 380-match season takes about 13 s. A hard tick cap means a match can never hang.
 
 The result:
 
@@ -90,7 +90,7 @@ The result:
 | `src/app/`, `src/components/` | The visualizer: matchday and live match, tactics board, report, Engine Lab |
 | `src/lib/` | Pitch drawing, the statistics shared by the calibration tools, league squads, the Web Worker batch runner |
 | `src/data/reference.json` | Real-football numbers built from the league data |
-| `tests/` | 80 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws, cup ties, tactics, attributes, the pitch view |
+| `tests/` | 81 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws, cup ties, tactics, attributes, the pitch view |
 | `tools/` | Headless play, data download, calibration, balance and attribute tools |
 
 ## Known limits

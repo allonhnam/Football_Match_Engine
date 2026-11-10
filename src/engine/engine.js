@@ -281,7 +281,7 @@ function Match(config) {
 const P = Match.prototype;
 
 P._mkRuntime = function (p, side, slot, onPitch) {
-  return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, tackleImmune: 0, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, tackleCd: 0, runOff: 0, boxRun: false, spaceK: 0, turned: true,
+  return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, tackleImmune: 0, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, treat: null, leaving: null, waitFor: null, tackleCd: 0, runOff: 0, boxRun: false, spaceK: 0, turned: true,
     st: { ownGoals: 0, claims: 0, minutes: 0, passes: 0, passesOk: 0, shots: 0, goals: 0, assists: 0, xg: 0, tackles: 0, interceptions: 0, fouls: 0, saves: 0, dist: 0, onAt: onPitch ? 0 : null, offAt: null } };
 };
 P.dir = function (side) { return (side === 0) === (this.half % 2 === 1) ? 1 : -1; }; // teams change ends every period
@@ -1789,8 +1789,14 @@ function suspensionFor(reason) {
 }
 
 // ---------- save / load / replay ----------
-P.save = function () { return JSON.stringify({ config: this.config, commands: this.commands, tick: this.tick }); };
-Match.load = function (s) { const o = JSON.parse(s); return Match.replay(o.config, o.commands, o.tick); };
+// A save records the engine version: the same inputs replay exactly only on the same version.
+P.save = function () { return JSON.stringify({ engineVersion: ENGINE_VERSION, config: this.config, commands: this.commands, tick: this.tick }); };
+Match.load = function (s) {
+  const o = JSON.parse(s), m = Match.replay(o.config, o.commands, o.tick);
+  // a save from another engine version still loads (never throws), but says it will not replay the same match
+  m.savedEngineVersion = o.engineVersion || null; m.replayExact = o.engineVersion === ENGINE_VERSION;
+  return m;
+};
 Match.replay = function (config, commands, untilTick) {
   const m = new Match(config); if (m.errors) return m;
   const cmds = (commands || []).slice().sort((a, b) => a.tick - b.tick);

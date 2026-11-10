@@ -56,7 +56,9 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
                 <li key={h.id} className="flex items-center gap-3 py-2.5">
                   <Badge color={h.colors[0]} label={h.shorts[0]} size={26} /><span className="font-display font-bold text-[20px] tnum w-12 text-center">{h.score[0]}–{h.score[1]}</span><Badge color={h.colors[1]} label={h.shorts[1]} size={26} />
                   <div className="min-w-0 flex-1"><div className="truncate text-[12.5px]">{h.names[0]} v {h.names[1]}</div><div className="text-dim font-mono text-[10.5px]">SEED {hexSeed(h.config.seed)} · {h.commands.length} command{h.commands.length === 1 ? '' : 's'} · {new Date(h.date).toLocaleString()}</div></div>
-                  <Btn size="sm" onClick={() => onReplay(h)}>Replay</Btn>
+                  {h.engineVersion === E.ENGINE_VERSION
+                    ? <Btn size="sm" onClick={() => onReplay(h)}>Replay</Btn>
+                    : <span className="text-dim text-[10.5px] text-right leading-tight" title={`Saved on engine ${h.engineVersion || '0.5 or older'}. This is engine ${E.ENGINE_VERSION}, so the same seed would give a different match.`}>Older engine,<br />can't replay</span>}
                 </li>))}</ul>}
           </Card>
           <Card eyebrow="For game developers" title="Use the engine in code">
