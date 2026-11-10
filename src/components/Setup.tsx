@@ -50,7 +50,7 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
   return (
     <div className="glow-bg min-h-[calc(100vh-56px)]">
       <div className="gutter mx-auto max-w-[1280px] py-8 flex flex-col gap-6">
-        <PageHead eyebrow="Match setup" title="Matchday" sub="Pick two squads and a seed, then kick off live or simulate instantly. The same seed and the same manager decisions always produce the same match." />
+        <PageHead eyebrow="Match setup" title="Matchday" sub="Pick two squads and a seed, then kick off live or simulate instantly. The same seed and the same manager decisions always produce the same match; a new seed is drawn after every match." />
         <div className="flex flex-col md:flex-row items-stretch gap-3">{teamCard('home')}<div className="grid place-items-center"><span className="font-display font-bold text-dim text-[20px] px-1">VS</span></div>{teamCard('away')}</div>
         <div className="rounded-lg border border-line bg-surface p-4 grid gap-4 lg:grid-cols-[0.8fr_0.9fr_0.9fr_1.2fr_auto] items-end">
           <div><div className="eyebrow mb-1.5">Seed</div><div className="flex gap-2"><input id="seed" type="number" value={seed} onChange={e => setSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setSeed(Math.floor(Math.random() * 16777215))} title="Random seed">Random</Btn></div></div>

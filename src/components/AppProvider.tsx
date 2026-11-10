@@ -8,6 +8,7 @@ import { clone, store, defaultTeams, matchKits } from '@/lib/util';
 export type Settings = { insights: boolean; banners: boolean; htPause: boolean };
 
 type Ctx = any;
+const newSeed = () => Math.floor(Math.random() * 16777215);
 const AppContext = createContext<Ctx>(null);
 export const useApp = () => useContext(AppContext) as Ctx;
 
@@ -37,6 +38,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setThemeState(store.get('me-theme', 'dark'));
     setHistory(store.get('me-history', []));
     setSettings(s => ({ ...s, ...store.get('me-settings', {}) }));
+    setSeed(newSeed());
     setLoaded(true);
   }, []);
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
@@ -60,11 +62,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSession({ key: Date.now(), config: cfg, mode, commands, match: new E.Match(cfg), ui: { cmdPtr: 0, finishedSent: false } });
     router.push('/');
   };
-  const kickoff = () => startSession(config(), 'live', []);
+  // Every match uses the seed shown on Matchday, then a new one is drawn, so the next match is a different one.
+  // Type a seed to play a particular match again; each saved match keeps its own seed for exact replays.
+  const kickoff = () => { startSession(config(), 'live', []); setSeed(newSeed()); };
   const replay = (cfg: any, commands: any[]) => startSession(cfg, 'replay', commands);
   const simulate = () => {
     const cfg = config();
     const R = new E.Match(cfg).runToEnd();
+    setSeed(newSeed());
     saveHistory(cfg, R, []);
     setReport({ R, teams: [cfg.home, cfg.away], config: cfg, commands: [] });
     router.push('/report');

@@ -190,7 +190,10 @@ function autoPick(players, formation) {
     for (const p of players) {
       if (used.has(p.id) || p.unavailable) continue;
       const ov = roleRating(p);
-      const sc = positionFit(p, formation, i) * 100 + ov;
+      // prefer a player who plays on that side: a natural full-back or winger out wide, a central player in the middle
+      const ss = slotSide(FORMATIONS[formation][i][2]);
+      const sideBonus = ss === 'C' ? (p.side === 'C' ? 2 : 0) : p.side === ss ? 5 : 0;
+      const sc = positionFit(p, formation, i) * 100 + ov + sideBonus;
       if (sc > bs) { bs = sc; best = p; }
     }
     used.add(best.id); xi.push(best.id);
