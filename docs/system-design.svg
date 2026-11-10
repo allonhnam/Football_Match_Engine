@@ -36,7 +36,7 @@
   <!-- ================= FRONT END ================= -->
   <g filter="url(#sh)"><rect x="40" y="104" width="920" height="320" rx="22" fill="#E4F1FC" stroke="#8DBBE3" stroke-width="2"/></g>
   <text class="h" x="64" y="134" fill="#3E7DB3">BROWSER · VISUALIZER</text>
-  <text class="hs" x="290" y="134">Next.js 16 · React 19 · Tailwind · src/app + src/components</text>
+  <text class="hs" x="290" y="134">Next.js 16 · React 19 · Tailwind · src/app + src/components · live on Vercel</text>
 
   <!-- route cards (tabs) -->
   <g filter="url(#sh)">
@@ -142,8 +142,8 @@
   <text class="sl" x="76" y="628">league-like spread of squad quality</text>
   <text class="ml" x="76" y="668" style="font-size:13px;font-weight:700">predictability.js</text>
   <text class="sl" x="76" y="688">fit to bookmaker-odds spread</text>
-  <text class="ml" x="76" y="728" style="font-size:13px;font-weight:700">summarise.ts</text>
-  <text class="sl" x="76" y="748">small result for workers</text>
+  <text class="ml" x="76" y="728" style="font-size:13px;font-weight:700">util.ts · summarise.ts</text>
+  <text class="sl" x="76" y="748">real clubs · kit clashes · worker results</text>
 
   <!-- ================= ENGINE ================= -->
   <g filter="url(#sh)"><rect x="370" y="480" width="590" height="290" rx="22" fill="#EEE8FD" stroke="#A893E0" stroke-width="2.5"/></g>
@@ -240,7 +240,7 @@
 
   <!-- tests -->
   <g filter="url(#sh)"><rect class="card" stroke="#DE93B4" x="64" y="876" width="660" height="154" rx="14"/></g>
-  <text class="tl" x="84" y="902">Vitest · 88 tests in 7 files</text>
+  <text class="tl" x="84" y="902">Vitest · 98 tests in 8 files</text>
   <text class="sl" x="290" y="902">fail if the engine drifts from real football or breaks a law</text>
   <g font-size="12.5" fill="#2E2A3A">
     <rect x="84"  y="918" width="118" height="28" rx="14" fill="#C8EFD9"/><text x="143" y="937" text-anchor="middle">determinism</text>
@@ -248,12 +248,12 @@
     <rect x="318" y="918" width="140" height="28" rx="14" fill="#E3DAFB"/><text x="388" y="937" text-anchor="middle">lineup validation</text>
     <rect x="466" y="918" width="72"  height="28" rx="14" fill="#FFDCC2"/><text x="502" y="937" text-anchor="middle">fuzz</text>
     <rect x="546" y="918" width="158" height="28" rx="14" fill="#FFF1B8"/><text x="625" y="937" text-anchor="middle">laws (32, 8 offside)</text>
-    <rect x="84"  y="956" width="150" height="28" rx="14" fill="#FBD3E3"/><text x="159" y="975" text-anchor="middle">knockout and pens</text>
-    <rect x="242" y="956" width="150" height="28" rx="14" fill="#C8EFD9"/><text x="317" y="975" text-anchor="middle">every attribute</text>
-    <rect x="400" y="956" width="168" height="28" rx="14" fill="#CDE6FA"/><text x="484" y="975" text-anchor="middle">realism vs real data</text>
-    <rect x="576" y="956" width="128" height="28" rx="14" fill="#E3DAFB"/><text x="640" y="975" text-anchor="middle">metrics · pitch</text>
+    <rect x="84"  y="956" width="142" height="28" rx="14" fill="#FBD3E3"/><text x="155" y="975" text-anchor="middle">knockout and pens</text>
+    <rect x="234" y="956" width="122" height="28" rx="14" fill="#C8EFD9"/><text x="295" y="975" text-anchor="middle">every attribute</text>
+    <rect x="364" y="956" width="160" height="28" rx="14" fill="#CDE6FA"/><text x="444" y="975" text-anchor="middle">realism vs real data</text>
+    <rect x="532" y="956" width="172" height="28" rx="14" fill="#E3DAFB"/><text x="618" y="975" text-anchor="middle">real squads · kits · pitch</text>
   </g>
-  <text class="sl" x="84" y="1012"><tspan class="ml" style="font-weight:700">QUICK_TESTS=1</tspan> skips the 17 statistical tests and runs the other 71 in about 17 s</text>
+  <text class="sl" x="84" y="1012"><tspan class="ml" style="font-weight:700">QUICK_TESTS=1</tspan> skips the 18 statistical tests and runs the other 80 in about 9 s</text>
 
   <line class="ln" x1="724" y1="953" x2="760" y2="953" marker-end="url(#ar)"/>
 
@@ -275,7 +275,7 @@
     <text class="ml" x="1136" y="996">4 build</text>
   </g>
   <text class="sl" x="784" y="992">skips .md-only changes · a new push cancels the old run</text>
-  <text class="sl" x="784" y="1012">20-minute job timeout</text>
+  <text class="sl" x="784" y="1012">no Actions minutes since PR #14, so every change is checked locally</text>
 
   <!-- ================= ARROWS ================= -->
   <!-- worker pool -> engine -->
