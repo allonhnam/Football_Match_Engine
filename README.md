@@ -35,9 +35,11 @@ The engine is one dependency-free file, `src/engine/engine.js`, typed by `src/en
 
 ```ts
 import { Match, makeTeam, validateLineup, simulateMatch } from '@/engine/engine';
+import { realTeam } from '@/lib/util';     // the real clubs, from src/data/teams.json
 
-const home = makeTeam({ name: 'Northbridge FC', seed: 11, strength: 13 });  // or pass your own players, formation, tactics
-const away = makeTeam({ name: 'Harbour City', seed: 22, strength: 12 });
+const home = realTeam('E0', 'Arsenal');    // a real club and its 2025/26 squad (league code, club name)
+const away = realTeam('E0', 'Man City');
+// or a generated squad: makeTeam({ name: 'Northbridge FC', seed: 11, strength: 13 }), or pass your own players, formation, tactics
 validateLineup(home);                      // [] or a list of typed errors
 
 // Headless: one call, full result
