@@ -121,27 +121,129 @@ function Scorelines({ s }: any) {
     </div>
   );
 }
+const outcome = (s: number[]) => (s[0] > s[1] ? 'H' : s[0] < s[1] ? 'A' : 'D');
+const OUTCOME_LABEL = { H: 'Home wins', D: 'Draws', A: 'Away wins' };
+
+/** Home wins, draws and away wins as counts and shares, next to real football. */
+function ResultsSummary({ matches }: any) {
+  const n = matches.length, c = { H: 0, D: 0, A: 0 };
+  let goals = 0;
+  for (const m of matches) { c[outcome(m.score)]++; goals += m.score[0] + m.score[1]; }
+  const real = { H: reference.rates.homeWin, D: reference.rates.draw, A: reference.rates.awayWin };
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">Results of all {thousands(n)} matches</span>
+        <span className="text-[11px] text-dim tnum">{thousands(goals)} goals · {fx(goals / (n || 1), 2)} per match (real {fx(reference.counts.goals.mean, 2)})</span>
+      </div>
+      <div className="flex h-8 rounded overflow-hidden text-[11.5px] font-bold mt-3">
+        <div className="grid place-items-center bg-accent text-accentink" style={{ width: pct(c.H / n) }}>{c.H / n > 0.1 && `H ${pct(c.H / n)}`}</div>
+        <div className="grid place-items-center bg-surface2" style={{ width: pct(c.D / n) }}>{c.D / n > 0.1 && `D ${pct(c.D / n)}`}</div>
+        <div className="grid place-items-center bg-bad text-white" style={{ width: pct(c.A / n) }}>{c.A / n > 0.1 && `A ${pct(c.A / n)}`}</div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        {(['H', 'D', 'A'] as const).map(k => (
+          <div key={k}>
+            <div className="eyebrow !text-[9px]">{OUTCOME_LABEL[k]}</div>
+            <div className="font-display font-bold text-[24px] tnum leading-tight">{thousands(c[k])} <span className="text-[15px]">({pctFmt(c[k] / (n || 1))})</span></div>
+            <div className="text-[10.5px] text-dim tnum">real {pctFmt(real[k])}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Every final score that came up, how often, and how often real football ends that way. */
+function ScorelineTable({ matches, pick, onPick }: any) {
+  const n = matches.length, counts = new Map<string, number>();
+  for (const m of matches) { const k = `${m.score[0]}-${m.score[1]}`; counts.set(k, (counts.get(k) || 0) + 1); }
+  const realShare = (k: string) => { const i = SCORELINES.indexOf(k); return i >= 0 && k !== 'other' ? reference.scorelines.hist[i] : null; };
+  const rows = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">Every scoreline ({rows.length} different)</span>
+        {pick && <button onClick={() => onPick(null)} className="text-[11px] text-accent hover:underline">Show all matches</button>}
+      </div>
+      <p className="text-[10.5px] text-dim mt-1">Click a scoreline to list its matches below. Real shares are from {thousands(reference.n)} real matches; rarer scores are grouped there, so they show –.</p>
+      <div className="grid gap-1.5 mt-3 grid-cols-[repeat(auto-fill,minmax(112px,1fr))]">
+        {rows.map(([k, c]) => { const r = realShare(k); return (
+          <button key={k} onClick={() => onPick(pick === k ? null : k)} title={`${k}: ${c} of ${n} matches`}
+            className={`rounded-md border px-2 py-1.5 text-left ${pick === k ? 'border-accent bg-accent/10' : 'border-line bg-bg hover:border-dim'}`}>
+            <div className="flex items-baseline justify-between gap-1"><b className="font-mono text-[13px]">{k.replace('-', '–')}</b><span className="font-mono text-[11px] tnum">{c}</span></div>
+            <div className="text-[10px] text-dim tnum">{pctFmt(c / n)} · real {r == null ? '–' : pctFmt(r)}</div>
+          </button>); })}
+      </div>
+    </div>
+  );
+}
+
+/** Every simulated match, one row each, filterable by result, scoreline or option. */
+function MatchList({ matches, pick, setPick, groups }: any) {
+  const [res, setRes] = useState('all'), [grp, setGrp] = useState('all');
+  const shown = matches.filter(m => (res === 'all' || outcome(m.score) === res) && (!pick || `${m.score[0]}-${m.score[1]}` === pick) && (grp === 'all' || m.group === grp));
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">Every match · {thousands(shown.length)} of {thousands(matches.length)}{pick ? ` ending ${pick.replace('-', '–')}` : ''}</span>
+        <div className="flex flex-wrap gap-2">
+          {groups && <select id="lab-group" aria-label="Option" value={grp} onChange={e => setGrp(e.target.value)} className="h-8 rounded-md border border-line bg-bg px-2 text-[12px]"><option value="all">All options</option>{groups.map(g => <option key={g} value={g}>{g}</option>)}</select>}
+          <select id="lab-result" aria-label="Result" value={res} onChange={e => setRes(e.target.value)} className="h-8 rounded-md border border-line bg-bg px-2 text-[12px]"><option value="all">All results</option><option value="H">Home wins</option><option value="D">Draws</option><option value="A">Away wins</option></select>
+          {pick && <button onClick={() => setPick(null)} className="h-8 rounded-md border border-line px-2 text-[12px] text-dim hover:text-ink">Clear {pick.replace('-', '–')}</button>}
+        </div>
+      </div>
+      <div className="mt-3 max-h-[420px] overflow-auto scroll-thin rounded-md border border-line">
+        <table className="w-full text-[11.5px] tnum">
+          <thead className="sticky top-0 bg-surface2 text-dim text-left"><tr>
+            <th className="px-2 py-1.5 font-semibold">#</th>{groups && <th className="px-2 py-1.5 font-semibold">Option</th>}<th className="px-2 py-1.5 font-semibold">Seed</th><th className="px-2 py-1.5 font-semibold">Strength H v A</th>
+            <th className="px-2 py-1.5 font-semibold">Half-time</th><th className="px-2 py-1.5 font-semibold">Full time</th><th className="px-2 py-1.5 font-semibold">Result</th><th className="px-2 py-1.5 font-semibold">Shots</th><th className="px-2 py-1.5 font-semibold">xG</th>
+          </tr></thead>
+          <tbody className="divide-y divide-line">
+            {shown.map(m => (
+              <tr key={m.i} className="hover:bg-surface2/60">
+                <td className="px-2 py-1 text-dim">{m.i + 1}</td>{groups && <td className="px-2 py-1">{m.group}</td>}<td className="px-2 py-1 font-mono text-dim">{m.seed}</td><td className="px-2 py-1">{fx(m.str[0], 1)} v {fx(m.str[1], 1)}</td>
+                <td className="px-2 py-1 font-mono">{m.ht ? `${m.ht[0]}–${m.ht[1]}` : '–'}</td><td className="px-2 py-1 font-mono font-bold">{m.score[0]}–{m.score[1]}</td>
+                <td className={`px-2 py-1 font-semibold ${outcome(m.score) === 'H' ? 'text-good' : outcome(m.score) === 'A' ? 'text-bad' : 'text-dim'}`}>{outcome(m.score) === 'H' ? 'Home' : outcome(m.score) === 'A' ? 'Away' : 'Draw'}</td>
+                <td className="px-2 py-1">{m.shots[0]}–{m.shots[1]}</td><td className="px-2 py-1">{fx(m.xg[0], 2)}–{fx(m.xg[1], 2)}</td>
+              </tr>))}
+          </tbody>
+        </table>
+        {!shown.length && <div className="text-dim text-[12px] text-center py-6">No matches with that filter.</div>}
+      </div>
+    </div>
+  );
+}
+
+// One row per simulated match, for the lists above.
+const matchRow = (r: any, job: any, i: number, group?: string) => ({ i, group, seed: job.seed, str: [job.home.strength, job.away.strength], score: r.score, ht: r.ht, shots: [r.ts[0].shots, r.ts[1].shots], xg: [r.ts[0].xg, r.ts[1].xg] });
+
 export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(1000), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
+  const [pick, setPick] = useState(null); // a scoreline picked in the table, to filter the match list
   const teamsFor = (i, g) => { const sw = i % 2; return { home: E.makeTeam({ name: 'Lab Home', seed: sw ? 202 : 101, strength: 12 + Math.ceil(g / 2) }), away: E.makeTeam({ name: 'Lab Away', seed: sw ? 101 : 202, strength: 12 - Math.floor(g / 2) }) }; };
   const hash = r => { let h = 0; const s = JSON.stringify([r.score, r.events.map(e => [e.tick, e.type, e.player])]); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(16).toUpperCase(); };
   useEffect(() => { const t = setTimeout(() => { const cfg = { ...teamsFor(0, 0), seed: 4242 }; const a = E.simulateMatch(cfg), b = E.simulateMatch(cfg); const m = new E.Match(cfg); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd(); setDet({ ok: hash(a) === hash(b) && hash(a) === hash(c), h: hash(a) }); }, 300); return () => clearTimeout(t); }, []);
   const realism = async () => {
     setRes(null); setProg(0.01);
     // A fresh, varied pair of squads for every match, like the many teams of a real league.
-    const out = (await runBatch(Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i, gap), seed: 1 + i, control: 'none' })), setProg)).filter(r => r && !r.errors);
+    const jobs = Array.from({ length: n }, (_, i) => ({ ...leagueTeams(i, gap), seed: 1 + i, control: 'none' }));
+    const raw = await runBatch(jobs, setProg);
+    const matches = raw.map((r, i) => (r && !r.errors ? matchRow(r, jobs[i], i) : null)).filter(Boolean);
+    const out = raw.filter(r => r && !r.errors);
     const tiles = buildTiles(out);
     const scorelines = compareScorelines(reference.scorelines.hist, out.map(r => lineFromEngine(r.score, r.ts, r.ht)));
     const byBlock = Array(6).fill(0); out.forEach(r => r.goalTimes.forEach(t => byBlock[Math.min(5, Math.floor(t / 900))]++));
-    setRes({ n: out.length, tiles, scorelines, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap }); setProg(0);
+    setRes({ n: out.length, tiles, scorelines, byBlock: byBlock.map(v => v / Math.max(1, byBlock.reduce((a, b) => a + b, 0))), inj: out.reduce((s, r) => s + r.injuries, 0) / out.length, gap, matches }); setPick(null); setProg(0);
   };
   const balance = async () => {
     setBal(null); setProg(0.01); const per = Math.max(60, Math.floor(n / 3)); const jobs = [], opt = [];
     [0, 1, 2].forEach(o => { for (let i = 0; i < per; i++) { const t = teamsFor(i, gap); t.home.tactics = { ...t.home.tactics, [dim]: o }; jobs.push({ ...t, seed: 7000 + i, control: 'none', neutral: true }); opt.push(o); } });
     const out = await runBatch(jobs, setProg);
-    const rows = [0, 1, 2].map(o => { const rs = out.filter((r, i) => opt[i] === o && r && !r.errors); const w = rs.filter(r => r.score[0] > r.score[1]).length / rs.length, d = rs.filter(r => r.score[0] === r.score[1]).length / rs.length; const avg = f => rs.reduce((s, r) => s + f(r), 0) / rs.length; return { o, w, d, l: 1 - w - d, gf: avg(r => r.score[0]), ga: avg(r => r.score[1]), xg: avg(r => r.ts[0].xg), pos: avg(r => r.ts[0].pos), fouls: avg(r => r.ts[0].fouls) }; });
-    setBal({ dim, rows, per }); setProg(0);
+    const rows = [0, 1, 2].map(o => { const rs = out.filter((r, i) => opt[i] === o && r && !r.errors); const nw = rs.filter(r => r.score[0] > r.score[1]).length, nd = rs.filter(r => r.score[0] === r.score[1]).length; const w = nw / rs.length, d = nd / rs.length; const avg = f => rs.reduce((s, r) => s + f(r), 0) / rs.length; return { o, n: rs.length, nw, nd, nl: rs.length - nw - nd, w, d, l: 1 - w - d, gf: avg(r => r.score[0]), ga: avg(r => r.score[1]), xg: avg(r => r.ts[0].xg), pos: avg(r => r.ts[0].pos), fouls: avg(r => r.ts[0].fouls) }; });
+    const matches = out.map((r, i) => (r && !r.errors ? matchRow(r, jobs[i], i, TACTIC_META[dim].opts[opt[i]]) : null)).filter(Boolean);
+    setBal({ dim, rows, per, matches }); setPick(null); setProg(0);
   };
   const perfRun = async () => {
     setPerf(null); setProg(0.01); const t = teamsFor(0, 0); const k = 12; let ms = 0;
@@ -170,8 +272,11 @@ export function Lab() {
           <div className="min-w-0">
             {tab === 'realism' && (!res ? <Empty text="Run the realism test to simulate a batch of matches and compare every number with real football. Small batches are noisy: 1,000 matches or more give a fair verdict (the command-line check uses 3,000)." /> :
               <div className="flex flex-col gap-3">
+                <ResultsSummary matches={res.matches} />
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{res.tiles.map(t => <Tile key={t.k} t={t} />)}</div>
                 <Scorelines s={res.scorelines} />
+                <ScorelineTable matches={res.matches} pick={pick} onPick={setPick} />
+                <MatchList matches={res.matches} pick={pick} setPick={setPick} />
                 <p className="text-[11.5px] text-dim">Bars show how often the engine produced each value per match; the white line marks real football. "Allowed" is how far the engine's average may sit from the real one: 7% or 2.5 standard errors of the batch, whichever is larger. Shape gap is the total variation distance between the two distributions (0 identical, 1 unrelated).</p>
               </div>)}
             {tab === 'balance' && (!bal ? <Empty text="Pick a tactic and run. Each option plays the same balanced opponent at a neutral venue, so differences come from the tactic alone." /> :
@@ -180,9 +285,13 @@ export function Lab() {
                 <div className="flex flex-col gap-4 mt-4">{bal.rows.map(r => <div key={r.o} className="grid gap-2 md:grid-cols-[110px_1fr_310px] items-center">
                   <b className="font-display font-bold text-[20px] uppercase">{TACTIC_META[bal.dim].opts[r.o]}</b>
                   <div className="flex h-8 rounded overflow-hidden text-[11.5px] font-bold"><div className="grid place-items-center bg-accent text-accentink" style={{ width: pct(r.w) }}>W {pct(r.w)}</div><div className="grid place-items-center bg-surface2" style={{ width: pct(r.d) }}>D {pct(r.d)}</div><div className="grid place-items-center bg-bad text-white" style={{ width: pct(r.l) }}>L {pct(r.l)}</div></div>
-                  <div className="text-[11.5px] text-dim tnum">GF {fx(r.gf, 2)} · GA {fx(r.ga, 2)} · xG {fx(r.xg, 2)} · poss {Math.round(r.pos)}% · fouls {fx(r.fouls, 1)}{r.w > 0.55 && <span className="text-warn font-bold"> · too strong</span>}</div>
+                  <div className="text-[11.5px] text-dim tnum"><b className="text-ink">{r.nw} won · {r.nd} drawn · {r.nl} lost</b> of {r.n}<br />GF {fx(r.gf, 2)} · GA {fx(r.ga, 2)} · xG {fx(r.xg, 2)} · poss {Math.round(r.pos)}% · fouls {fx(r.fouls, 1)}{r.w > 0.55 && <span className="text-warn font-bold"> · too strong</span>}</div>
                 </div>)}</div>
-                <p className="text-[12px] text-dim mt-4">Healthy options trade one thing for another. No option should win more than about 55% against the field, and each should move at least one number. With {bal.per} matches per row, gaps under about 8 points are noise.</p>
+                <p className="text-[12px] text-dim mt-4">Healthy options trade one thing for another. No option should win more than about 55% against the field, and each should move at least one number. With {bal.per} matches per row, gaps under about 8 points are noise. The tested side is always the home team.</p>
+                <div className="flex flex-col gap-3 mt-4">
+                  <ScorelineTable matches={bal.matches} pick={pick} onPick={setPick} />
+                  <MatchList matches={bal.matches} pick={pick} setPick={setPick} groups={TACTIC_META[bal.dim].opts} />
+                </div>
               </div>)}
             {tab === 'perf' && (!perf ? <Empty text="Run the performance test to time single-thread simulation and worker throughput, and to check that seeds and save/load reproduce matches exactly." /> :
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
