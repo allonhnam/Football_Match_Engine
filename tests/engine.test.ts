@@ -43,6 +43,18 @@ describe('determinism', () => {
     expect(fingerprint(replayed)).toBe(fingerprint(finished));
   });
 
+  it('keeps a change made just before saving: load gives the same match', () => {
+    for (const act of ['tactics', 'sub'] as const) {
+      const m = new E.Match(config(91, { control: 'home' }));
+      m.runUntil({ minute: 60 });
+      if (act === 'tactics') expect(m.setTactics(0, { pressing: 2 }).ok).toBe(true);
+      else expect(m.substitute(0, m.onPitch(0).find((q: any) => q.slot === 9).id, m.teams[0].sheet.bench[0]).ok).toBe(true);
+      const saved = m.save(); // saved at the same tick as the change
+      const finished = m.runToEnd();
+      expect(fingerprint(E.Match.load(saved).runToEnd()), act).toBe(fingerprint(finished));
+    }
+  });
+
   it('records the engine version in a save and flags a save from another version', () => {
     const m = new E.Match(config(5));
     m.runUntil({ minute: 10 });

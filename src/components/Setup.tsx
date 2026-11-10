@@ -74,13 +74,13 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
           <Card eyebrow="For game developers" title="Use the engine in code">
             <pre className="text-[11px] leading-[1.6] font-mono bg-bg border border-line rounded-md p-3 overflow-x-auto scroll-thin text-dim">{`import { Match, makeTeam, validateLineup } from '@/engine/engine';
 
-const home = makeTeam({ name: 'Arsenal', seed: 11 });
-const away = makeTeam({ name: 'Man City', seed: 22 });
+const home = makeTeam({ name: 'Northbridge FC', seed: 11 }); // generated squad,
+const away = makeTeam({ name: 'Harbour City', seed: 22 });   // or pass players
 validateLineup(home);          // → [] or typed errors
 
 const m = new Match({ home, away, seed: ${seed} });
 m.runUntil({ minute: 60 });    // or { event: 'goal' }
-m.substitute(0, outId, inId);  // applied at next stoppage
+m.substitute(0, outId, inId);  // player ids; next stoppage
 m.setTactics(0, { pressing: 2 });
 const save = m.save();         // inputs + command log
 const res = m.runToEnd();      // score, events, stats,

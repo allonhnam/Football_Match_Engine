@@ -93,7 +93,7 @@ The result:
 | `src/lib/` | Pitch drawing, the statistics shared by the calibration tools, league squads, the Web Worker batch runner |
 | `src/data/reference.json` | Real-football numbers built from the league data |
 | `src/data/teams.json` | The real clubs and squads, with derived ratings |
-| `tests/` | 97 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view, real squads and kits |
+| `tests/` | 98 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view, real squads and kits |
 | `tools/` | Headless play, data download, calibration, balance and attribute tools |
 
 ## Known limits

@@ -10,7 +10,7 @@
 | **Visualizer** | 4 routes: `/` matchday, `/tactics`, `/report`, `/lab` |
 | **Real clubs** | 96 clubs and 1,920 real players (2025/26), national flags, kit colours, crests, editable ratings |
 | **Tools** | 8 Node command-line tools in `tools/` |
-| **Tests** | 97 tests in 8 files, 40 of them on the rules of football; CI is set up for 4 jobs on Linux, Windows and macOS, but the account has no Actions minutes, so every change is checked locally |
+| **Tests** | 98 tests in 8 files, 40 of them on the rules of football; CI is set up for 4 jobs on Linux, Windows and macOS, but the account has no Actions minutes, so every change is checked locally |
 | **Realism** | 24 of 24 real-data checks pass, and 12 of 12 match-flow numbers sit in their published ranges |
 | **Speed** | about 250 ms per match on one core; about 18 matches a second in the browser's worker pool |
 
@@ -110,7 +110,7 @@ Each option gets one value: **chance it works × value of the new position − c
 | `PASS_ODDS` | The fitted pass-completion model |
 | `ENGINE_VERSION` | Saved matches record it; a save only replays exactly on the same version |
 | `carryOver` | What the game keeps after a match: minutes, condition, injuries, cards, suspensions |
-| `QUICK_TESTS` | Set to `1` to skip the 18 statistical tests (79 tests run in about 9 s) |
+| `QUICK_TESTS` | Set to `1` to skip the 18 statistical tests (80 tests run in about 9 s) |
 | `teams.json` | The 96 real clubs: strength, kit colours, crest id and 20 players each, ratings derived by `build-teams` |
 | `pickXI`, `matchKits` | The app's XI pick for real clubs (natural full-backs and wingers out wide) and its kit-clash rule |
 | `describeStatistical`, `itStatistical` | Test helpers in `tests/statistical.ts` that `QUICK_TESTS` skips |
@@ -193,10 +193,10 @@ Nobody publishes 1–20 ratings, so `npm run build-teams` derives them: each clu
 
 | Job | Tests |
 | :-- | :-- |
-| Ubuntu, Node 20 | all 97 |
-| Ubuntu, Node 22 | all 97 |
-| Windows, Node 20 | 79 quick tests (`QUICK_TESTS=1`) |
-| macOS, Node 22 | 79 quick tests (`QUICK_TESTS=1`) |
+| Ubuntu, Node 20 | all 98 |
+| Ubuntu, Node 22 | all 98 |
+| Windows, Node 20 | 80 quick tests (`QUICK_TESTS=1`) |
+| macOS, Node 22 | 80 quick tests (`QUICK_TESTS=1`) |
 
 Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on pull requests and pushes to `main`, skips changes that only touch `.md` files, and a new push cancels the old run. Since PR #14 the account has no Actions minutes, so the jobs stop before they start; every change since has been checked locally (typecheck, all tests, the build, and the calibration when the engine changed).
 
@@ -219,8 +219,8 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 ```bash
 npm install
 npm run dev                 # http://localhost:3000
-npm test                    # 97 tests
-QUICK_TESTS=1 npm test      # 79 quick tests
+npm test                    # 98 tests
+QUICK_TESTS=1 npm test      # 80 quick tests
 npm run simulate -- --seed 42
 npm run calibrate -- 3000   # compare with real football
 npm run balance -- 200      # tactic and formation win rates
