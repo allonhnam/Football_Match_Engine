@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
+import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 // Every attribute must change the thing it stands for. Both sides get the same squad at a neutral ground; one side
 // gets +6 in a single attribute and alternates home and away. `npm run attributes` runs the full-size version.
 const N = 60;
 /** Sums a [numerator, denominator] stat over n matches, for the boosted side and for its opponent. */
-function play(attr: string, stat: (r: any, side: number) => [number, number], n: number) {
+async function play(attr: string, stat: (r: any, side: number) => [number, number], n: number) {
   const mine = [0, 0], theirs = [0, 0];
   for (let i = 0; i < n; i++) {
+    await breathe();
     const side = i % 2, teams = [E.makeTeam({ name: 'H', seed: 700 + i }), E.makeTeam({ name: 'A', seed: 700 + i })];
     for (const p of teams[side].players) if (attr !== 'keeping' || p.role === 'GK') (p.attrs as any)[attr] = Math.min(20, (p.attrs as any)[attr] + 6);
     const r: any = E.simulateMatch({ home: teams[0], away: teams[1], seed: 40 + i, control: 'none', neutral: true });
@@ -39,49 +42,49 @@ function scoringRate({ shooting, keeping }: { shooting: number; keeping: number 
 }
 const events = (r: any, side: number, pred: (e: any) => boolean) => r.events.filter((e: any) => e.side === side && pred(e)).length;
 
-describe('player attributes', { timeout: 120_000 }, () => {
-  it('pace: faster players get more shots', () => {
-    const c = compare('pace', (r, s) => r.teamStats[s].shots);
+describeStatistical('player attributes', () => {
+  it('pace: faster players get more shots', async () => {
+    const c = await compare('pace', (r, s) => r.teamStats[s].shots);
     expect(c.mine).toBeGreaterThan(c.theirs * 1.2);
   });
-  it('stamina: fitter players are less tired at full time', () => {
-    const c = compare('stamina', (r, s) => { const l = r.playerStats.filter((p: any) => p.side === s && p.minutes >= 89 && p.role !== 'GK'); return l.reduce((a: number, p: any) => a + p.endCondition, 0) / l.length; });
+  it('stamina: fitter players are less tired at full time', async () => {
+    const c = await compare('stamina', (r, s) => { const l = r.playerStats.filter((p: any) => p.side === s && p.minutes >= 89 && p.role !== 'GK'); return l.reduce((a: number, p: any) => a + p.endCondition, 0) / l.length; });
     expect(c.mine).toBeGreaterThan(c.theirs + 0.03);
   });
-  it('passing: better passers complete more passes', () => {
-    const c = compare('passing', (r, s) => r.teamStats[s].passPct);
+  it('passing: better passers complete more passes', async () => {
+    const c = await compare('passing', (r, s) => r.teamStats[s].passPct);
     expect(c.mine).toBeGreaterThan(c.theirs + 2.5);
   });
-  it('vision: better vision means fewer offsides and better chances', () => {
-    const off = compare('vision', (r, s) => r.teamStats[s].offsides);
+  it('vision: better vision means fewer offsides and better chances', async () => {
+    const off = await compare('vision', (r, s) => r.teamStats[s].offsides);
     expect(off.mine).toBeLessThan(off.theirs * 0.7);
   });
-  it('dribbling: better dribblers carry the ball into the box more often', () => {
-    const c = compare('dribbling', (r, s) => r.teamStats[s].boxEntries);
+  it('dribbling: better dribblers carry the ball into the box more often', async () => {
+    const c = await compare('dribbling', (r, s) => r.teamStats[s].boxEntries);
     expect(c.mine).toBeGreaterThan(c.theirs * 1.3);
   });
   // Finishing and keeping are checked on the same chance taken thousands of times: whether a single shot goes in
   // is too random for a CI-sized sample of matches to show a 10% effect reliably. `npm run attributes` shows the
   // effect on results over 2,000 matches.
-  it('shooting: a better finisher scores more of the same chances', () => {
+  it('shooting: a better finisher scores more of the same chances', async () => {
     // better finishers hit the target more often and beat the keeper more often
     expect(scoringRate({ shooting: 16, keeping: 13 }).perAttempt).toBeGreaterThan(scoringRate({ shooting: 10, keeping: 13 }).perAttempt * 1.25);
   });
-  it('heading: better headers win more headers and get more headed attempts', () => {
+  it('heading: better headers win more headers and get more headed attempts', async () => {
     // headed goals are too rare (a few per hundred matches) to test directly; headed attempts follow won headers
-    const c = compare('heading', (r, s) => events(r, s, e => (e.type === 'shot' || e.type === 'goal') && e.header));
+    const c = await compare('heading', (r, s) => events(r, s, e => (e.type === 'shot' || e.type === 'goal') && e.header));
     expect(c.mine).toBeGreaterThan(c.theirs * 1.3);
   });
-  it('tackling: better tacklers win more of their challenges', () => {
+  it('tackling: better tacklers win more of their challenges', async () => {
     // (not the raw count: a side that wins the ball sooner defends less, so it attempts fewer tackles)
-    const c = compare('tackling', (r, s) => r.teamStats[s].tackles / Math.max(1, r.teamStats[s].challenges));
+    const c = await compare('tackling', (r, s) => r.teamStats[s].tackles / Math.max(1, r.teamStats[s].challenges));
     expect(c.mine).toBeGreaterThan(c.theirs * 1.1);
   });
-  it('positioning: well-positioned defenders keep the opponent out of the box', () => {
-    const c = compare('positioning', (r, s) => r.teamStats[1 - s].boxEntries);
+  it('positioning: well-positioned defenders keep the opponent out of the box', async () => {
+    const c = await compare('positioning', (r, s) => r.teamStats[1 - s].boxEntries);
     expect(c.mine).toBeLessThan(c.theirs * 0.93);
   });
-  it('keeping: a better keeper saves more of the same shots on target', () => {
+  it('keeping: a better keeper saves more of the same shots on target', async () => {
     expect(scoringRate({ shooting: 13, keeping: 16 }).perOnTarget).toBeLessThan(scoringRate({ shooting: 13, keeping: 10 }).perOnTarget * 0.85);
   });
 });

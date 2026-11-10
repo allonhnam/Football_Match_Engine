@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
+import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 const tie = (i: number, extra: object = {}) => E.simulateMatch({
   home: E.makeTeam({ name: 'H', seed: 2 * i + 1 }), away: E.makeTeam({ name: 'A', seed: 2 * i + 2 }),
@@ -23,9 +25,9 @@ function checkShootout(so: any) {
 }
 
 describe('knockout ties', () => {
-  it('always produces a winner, through extra time and penalties when needed', () => {
+  itStatistical('always produces a winner, through extra time and penalties when needed', async () => {
     let et = 0, pens = 0;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 60; i++) { await breathe();
       const r = tie(i);
       expect(r.winner === 0 || r.winner === 1).toBe(true);
       if (r.extraTime) et++;
@@ -34,22 +36,22 @@ describe('knockout ties', () => {
     }
     expect(et).toBeGreaterThan(5);
     expect(pens).toBeGreaterThan(2);
-  }, 120_000);
+  });
 
-  it('plays two 15-minute halves of extra time after a draw', () => {
+  it('plays two 15-minute halves of extra time after a draw', async () => {
     let i = 0, r: any;
-    do r = tie(i++); while (!r.extraTime);
+    do { await breathe(); r = tie(i++); } while (!r.extraTime);
     const kickoffs = r.events.filter((e: any) => e.type === 'kickoff');
     expect(kickoffs.length).toBe(4);
     expect(r.events.some((e: any) => e.type === 'extratime')).toBe(true);
     const lastClock = r.events[r.events.length - 1].t;
     expect(lastClock).toBeGreaterThanOrEqual(120 * 60);
     expect(lastClock).toBeLessThan(126 * 60);
-  }, 60_000);
+  });
 
-  it('decides a second leg on aggregate', () => {
+  itStatistical('decides a second leg on aggregate', async () => {
     // the away side won the first leg 2-0: the home side needs to win by two to force extra time
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 30; i++) { await breathe();
       const r = tie(i, { knockout: { aggregate: [0, 2] } });
       // extra time is played exactly when the aggregate is level after 90 minutes
       const at90 = [0, 1].map(side => r.events.filter((e: any) => e.type === 'goal' && e.side === side && e.half <= 2).length);
@@ -57,7 +59,7 @@ describe('knockout ties', () => {
       const agg = [r.score[0], r.score[1] + 2];
       if (!r.shootout) expect(r.winner).toBe(agg[0] > agg[1] ? 0 : 1);
     }
-  }, 60_000);
+  });
 
   it('allows a sixth substitute in extra time, but not before', () => {
     const m: any = new E.Match({ home: E.makeTeam({ name: 'H', seed: 1 }), away: E.makeTeam({ name: 'A', seed: 2 }), seed: 1, control: 'both', knockout: true });
@@ -67,20 +69,20 @@ describe('knockout ties', () => {
     expect(m._maxSubs()).toBe(5);
   });
 
-  it('leaves league matches unchanged: a draw stays a draw', () => {
-    for (let i = 0; i < 20; i++) {
+  it('leaves league matches unchanged: a draw stays a draw', async () => {
+    for (let i = 0; i < 20; i++) { await breathe();
       const r: any = E.simulateMatch({ home: E.makeTeam({ name: 'H', seed: 2 * i + 1 }), away: E.makeTeam({ name: 'A', seed: 2 * i + 2 }), seed: i, control: 'none' });
       expect(r.extraTime).toBe(false);
       expect(r.shootout).toBe(null);
       if (r.score[0] === r.score[1]) expect(r.winner).toBe(null);
     }
-  }, 60_000);
+  });
 
-  it('replays a knockout tie exactly from its saved inputs', () => {
+  it('replays a knockout tie exactly from its saved inputs', async () => {
     let i = 0, r: any;
-    do r = tie(i++); while (!r.shootout);
+    do { await breathe(); r = tie(i++); } while (!r.shootout);
     const cfg = { home: E.makeTeam({ name: 'H', seed: 2 * (i - 1) + 1 }), away: E.makeTeam({ name: 'A', seed: 2 * (i - 1) + 2 }), seed: i - 1, control: 'none' as const, knockout: true };
     const again: any = E.Match.replay(cfg, []).result();
     expect(again.shootout).toEqual(r.shootout);
-  }, 120_000);
+  });
 });

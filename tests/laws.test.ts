@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
+import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 const L = 105, W = 68;
 const newMatch = (seed = 3) => {
@@ -15,10 +17,10 @@ const lastEvent = (m: any, type: string) => m.events.filter((e: any) => e.type =
 const intoBox = (m: any, side: number) => { const d = m.dir(side); m.ball.x = d > 0 ? L - 8 : 8; m.ball.y = W / 2; };
 
 describe('laws of the game', () => {
-  it('takes every kick-off after a goal with all players in their own half (Law 8)', () => {
+  it('takes every kick-off after a goal with all players in their own half (Law 8)', async () => {
     let kickoffs = 0;
     const offenders: string[] = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 12; i++) { await breathe();
       const { home, away } = leagueTeams(i);
       const m: any = new E.Match({ home, away, seed: i + 1, control: 'none', officials: false });
       let afterGoal = false, prev: any = null;
@@ -36,7 +38,7 @@ describe('laws of the game', () => {
     }
     expect(kickoffs).toBeGreaterThan(10);
     expect(offenders).toEqual([]);
-  }, 60_000);
+  });
 
   it('never gives two team-mates the same surname', () => {
     for (let seed = 1; seed <= 200; seed++) {
@@ -132,9 +134,9 @@ describe('laws of the game', () => {
     expect(m.onPitch(1).some((q: any) => q.slot === 0)).toBe(true);
   });
 
-  it('plays advantage and still shows the card at the next stoppage', () => {
+  it('plays advantage and still shows the card at the next stoppage', async () => {
     let advantages = 0, recalled = 0;
-    for (let s = 1; s <= 12; s++) {
+    for (let s = 1; s <= 12; s++) { await breathe();
       const { home, away } = leagueTeams(s);
       const r: any = E.simulateMatch({ home, away, seed: s, control: 'none' });
       advantages += r.events.filter((e: any) => e.type === 'advantage' && !/^No advantage/.test(e.text)).length;
@@ -143,7 +145,7 @@ describe('laws of the game', () => {
     expect(advantages).toBeGreaterThan(12);
     expect(recalled).toBeGreaterThan(0);
     expect(recalled).toBeLessThan(advantages);
-  }, 60_000);
+  });
 
   // A last-man foul 20 m out by `slot 2` of the away side on the home centre-forward, with the home side keeping the
   // ball. `rolls` are the referee's random draws in order (card decisions, injury, advantage).
@@ -336,11 +338,107 @@ describe('laws of the game', () => {
   });
 });
 
-describe('tactics', () => {
+// Offside is judged when a team-mate plays the ball. In open play the engine adds a small random error near the line
+// (a run or a pass a fraction too early or late, larger for a passer with poor vision). These tests fix the random
+// draw at its midpoint, so that error is zero and they check the rule itself.
+describe('offside (Law 11)', () => {
+  /** Line up an attack by side 0. Positions are metres from the goal side 0 defends (105 = the goal it attacks). */
+  function lineUp(o: { opp: (q: any, n: number) => number; passer: number; ball?: number; recv: number }) {
+    const m = newMatch();
+    const d = m.dir(0), X = (fx: number) => (d > 0 ? fx : L - fx);
+    m.rng = () => 0.5;
+    let n = 0;
+    for (const q of m.players) if (q.onPitch && q.side === 1) { q.x = X(o.opp(q, q.slot === 0 ? -1 : n++)); q.y = 10 + (n * 5) % 50; }
+    const passer = idx(m, 0, q => q.slot !== 0), recv = idx(m, 0, (q: any) => q.slot !== 0 && m.players.indexOf(q) !== passer);
+    const p = m.players[passer], r = m.players[recv];
+    p.x = X(o.passer); p.y = 30; r.x = X(o.recv); r.y = 40;
+    m.ball.x = X(o.ball ?? o.passer); m.ball.y = 30; m.ball.owner = passer;
+    const before = m.teams[0].stats.offsides;
+    const flagged = () => m.teams[0].stats.offsides > before;
+    return { m, passer, recv, r, X, flagged };
+  }
+  /** A back line at 80 m and the keeper on his line. */
+  const backLine = (q: any, n: number) => (n < 0 ? 103 : 80);
+
+  it('flags a player beyond the second-last opponent and gives an indirect free kick where he stood', () => {
+    const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 88 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(true);
+    expect(lastEvent(m, 'offside').player).toBe(r.id);
+    expect(m.restart.type).toBe('freekick');
+    expect(m.restart.side).toBe(1);
+    expect(m.restart.direct).toBe(false);
+    expect(Math.abs(m.restart.x - r.x)).toBeLessThan(0.01);
+  });
+
+  it('does not flag a player level with the second-last opponent', () => {
+    const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 80 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(false);
+    expect(m.ball.flight && m.ball.flight.kind).toBe('pass');
+  });
+
+  it('counts the keeper: with the keeper out, one defender behind the attacker is not enough', () => {
+    // one defender back on the line at 100 m, the keeper out at 70 m, everyone else at 60 m: the second-last
+    // opponent is the keeper, so an attacker at 85 m is offside even with a defender behind him
+    const { m, passer, recv, r, flagged } = lineUp({ opp: (q, n) => (n < 0 ? 70 : n === 0 ? 100 : 60), passer: 55, recv: 85 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(true);
+  });
+
+  it('never flags a player in his own half', () => {
+    // a very high line at 40 m: the attacker at 50 m is beyond it but still in his own half
+    const { m, passer, recv, r, flagged } = lineUp({ opp: (q, n) => (n < 0 ? 60 : 40), passer: 30, recv: 50 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(false);
+  });
+
+  it('never flags a player behind the ball', () => {
+    // the passer is already beyond the line at 90 m and lays it back to a team-mate at 85 m
+    const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 90, recv: 85 });
+    m._pass(passer, recv, r.x, r.y);
+    expect(flagged()).toBe(false);
+  });
+
+  it('has no offside from a throw-in, a goal kick or a corner', () => {
+    for (const rt of ['throwin', 'goalkick', 'corner']) {
+      const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 88 });
+      m.restartType = rt;
+      m._pass(passer, recv, r.x, r.y);
+      expect(flagged(), rt).toBe(false);
+    }
+  });
+
+  /** One attacker alone in the box at 95 m, the rest of side 0 well away from it. */
+  function setPiece() {
+    const s = lineUp({ opp: backLine, passer: 75, recv: 95 });
+    const { m, passer, recv, X } = s;
+    m.players.forEach((q: any, k: number) => { if (q.onPitch && q.side === 0 && k !== passer && k !== recv && q.slot !== 0) { q.x = X(40); q.y = 10; } });
+    m.players[recv].y = W / 2;
+    return s;
+  }
+
+  it('can flag a player beyond the line from a free kick into the box', () => {
+    const { m, passer, r, flagged } = setPiece();
+    m._cross(passer, false, true);
+    expect(flagged()).toBe(true);
+    expect(lastEvent(m, 'offside').player).toBe(r.id);
+    expect(m.restart.direct).toBe(false);
+  });
+
+  it('never flags a player from a corner', () => {
+    const { m, passer, flagged } = setPiece();
+    m._cross(passer, false, false);
+    expect(flagged()).toBe(false);
+  });
+});
+
+describeStatistical('tactics', () => {
   // Same squads and seeds, one setting changed for the home side: every option has to show up somewhere.
-  const play = (tactics: object, n = 24) => {
+  const play = async (tactics: object, n = 24) => {
     const sum: Record<string, number> = { shots: 0, fouls: 0, passPct: 0, cond: 0 };
     for (let i = 0; i < n; i++) {
+      await breathe();
       const { home, away } = leagueTeams(i);
       home.tactics = { ...home.tactics, ...tactics };
       const r: any = E.simulateMatch({ home, away, seed: 300 + i, control: 'none', neutral: true });
@@ -352,15 +450,15 @@ describe('tactics', () => {
     return sum;
   };
 
-  it('has no dead options: each setting changes how the team plays', () => {
-    expect(play({ mentality: 2 }).shots).toBeGreaterThan(play({ mentality: 0 }).shots + 3);
-    const hi = play({ pressing: 2 }), lo = play({ pressing: 0 });
+  it('has no dead options: each setting changes how the team plays', async () => {
+    expect((await play({ mentality: 2 })).shots).toBeGreaterThan((await play({ mentality: 0 })).shots + 3);
+    const hi = await play({ pressing: 2 }), lo = await play({ pressing: 0 });
     expect(hi.fouls).toBeGreaterThan(lo.fouls + 5);
     expect(hi.cond).toBeLessThan(lo.cond - 0.05);
-    expect(play({ passing: 0 }).passPct).toBeGreaterThan(play({ passing: 2 }).passPct + 4);
-    expect(play({ tempo: 0 }).passPct).toBeGreaterThan(play({ tempo: 2 }).passPct + 2);
-    expect(play({ line: 2 }).shots).toBeGreaterThan(play({ line: 0 }).shots + 2);
-  }, 120_000);
+    expect((await play({ passing: 0 })).passPct).toBeGreaterThan((await play({ passing: 2 })).passPct + 4);
+    expect((await play({ tempo: 0 })).passPct).toBeGreaterThan((await play({ tempo: 2 })).passPct + 2);
+    expect((await play({ line: 2 })).shots).toBeGreaterThan((await play({ line: 0 })).shots + 2);
+  });
 
   it('makes styles counter each other', () => {
     const e = E as any;

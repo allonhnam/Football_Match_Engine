@@ -3,6 +3,8 @@ import reference from '@/data/reference.json';
 import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
 import { COUNT_METRICS, RATE_METRICS, HALF_METRICS, compareRate, compareHalf, compareScorelines, lineFromEngine } from '@/lib/metrics';
+import { breathe } from './breathe';
+import { describeStatistical, itStatistical } from './statistical';
 
 describe('league squads', () => {
   it('are repeatable and different from match to match', () => {
@@ -26,12 +28,12 @@ describe('league squads', () => {
   });
 });
 
-describe('agreement with real league data', () => {
+describeStatistical('agreement with real league data', () => {
   // A regression guard: if a change to the engine drags a headline statistic away from real football, this fails.
   // 150 matches keeps the test quick; the tolerance widens with the batch's own noise.
-  it('keeps the headline statistics within tolerance of 8,900 real matches', () => {
+  it('keeps the headline statistics within tolerance of 8,900 real matches', async () => {
     const lines = [];
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 150; i++) { await breathe();
       const { home, away } = leagueTeams(i);
       const r: any = E.simulateMatch({ home, away, seed: i + 1, control: 'none' });
       // The half-time score is what the first-half goal events add up to.
@@ -63,5 +65,5 @@ describe('agreement with real league data', () => {
     const sl = compareScorelines(reference.scorelines.hist, lines);
     if (!sl.ok) failures.push(`scorelines: shape gap ${sl.tv.toFixed(3)} (allowed ${sl.tol.toFixed(3)})`);
     expect(failures).toEqual([]);
-  }, 90_000);
+  });
 });
