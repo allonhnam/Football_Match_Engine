@@ -2,6 +2,8 @@
 
 A football match engine for a management game. It simulates a full 11 v 11 match with added time (and extra time and penalties in cup ties), returns the result, an event log, team and player statistics and what the game needs to carry on. It comes with a library API, a 2D visualizer (Next.js) with the real clubs and players of the five top European leagues, and command-line tools that check its numbers against 8,907 real matches.
 
+**Live demo:** https://mainline-markets-interview.vercel.app (deployed from `main` on Vercel)
+
 Author: Hyun
 
 ## Build and run
