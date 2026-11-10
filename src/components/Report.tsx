@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
 import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 import { StatRows } from '@/components/LiveParts';
 
@@ -80,7 +80,7 @@ export function Report({ report, onReplay, onBack }: any) {
           <Card eyebrow="Click a column to sort" title="Player ratings">
             <div className="overflow-x-auto scroll-thin"><table className="w-full text-[12px] tnum"><thead><tr className="text-left border-b border-line">{th('name', 'Player')}{th('minutes', 'Min', 'text-right')}{th('rating', 'Rtg', 'text-right')}{th('goals', 'G', 'text-right')}{th('assists', 'A', 'text-right')}{th('xg', 'xG', 'text-right')}{th('passPct', 'Pass%', 'text-right')}{th('tackles', 'Tkl', 'text-right')}{th('distKm', 'km', 'text-right')}{th('endCondition', 'Cond', 'text-right')}</tr></thead>
               <tbody>{rows.map(p => <tr key={p.id} className="border-b border-line/60">
-                <td className="py-1.5 px-1.5 whitespace-nowrap"><span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: teams[p.side].color }} /><span className="font-mono text-dim mr-1">{p.num}</span>{p.name}{p.yellow > 0 && <span className="ml-1"><CardIcon n={p.yellow} /></span>}{p.red && <span className="ml-1"><CardIcon red /></span>}{p.injury && <span className="text-bad ml-1">+</span>}</td>
+                <td className="py-1.5 px-1.5 whitespace-nowrap"><span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: teams[p.side].color }} /><span className="font-mono text-dim mr-1">{p.num}</span>{(() => { const sp = teams[p.side].players.find(q => q.id === p.id); return sp && sp.flag ? <span className="inline-block align-middle mr-1.5"><Flag code={sp.flag} title={sp.nation} h={10} /></span> : null; })()}{p.name}{p.yellow > 0 && <span className="ml-1"><CardIcon n={p.yellow} /></span>}{p.red && <span className="ml-1"><CardIcon red /></span>}{p.injury && <span className="text-bad ml-1">+</span>}</td>
                 <td className="text-right px-1.5">{p.minutes}</td><td className="text-right px-1.5"><span className={`inline-block min-w-[34px] text-center rounded-[3px] px-1 font-bold ${p.rating >= 7.5 ? 'bg-accent text-accentink' : p.rating < 6 ? 'bg-bad/15 text-bad' : 'bg-surface2'}`}>{fx(p.rating, 1)}</span></td>
                 <td className="text-right px-1.5">{p.goals || ''}</td><td className="text-right px-1.5">{p.assists || ''}</td><td className="text-right px-1.5">{p.xg ? fx(p.xg, 2) : ''}</td><td className="text-right px-1.5">{p.passPct ?? ''}</td><td className="text-right px-1.5">{p.tackles || ''}</td><td className="text-right px-1.5">{fx(p.distKm, 1)}</td><td className="text-right px-1.5">{pct(p.endCondition)}</td>
               </tr>)}</tbody></table></div>
