@@ -86,7 +86,7 @@ const TACTIC_EDGE = {
   crossConcede: [1.15, 1, 0.9],
 };
 // Formation trade-offs on the same scale: [chances created, chances conceded]
-const FORMATION_EDGE = { '4-3-3': [1, 1], '4-4-2': [1.05, 0.95], '4-2-3-1': [1.1, 1], '3-5-2': [0.96, 1], '5-3-2': [1.02, 0.94] };
+const FORMATION_EDGE = { '4-3-3': [1, 1], '4-4-2': [1.03, 0.98], '4-2-3-1': [1.1, 1], '3-5-2': [0.96, 1], '5-3-2': [1.02, 0.94] };
 // Rock-paper-scissors between styles: [our tactic, option, their tactic, option, multiplier on our chances]
 const MATCHUPS = [
   ['passing', 2, 'line', 2, 1.18, 'direct balls in behind a high line'],
@@ -114,7 +114,7 @@ const DEFAULT_TACTICS = { mentality: 1, pressing: 1, line: 1, width: 1, tempo: 1
 // Seconds from the ball going dead to the restart: [minimum, random extra]. Roughly the averages in top leagues.
 const RESTART_TIME = { throwin: [9, 11], goalkick: [22, 18], corner: [28, 20], freekick: [24, 28], penalty: [50, 40], dropball: [10, 10] };
 const ATTRS = ['pace', 'stamina', 'passing', 'vision', 'dribbling', 'shooting', 'heading', 'tackling', 'positioning', 'keeping'];
-const ENGINE_VERSION = '0.6.0';
+const ENGINE_VERSION = '0.6.1';
 const KEY_EVENTS = { shootoutkick: 1, extratime: 1, goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
 
 // ---------- RNG (mulberry32, serialisable) ----------

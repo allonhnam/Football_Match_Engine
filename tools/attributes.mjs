@@ -25,11 +25,14 @@ const MECHANISM = {
 };
 const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 
-function boosted(team, attr) {
-  for (const p of team.players) for (const k of ATTRS) if (attr === 'all' || k === attr) {
+// The same squad on both sides, so players match one-for-one. Where +3 would pass the cap of 20 (most keepers start
+// at 18-20), the rest of the gap comes off the opponent's copy of that player, so every comparison is a real 3 points.
+function boosted(team, other, attr) {
+  team.players.forEach((p, i) => { for (const k of ATTRS) if (attr === 'all' || k === attr) {
     if (k === 'keeping' && p.role !== 'GK') continue; // outfield keeping is meaningless
-    p.attrs[k] = Math.min(20, p.attrs[k] + BOOST);
-  }
+    const up = Math.min(20, p.attrs[k] + BOOST) - p.attrs[k];
+    p.attrs[k] += up; other.players[i].attrs[k] -= BOOST - up;
+  } });
   return team;
 }
 
@@ -38,7 +41,7 @@ function runJobs(jobs) {
     // the same squad on both sides; the boosted side alternates home and away so venue cannot matter
     const seed = 500 + i, side = i % 2;
     const teams = [makeTeam({ name: 'H', seed, strength: 12 }), makeTeam({ name: 'A', seed, strength: 12 })];
-    if (attr !== 'none') boosted(teams[side], attr);
+    if (attr !== 'none') boosted(teams[side], teams[1 - side], attr);
     const r = simulateMatch({ home: teams[0], away: teams[1], seed: 9000 + i, control: 'none', neutral: true });
     const m = MECHANISM[attr === 'none' ? 'all' : attr];
     return { attr, gf: r.score[side], ga: r.score[1 - side], mine: m[1](r, side), theirs: m[1](r, 1 - side) };

@@ -147,7 +147,7 @@
 
   <!-- ================= ENGINE ================= -->
   <g filter="url(#sh)"><rect x="370" y="480" width="590" height="290" rx="22" fill="#EEE8FD" stroke="#A893E0" stroke-width="2.5"/></g>
-  <text class="h" x="394" y="510" fill="#7559C4">MATCH ENGINE · v0.6.0</text>
+  <text class="h" x="394" y="510" fill="#7559C4">MATCH ENGINE · v0.6.1</text>
   <text class="hs" x="604" y="510">src/engine/engine.js · ~1,820 lines · no dependencies · engine.d.ts</text>
 
   <!-- API hexagon band -->

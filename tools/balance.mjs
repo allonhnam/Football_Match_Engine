@@ -49,7 +49,8 @@ async function main() {
   console.log(`${jobs.length} matches in ${((performance.now() - t0) / 1000).toFixed(1)} s (${per} per option)\n`);
 
   console.log('Group'.padEnd(11) + 'Option'.padEnd(30) + 'Win'.padStart(5) + 'Draw'.padStart(6) + 'Loss'.padStart(6) + '   GF    GA    xG  Shots Poss Pass%  Fouls  Cond   Note');
-  let flagged = 0, group = null;
+  let flagged = 0, group = null, balanced = null;
+  const optionWins = [];
   CASES.forEach((cs, c) => {
     if (group !== null && cs.group !== group) console.log('');
     group = cs.group;
@@ -59,13 +60,16 @@ async function main() {
     // With a few hundred matches a win rate has a standard error of about 3 points, so flag only clear outliers.
     const note = cs.group === 'match-up' ? '' : w > 0.5 ? 'too strong' : w < 0.27 ? 'too weak' : '';
     if (note) flagged++;
+    if (cs.group !== 'match-up') optionWins.push(w);
+    if (cs.group === 'formation' && cs.label === '4-3-3') balanced = w; // every setting in the middle: the balanced side
     console.log(
       cs.group.padEnd(11) + cs.label.padEnd(30) + `${(100 * w).toFixed(0)}%`.padStart(5) + `${(100 * d).toFixed(0)}%`.padStart(6) + `${(100 * (1 - w - d)).toFixed(0)}%`.padStart(6) +
       avg('gf').toFixed(2).padStart(7) + avg('ga').toFixed(2).padStart(6) + avg('xg').toFixed(2).padStart(6) + avg('shots').toFixed(1).padStart(7) + avg('poss').toFixed(0).padStart(5) +
       avg('pass').toFixed(0).padStart(6) + avg('fouls').toFixed(1).padStart(7) + avg('cond').toFixed(2).padStart(6) + (note ? '   ' + note : ''),
     );
   });
-  console.log('\nA balanced side wins about 37% against another balanced side (the rest are draws and losses).');
+  const pctOf = v => `${(100 * v).toFixed(0)}%`;
+  console.log(`\nA balanced side wins ${pctOf(balanced)} against another balanced side (the rest are draws and losses); every option wins between ${pctOf(Math.min(...optionWins))} and ${pctOf(Math.max(...optionWins))}.`);
   console.log(flagged ? `${flagged} option(s) look out of balance (win rate above 50% or below 27% against a balanced side).` : 'No tactic or formation is clearly dominant or useless.');
 }
 
