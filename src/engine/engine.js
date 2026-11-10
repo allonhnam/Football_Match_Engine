@@ -1801,8 +1801,14 @@ function suspensionFor(reason) {
 }
 
 // ---------- save / load / replay ----------
-P.save = function () { return JSON.stringify({ config: this.config, commands: this.commands, tick: this.tick }); };
-Match.load = function (s) { const o = JSON.parse(s); return Match.replay(o.config, o.commands, o.tick); };
+// A save records the engine version: the same inputs replay exactly only on the same version.
+P.save = function () { return JSON.stringify({ engineVersion: ENGINE_VERSION, config: this.config, commands: this.commands, tick: this.tick }); };
+Match.load = function (s) {
+  const o = JSON.parse(s), m = Match.replay(o.config, o.commands, o.tick);
+  // a save from another engine version still loads (never throws), but says it will not replay the same match
+  m.savedEngineVersion = o.engineVersion || null; m.replayExact = o.engineVersion === ENGINE_VERSION;
+  return m;
+};
 Match.replay = function (config, commands, untilTick) {
   const m = new Match(config); if (m.errors) return m;
   const cmds = (commands || []).slice().sort((a, b) => a.tick - b.tick);

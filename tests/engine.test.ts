@@ -42,6 +42,19 @@ describe('determinism', () => {
     expect(fingerprint(reloaded)).toBe(fingerprint(finished));
     expect(fingerprint(replayed)).toBe(fingerprint(finished));
   });
+
+  it('records the engine version in a save and flags a save from another version', () => {
+    const m = new E.Match(config(5));
+    m.runUntil({ minute: 10 });
+    const saved = JSON.parse(m.save());
+    expect(saved.engineVersion).toBe(E.ENGINE_VERSION);
+    expect(E.Match.load(JSON.stringify(saved)).replayExact).toBe(true);
+    const old = E.Match.load(JSON.stringify({ ...saved, engineVersion: '0.5.0' }));
+    expect(old.replayExact).toBe(false); // still loads, never throws
+    expect(old.savedEngineVersion).toBe('0.5.0');
+    const { engineVersion, ...older } = saved;
+    expect(E.Match.load(JSON.stringify(older)).savedEngineVersion).toBe(null);
+  });
 });
 
 describe('lineup validation', () => {

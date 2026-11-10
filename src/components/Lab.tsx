@@ -122,7 +122,7 @@ function Scorelines({ s }: any) {
   );
 }
 export function Lab() {
-  const [tab, setTab] = useState('realism'), [n, setN] = useState(500), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
+  const [tab, setTab] = useState('realism'), [n, setN] = useState(1000), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
   const teamsFor = (i, g) => { const sw = i % 2; return { home: E.makeTeam({ name: 'Lab Home', seed: sw ? 202 : 101, strength: 12 + Math.ceil(g / 2) }), away: E.makeTeam({ name: 'Lab Away', seed: sw ? 101 : 202, strength: 12 - Math.floor(g / 2) }) }; };
   const hash = r => { let h = 0; const s = JSON.stringify([r.score, r.events.map(e => [e.tick, e.type, e.player])]); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(16).toUpperCase(); };
@@ -160,7 +160,7 @@ export function Lab() {
         <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)] items-start">
           <div className="rounded-lg border border-line bg-surface p-4 flex flex-col gap-5">
             <div className="eyebrow">Run configuration</div>
-            {tab !== 'perf' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Matches</div><Seg id="lab-n" value={[200, 500, 2000].indexOf(n)} options={['200', '500', '2,000']} onChange={i => setN([200, 500, 2000][i])} size="sm" /></div>}
+            {tab !== 'perf' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Matches</div><Seg id="lab-n" value={[200, 1000, 2000].indexOf(n)} options={['200', '1,000', '2,000']} onChange={i => setN([200, 1000, 2000][i])} size="sm" /></div>}
             {tab !== 'perf' && <div><div className="flex justify-between"><span className="eyebrow !text-[9.5px]">Squad strength gap</span><span className="font-mono text-[11px]">{gap === 0 ? 'Equal' : `Home +${gap}`}</span></div><input id="lab-gap" type="range" min="0" max="6" value={gap} onChange={e => setGap(+e.target.value)} className="w-full mt-1.5" /></div>}
             {tab === 'balance' && <div><div className="eyebrow !text-[9.5px] mb-1.5">Tactic to test</div><select id="lab-dim" value={dim} onChange={e => setDim(e.target.value)} className="w-full h-9 rounded-md border border-line bg-bg px-2 text-[12.5px]">{E.TACTIC_KEYS.map(k => <option key={k} value={k}>{TACTIC_META[k].label}</option>)}</select></div>}
             <Btn kind="primary" className="w-full h-10" disabled={prog > 0} onClick={run}>{prog > 0 ? 'Running…' : `Run ${tab === 'perf' ? 'performance' : tab} test`}</Btn>
@@ -168,7 +168,7 @@ export function Lab() {
             {tab === 'realism' && res && <div className="text-[11.5px] text-dim">Goals by 15-minute block<div className="flex items-end gap-1 h-16 mt-2">{res.byBlock.map((v, i) => <div key={i} className="flex-1 bg-accent/70 rounded-t-[2px]" style={{ height: `${v / 0.3 * 100}%` }} title={pct(v)} />)}</div><div className="flex justify-between font-mono text-[9.5px] mt-1"><span>0'</span><span>45'</span><span>90'</span></div><div className="mt-3">Injuries {fx(res.inj, 2)} per match · {res.n} matches</div></div>}
           </div>
           <div className="min-w-0">
-            {tab === 'realism' && (!res ? <Empty text="Run the realism test to simulate a batch of matches and compare every number with real football." /> :
+            {tab === 'realism' && (!res ? <Empty text="Run the realism test to simulate a batch of matches and compare every number with real football. Small batches are noisy: 1,000 matches or more give a fair verdict (the command-line check uses 3,000)." /> :
               <div className="flex flex-col gap-3">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{res.tiles.map(t => <Tile key={t.k} t={t} />)}</div>
                 <Scorelines s={res.scorelines} />

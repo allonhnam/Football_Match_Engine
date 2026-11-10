@@ -67,8 +67,12 @@ const sum = a => a.reduce((s, v) => s + v, 0);
 const mean = a => (a.length ? sum(a) / a.length : 0);
 
 function halfValue(m, lines) {
-  const use = lines.filter(m.when);
-  return { value: sum(use.map(m.num)) / (sum(use.map(m.den)) || 1), n: use.length, den: sum(use.map(m.den)) };
+  const use = lines.filter(m.when), den = sum(use.map(m.den)), value = sum(use.map(m.num)) / (den || 1);
+  // Standard error of a ratio, counted match by match: goals cluster within matches (an open game has more of them
+  // in both halves), so treating every goal as an independent coin flip would claim too much precision for a small
+  // batch. For a per-match rate (den 1 each) this is the usual binomial error.
+  const se = den ? Math.sqrt(sum(use.map(l => (m.num(l) - value * m.den(l)) ** 2))) / den : 0;
+  return { value, n: use.length, den, se };
 }
 const sd = a => { const m = mean(a); return a.length > 1 ? Math.sqrt(sum(a.map(v => (v - m) * (v - m))) / (a.length - 1)) : 0; };
 const quantile = (sorted, q) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : 0);
@@ -136,8 +140,8 @@ export function compareRatio(realRatio, value) {
  * 2.5 standard errors of its own sample (a binomial error over the matches, or goals, it is a share of).
  */
 export function compareHalf(metric, realValue, lines) {
-  const { value, n, den } = halfValue(metric, lines);
-  const tol = Math.max(0.025, 2.5 * Math.sqrt((value * (1 - value)) / (den || 1)));
+  const { value, n, se } = halfValue(metric, lines);
+  const tol = Math.max(0.025, 2.5 * se);
   return { mean: value, tol, ok: Math.abs(value - realValue) <= tol, n };
 }
 
