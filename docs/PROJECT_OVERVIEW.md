@@ -2,7 +2,7 @@
 
 > **In short:** a football match engine for a management game. It plays a full 11 v 11 match on a 2D pitch in 0.25-second steps, follows the IFAB Laws of the Game 2026/27, and is tuned so its numbers match 8,907 real top-flight matches. A Next.js visualizer shows the match live, and command-line tools and tests check the engine.
 >
-> Version **0.6.0** · `main` · author Hyun · 9 November 2026
+> Version **0.6.1** · `main` · author Hyun · 9 November 2026
 
 | Part | At a glance |
 | :-- | :-- |
@@ -137,6 +137,7 @@ Each option gets one value: **chance it works × value of the new position − c
 | 14 | CI cut from 6 jobs to 4, with quick tests on Windows and macOS (PR #11) |
 | 15 | Overview and diagrams brought up to engine 0.6.0 (PR #12) |
 | 16 | Offside tests: 8 cases for Law 11, so every major law has a direct test (PR #13) |
+| 17 | 4-4-2 bonus trimmed (42% wins down to 41%, in line with the other formations); the attribute tool measures a real 3-point gap for keepers near the cap of 20; engine 0.6.1 |
 
 ### How close it is to real football (3,000 simulated matches)
 

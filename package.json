@@ -1,6 +1,6 @@
 {
   "name": "match-engine",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "description": "Football match engine for a management game, with a Next.js front end",
