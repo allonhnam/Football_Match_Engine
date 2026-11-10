@@ -19,10 +19,10 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
     return (
       <div key={side} className="flex-1 min-w-0 rounded-lg border border-line bg-surface p-4 flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <label className="relative cursor-pointer" title="Kit colour"><Badge color={t.color} label={t.short} size={48} /><input id={`kit-${side}`} type="color" value={t.color} onChange={e => upd(side, { color: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" aria-label={`${t.name} kit colour`} /></label>
+          <label className="relative cursor-pointer" title="Kit colour"><Badge color={t.color} label={t.short} size={48} crest={t.crest} /><input id={`kit-${side}`} type="color" value={t.color} onChange={e => upd(side, { color: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" aria-label={`${t.name} kit colour`} /></label>
           <div className="min-w-0 flex-1">
             <div className="eyebrow">{side === 'home' ? 'Home' : 'Away'} · {t.formation}</div>
-            <input id={`name-${side}`} value={t.name} onChange={e => upd(side, { league: undefined, name: e.target.value || ' ', short: (e.target.value || 'XXX').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() })} className="w-full bg-transparent font-display font-bold uppercase text-[26px] leading-tight outline-none border-b border-transparent focus:border-line" />
+            <input id={`name-${side}`} value={t.name} onChange={e => upd(side, { league: undefined, crest: undefined, name: e.target.value || ' ', short: (e.target.value || 'XXX').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() })} className="w-full bg-transparent font-display font-bold uppercase text-[26px] leading-tight outline-none border-b border-transparent focus:border-line" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -64,7 +64,7 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
             {history.length === 0 ? <p className="text-dim text-[12.5px] py-6 text-center">No matches yet. Every match you play or simulate appears here with its seed and command log, ready to replay exactly.</p> :
               <ul className="divide-y divide-line">{history.map(h => (
                 <li key={h.id} className="flex items-center gap-3 py-2.5">
-                  <Badge color={h.colors[0]} label={h.shorts[0]} size={26} /><span className="font-display font-bold text-[20px] tnum w-12 text-center">{h.score[0]}–{h.score[1]}</span><Badge color={h.colors[1]} label={h.shorts[1]} size={26} />
+                  <Badge color={h.colors[0]} label={h.shorts[0]} size={26} crest={h.crests?.[0]} /><span className="font-display font-bold text-[20px] tnum w-12 text-center">{h.score[0]}–{h.score[1]}</span><Badge color={h.colors[1]} label={h.shorts[1]} size={26} crest={h.crests?.[1]} />
                   <div className="min-w-0 flex-1"><div className="truncate text-[12.5px]">{h.names[0]} v {h.names[1]}</div><div className="text-dim font-mono text-[10.5px]">SEED {hexSeed(h.config.seed)} · {h.commands.length} command{h.commands.length === 1 ? '' : 's'} · {new Date(h.date).toLocaleString()}</div></div>
                   {h.engineVersion === E.ENGINE_VERSION
                     ? <Btn size="sm" onClick={() => onReplay(h)}>Replay</Btn>

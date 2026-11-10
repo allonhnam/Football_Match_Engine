@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
+import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, crestUrl } from '@/lib/util';
 
 export const I = {
   play: <path d="M7 5l12 7-12 7z" fill="currentColor" />, pause: <g fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></g>,
@@ -50,7 +50,15 @@ export function Card({ title, eyebrow, right, children, className = '', pad = 'p
     </section>
   );
 }
-export function Badge({ color, label, size = 36 }: any) { return <span className="inline-grid place-items-center rounded-full font-display font-bold shrink-0 border-2 border-black/30" style={{ width: size, height: size, background: color, color: textOn(color), fontSize: size * 0.34, letterSpacing: '.02em' }}>{label}</span>; }
+// A club badge: the real crest when the club has one (loaded from transfermarkt at runtime), otherwise, or when the
+// image cannot load (offline), a disc in the kit colour with the club's short name.
+export function Badge({ color, label, size = 36, crest }: any) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [crest]);
+  if (crest && !failed) return <img src={crestUrl(crest)} alt={label} title={label} width={size} height={size} referrerPolicy="no-referrer" onError={() => setFailed(true)} className="shrink-0 object-contain" style={{ width: size, height: size }} />;
+  return <ColourBadge color={color} label={label} size={size} />;
+}
+function ColourBadge({ color, label, size = 36 }: any) { return <span className="inline-grid place-items-center rounded-full font-display font-bold shrink-0 border-2 border-black/30" style={{ width: size, height: size, background: color, color: textOn(color), fontSize: size * 0.34, letterSpacing: '.02em' }}>{label}</span>; }
 export function CondBar({ v, w = 'w-14' }: any) { const c = v > 0.75 ? 'bg-good' : v > 0.58 ? 'bg-warn' : 'bg-bad'; return <span className={`inline-block h-1 rounded-full bg-surface2 ${w} overflow-hidden align-middle`}><span className={`block h-full ${c}`} style={{ width: pct(Math.max(0, Math.min(1, v))) }} /></span>; }
 export function CardIcon({ red, n = 1 }: any) { return <span className="inline-flex gap-0.5 align-middle">{Array.from({ length: n }).map((_, i) => <span key={i} className={`inline-block w-[7px] h-[10px] rounded-[1.5px] ${red ? 'bg-bad' : 'bg-card'}`} />)}</span>; }
 export function Progress({ v }: any) { return <div className="h-1 rounded-full bg-surface2 overflow-hidden"><div className="h-full bg-accent transition-all" style={{ width: pct(v) }} /></div>; }

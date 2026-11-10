@@ -241,7 +241,9 @@ for (const code of Object.keys(LEAGUE_NAMES).filter(c => latest[c])) {
       // compact row: [id, name, role, side, flag, nation, born, height, foot, attrs]
       return [p.id, p.name, p.role, p.side, flag, p.nation, p.born, p.height, p.foot, attributes(p, level)];
     });
-    return { ...t, short: shortCode(t.name, taken), color, color2, players: out };
+    // crest: the transfermarkt club id; the app loads the crest image from transfermarkt at runtime (the crests are
+    // the clubs' trademarks, so they are not stored in this repository)
+    return { ...t, short: shortCode(t.name, taken), color, color2, crest: tmId, players: out };
   });
   leagues.push({ code, name: LEAGUE_NAMES[code], season: `20${season.slice(0, 2)}/${season.slice(2)}`, teams });
 }

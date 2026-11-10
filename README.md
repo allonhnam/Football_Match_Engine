@@ -1,6 +1,6 @@
 # Match Engine
 
-A football match engine for a management game. It simulates a full 11 v 11 match with added time (and extra time and penalties in cup ties), returns the result, an event log, team and player statistics and what the game needs to carry on. It comes with a library API, a 2D visualizer (Next.js) and command-line tools that check its numbers against 8,907 real matches.
+A football match engine for a management game. It simulates a full 11 v 11 match with added time (and extra time and penalties in cup ties), returns the result, an event log, team and player statistics and what the game needs to carry on. It comes with a library API, a 2D visualizer (Next.js) with the real clubs and players of the five top European leagues, and command-line tools that check its numbers against 8,907 real matches.
 
 Author: Hyun
 
@@ -23,10 +23,11 @@ npm run dev        # visualizer at http://localhost:3000
 | `npm run calibrate -- 3000` | Simulate 3,000 league matches and compare them with the real data (`--hist` prints the distributions) |
 | `npm run balance -- 200` | Play every tactic, formation and style match-up against a balanced side and show win rates |
 | `npm run attributes -- 300` | Give one side +3 in a single attribute and show what it changes |
-| `npm run fetch-data`, `npm run build-reference` | Download the real league data and rebuild `src/data/reference.json` (already committed, so not needed to run anything) |
+| `npm run fetch-data`, `npm run build-reference` | Download the real league results and squads, and rebuild `src/data/reference.json` (already committed, so not needed to run anything) |
+| `npm run build-teams` | Rebuild the real clubs and squads in `src/data/teams.json` from the downloaded data (already committed) |
 | `npm run fit-pass-odds -- 40` | Refit the pass-completion model players use to judge passes (`--write` stores it in the engine) |
 
-The visualizer has four screens: matchday setup, a tactics board, the live match (pitch view, four playback speeds, step to the next event, skip to full time, substitutions and tactic changes from the touchline) with a post-match report, and an Engine Lab that runs the realism, balance and performance checks in the browser.
+The visualizer has four screens: matchday setup (pick any real club, or make your own squad), a tactics board where you can click any player and set each of his ten ratings, the live match (pitch view, four playback speeds, step to the next event, skip to full time, substitutions and tactic changes from the touchline) with a post-match report, and an Engine Lab that runs the realism, balance and performance checks in the browser.
 
 ## Using the engine
 
@@ -55,7 +56,7 @@ const final = m.runToEnd();
 const again = Match.load(saved).runToEnd();  // replayExact is false if saved on another engine version
 ```
 
-- **Teams.** A `TeamSheet` holds the squad (each player with ten attributes from 1 to 20: pace, stamina, passing, vision, dribbling, shooting, heading, tackling, positioning, keeping), the starting XI in formation order, the bench, the formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 5-3-2) and six tactics (mentality, pressing, defensive line, width, tempo, passing), each with three settings. Each player's `condition` (fitness carried in) and `unavailable` (injured, suspended) come from the game.
+- **Teams.** A `TeamSheet` holds the squad (each player with ten attributes from 1 to 20: pace, stamina, passing, vision, dribbling, shooting, heading, tackling, positioning, keeping), the starting XI in formation order, the bench, the formation (4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 5-3-2) and six tactics (mentality, pressing, defensive line, width, tempo, passing), each with three settings. Each player's `condition` (fitness carried in) and `unavailable` (injured, suspended) come from the game; `flag`, `nation`, `born`, `height` and `foot` are optional details the engine ignores.
 - **Errors.** Illegal lineups come back as typed errors (`validateLineup`, and `errors` on a `Match` or `simulateMatch` result), never thrown. Illegal manager commands return `{ ok: false, error }`.
 - **Live view.** Call `m.step()` (one tick, 0.25 s of game time) or `m.runUntil(...)` from a timer at any speed, draw `m.snapshot()`, and listen to events with `m.on(e => ...)`.
 - **Cup ties.** Pass `knockout: true`, or `knockout: { aggregate: [2, 1] }` for a second leg. The result then always has a `winner`, plus `extraTime` and `shootout`.
@@ -80,6 +81,7 @@ The result:
 - **The laws** (IFAB Laws of the Game 2026/27): kick-offs, throw-ins, goal kicks, corners, free kicks and penalties with opponents at the right distance; offside; direct and indirect free kicks (handball, dangerous play, back-passes); advantage; yellow and red cards (denying an obvious goal-scoring chance judged on distance, direction, defenders and the attackers in support; a caution instead of a red when advantage is played for it, and no card if the goal follows; no caution for stopping a promising attack once advantage is played; cautions for delaying a restart); the 8-second rule for keepers; a 5-second countdown on delayed throw-ins and goal kicks (the throw-in goes to the opponents, a goal kick becomes their corner); a player treated on the field stays off until a minute after the restart; dropped balls to the defending keeper in his area, else to the team that would have kept or won the ball; a substituted player leaves within 10 seconds at the nearest boundary; 5 substitutes in 3 windows; abandonment below 7 players; extra time and shootouts. Not modelled: VAR, concussion substitutes, goal-line technology.
 - **Realism.** `npm run calibrate` plays thousands of league matches with squads of varying quality and compares them with five top European leagues over five seasons (football-data.co.uk): goals, shots, accuracy, corners, fouls, cards, results, margins, final scorelines, half-time against full-time, and how predictable results are against bookmaker odds. All 24 checks pass, on full distributions as well as averages. Twelve numbers the dataset lacks are checked against published top-league averages, and all are in range: passes (472 per team), ball in play (60 min), throw-ins (40) and goal kicks (14), headers (15% of shots) and shots from outside the box (36%), who takes the shots (forwards 56%, midfielders 30%, defenders 14%), the leading shooter's share (39%), hat-tricks and distance run (9.7 km).
 - **Decisions matter.** Every tactic setting and formation has a cost and a benefit, and none wins outright (`npm run balance`: every option lands between 34% and 42% wins against a balanced side, which wins about 39%). Every attribute changes results (`npm run attributes`). Tests fail if any option or attribute stops doing its job.
+- **Real clubs and players.** All 96 clubs of the 2025/26 Premier League, La Liga, Bundesliga, Serie A and Ligue 1, each with its real squad of 20 (name, position, nationality, age, height, stronger foot; from the CC0 [transfermarkt-datasets](https://github.com/dcaribou/transfermarkt-datasets), current to July 2026), its national flags, kit colours and crest. Nobody publishes 1-20 ratings, so `npm run build-teams` derives them: the club's strength comes from its real results, put on the spread the engine is calibrated on; a player's level within the squad from his market value against his own position group, corrected for age; his profile from his exact position, height and age. League matches between real squads average 2.7 goals and 23 shots, as generated squads do. When two kits look alike, the away side changes to its second colour.
 - **Deterministic.** One seeded random number generator: the same inputs, seed and commands always give the same match, including after saving and loading mid-match.
 
 ## Project layout
@@ -90,7 +92,8 @@ The result:
 | `src/app/`, `src/components/` | The visualizer: matchday and live match, tactics board, report, Engine Lab |
 | `src/lib/` | Pitch drawing, the statistics shared by the calibration tools, league squads, the Web Worker batch runner |
 | `src/data/reference.json` | Real-football numbers built from the league data |
-| `tests/` | 89 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view |
+| `src/data/teams.json` | The real clubs and squads, with derived ratings |
+| `tests/` | 97 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view, real squads and kits |
 | `tools/` | Headless play, data download, calibration, balance and attribute tools |
 
 ## Known limits
@@ -98,3 +101,5 @@ The result:
 - Some numbers sit at the edge of their real range: the leading shooter takes 39% of his team's shots (about 32% in real football), and hat-tricks and goal kicks are near the ends of theirs.
 - Offsides, passing and player-level numbers have no real-data reference; `npm run calibrate` checks them against published averages and would show CHECK if they drifted.
 - Yellow-card accumulation across a season is left to the game, which gets every player's cards in `carryOver`.
+- Player ratings are derived, not published (see Real clubs and players), and can be edited in the app. Each league is rated on its own: the best clubs of every league are about equally strong. Squad numbers are not in the data, so they are assigned.
+- Crests are the clubs' trademarks, so they are not in this repository: the browser loads them from transfermarkt and shows a kit-colour badge when offline.

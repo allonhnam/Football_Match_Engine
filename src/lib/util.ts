@@ -54,10 +54,33 @@ function realPlayers(t: any) {
     };
   });
 }
+// How different two colours look ("redmean" weighted RGB distance, 0 to about 765).
+export function colourDistance(a: string, b: string) {
+  const rgb = (h: string) => { const c = (h || '#000').replace('#', ''); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16) || 0); };
+  const [x, y] = [rgb(a), rgb(b)], rm = (x[0] + y[0]) / 2, dr = x[0] - y[0], dg = x[1] - y[1], db = x[2] - y[2];
+  return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
+}
+const PITCH_GREEN = '#1F5E3A', NEAR_PITCH = 125, NEAR_KIT = 150;
+// Kits for a match, as a referee would rule: the home side keeps its first colour unless it vanishes into the pitch;
+// the away side changes to its second colour (then white, then black) when it is too close to the home kit or the
+// pitch. The kit not worn becomes the second colour.
+export function matchKits(home: any, away: any) {
+  const pick = (t: any, avoid: string[]) => {
+    const tries = [t.color, t.color2, '#FFFFFF', '#111111'].filter(Boolean);
+    const ok = (c: string) => colourDistance(c, PITCH_GREEN) >= NEAR_PITCH && avoid.every(a => colourDistance(c, a) >= NEAR_KIT);
+    const score = (c: string) => Math.min(colourDistance(c, PITCH_GREEN) / NEAR_PITCH, ...avoid.map(a => colourDistance(c, a) / NEAR_KIT));
+    const c = tries.find(ok) || tries.slice().sort((p, q) => score(q) - score(p))[0];
+    return c === t.color ? t : { ...t, color: c, color2: t.color };
+  };
+  const h = pick(home, []);
+  return { home: h, away: pick(away, [h.color]) };
+}
+// Club crests are the clubs' trademarks, so they are not stored here: the browser loads them from transfermarkt.
+export const crestUrl = (id: number | string) => `https://tmssl.akamaized.net/images/wappen/head/${id}.png`;
 export function realTeam(league: string, name: string, keep: any = {}) {
   const l = LEAGUES.find(x => x.code === league), t = l && l.teams.find(x => x.name === name);
   if (!t) return null;
-  return { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league };
+  return { ...E.makeTeam({ name: t.name, short: t.short, seed: nameSeed(t.name), strength: t.strength, color: t.color, color2: t.color2, players: realPlayers(t), formation: keep.formation || '4-3-3', tactics: keep.tactics }), league, crest: t.crest };
 }
 // The built-in attributes of a real player, for "reset" after editing (null for generated players).
 export function realAttrs(league: string | undefined, club: string, id: string) {
@@ -87,5 +110,5 @@ export function rebuildSquad(team, patch) {
     const players = team.players.map(p => ({ ...p, attrs: Object.fromEntries(Object.entries(p.attrs).map(([k, v]: any) => [k, k === 'keeping' && p.role !== 'GK' ? v : Math.max(1, Math.min(20, Math.round(v + d)))])) }));
     return { ...team, strength: patch.strength, players };
   }
-  return { ...E.makeTeam({ name: team.name, short: team.short, color: team.color, color2: team.color2, seed: patch.seed ?? team.seed, strength: patch.strength ?? team.strength, formation: team.formation, tactics: team.tactics }), league: patch.seed != null ? undefined : team.league };
+  return { ...E.makeTeam({ name: team.name, short: team.short, color: team.color, color2: team.color2, seed: patch.seed ?? team.seed, strength: patch.strength ?? team.strength, formation: team.formation, tactics: team.tactics }), league: patch.seed != null ? undefined : team.league, crest: patch.seed != null ? undefined : team.crest };
 }
