@@ -2,7 +2,7 @@
 
 > **In short:** a football match engine for a management game. It plays a full 11 v 11 match on a 2D pitch in 0.25-second steps, follows the IFAB Laws of the Game 2026/27, and is tuned so its numbers match 8,907 real top-flight matches. A Next.js visualizer plays the 96 real clubs of the five top European leagues live, with their real 2025/26 squads, and command-line tools and tests check the engine.
 >
-> Version **0.6.0** · `main` · author Hyun · 9 November 2026 · live demo: https://mainline-markets-interview.vercel.app
+> Version **0.6.1** · `main` · author Hyun · 10 November 2026 · live demo: https://mainline-markets-interview.vercel.app
 
 | Part | At a glance |
 | :-- | :-- |
@@ -148,6 +148,12 @@ Each option gets one value: **chance it works × value of the new position − c
 | 22 | The Matchday seed box shows the whole seed (PR #20) |
 | 23 | A command given at the very tick a match was saved now applies on load; the Matchday code sample uses the clubs picked (PR #21) |
 | 24 | README balance range corrected to what the runs show (PR #22) |
+| 25 | Live demo on Vercel, linked from the README; overview and diagrams refreshed for the real clubs (PR #23, #24) |
+| 26 | Engine Lab shows its numbers: results as counts, every scoreline and every simulated match (PR #25) |
+| 27 | Season tab: a real league's full season matchday by matchday, with injuries, bans and fatigue carried over, the league table and every player's goals, assists, cards and injuries (PR #26) |
+| 28 | Captions for every short label; each Lab match opens its players (PR #27) |
+| 29 | Every Lab run uses a new random seed, shown with its results (PR #28) |
+| 30 | 4-4-2 bonus trimmed to match the other formations; the attribute check gives keepers near the cap a real +3; the balance tool measures its summary; engine 0.6.1 (PR #15) |
 
 ### How close it is to real football (3,000 simulated matches)
 
@@ -229,7 +235,7 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 - [ ] Offsides and pass completion are only checked against rough estimates, because the dataset has none.
 - [ ] Goal timing is checked by half only; the dataset has no goal minutes.
 - [ ] Speed: the engine is about twice as slow as at PR #5, because of the richer off-ball positioning (`_findSpace`). Re-planning less often would fix it but changes results, so it needs a re-calibration.
-- [ ] Saves record `ENGINE_VERSION`; a match saved on 0.5.x does not replay exactly on 0.6.0.
+- [ ] Saves record `ENGINE_VERSION`; a match saved on an older engine (0.6.0 or before) does not replay exactly on 0.6.1, and the app says so instead of offering Replay.
 - [ ] Real players' ratings are derived, not published, and each league is rated on its own scale: the best clubs of every league are about equally strong. Squad numbers are assigned, and the squads are those of July 2026.
 - [ ] Some real clubs' data lists their wide players as central, so their XIs still put central players out wide (216 of 576 wide slots across the 96 clubs in 4-3-3).
 
