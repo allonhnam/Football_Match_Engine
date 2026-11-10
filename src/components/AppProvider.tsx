@@ -3,7 +3,7 @@ import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as E from '@/engine/engine';
-import { clone, store, defaultTeams } from '@/lib/util';
+import { clone, store, defaultTeams, matchKits } from '@/lib/util';
 
 export type Settings = { insights: boolean; banners: boolean; htPause: boolean };
 
@@ -44,7 +44,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (t: 'dark' | 'light') => { setThemeState(t); store.set('me-theme', t); };
 
-  const config = () => ({ home: clone(teams.home), away: clone(teams.away), seed, control: control as any, neutral: venue === 'neutral', knockout: competition === 'cup' || undefined });
+  // Kits are settled at kick-off so the two sides (and the pitch) never look alike.
+  const config = () => ({ ...matchKits(clone(teams.home), clone(teams.away)), seed, control: control as any, neutral: venue === 'neutral', knockout: competition === 'cup' || undefined });
   const saveHistory = (cfg: any, R: any, commands: any[]) => {
     const h = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), date: Date.now(), score: R.score,
