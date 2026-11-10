@@ -7,6 +7,30 @@ import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
+// The "use the engine in code" sample, written for the two teams picked on Matchday: a real club comes from
+// realTeam (its real 2025/26 squad), a custom squad from makeTeam. It runs as shown.
+function codeSample(teams: any, seed: number) {
+  const str = (s: string) => (s.includes("'") ? `"${s}"` : `'${s}'`);
+  const team = (t: any) => t.league
+    ? `realTeam(${str(t.league)}, ${str(t.name)});   // real 2025/26 squad`
+    : `makeTeam({ name: ${str(t.name)}, seed: ${t.seed}, strength: ${t.strength} });   // generated squad`;
+  const anyReal = teams.home.league || teams.away.league, anyMade = !teams.home.league || !teams.away.league;
+  return `import { Match, ${anyMade ? 'makeTeam, ' : ''}validateLineup } from '@/engine/engine';
+${anyReal ? "import { realTeam } from '@/lib/util';\n" : ''}
+const home = ${team(teams.home)}
+const away = ${team(teams.away)}
+validateLineup(home);          // → [] or typed errors
+
+const m = new Match({ home, away, seed: ${seed} });
+m.runUntil({ minute: 60 });    // or { event: 'goal' }
+const outId = home.xi[9], inId = home.bench.at(-1);  // a starter off, a sub on
+m.substitute(0, outId, inId);  // applied at the next stoppage
+m.setTactics(0, { pressing: 2 });
+const save = m.save();         // inputs + command log
+const res = m.runToEnd();      // score, events, stats,
+                               // carryOver, explanation`;
+}
+
 export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control, setControl, competition, setCompetition, onKickoff, onSimulate, history, onReplay, onEditTactics }: any) {
   const errs = { home: E.validateLineup(teams.home), away: E.validateLineup(teams.away) };
   const ok = !errs.home.length && !errs.away.length;
@@ -72,19 +96,7 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
                 </li>))}</ul>}
           </Card>
           <Card eyebrow="For game developers" title="Use the engine in code">
-            <pre className="text-[11px] leading-[1.6] font-mono bg-bg border border-line rounded-md p-3 overflow-x-auto scroll-thin text-dim">{`import { Match, makeTeam, validateLineup } from '@/engine/engine';
-
-const home = makeTeam({ name: 'Arsenal', seed: 11 });
-const away = makeTeam({ name: 'Man City', seed: 22 });
-validateLineup(home);          // → [] or typed errors
-
-const m = new Match({ home, away, seed: ${seed} });
-m.runUntil({ minute: 60 });    // or { event: 'goal' }
-m.substitute(0, outId, inId);  // applied at next stoppage
-m.setTactics(0, { pressing: 2 });
-const save = m.save();         // inputs + command log
-const res = m.runToEnd();      // score, events, stats,
-                               // carryOver, explanation`}</pre>
+            <pre className="text-[11px] leading-[1.6] font-mono bg-bg border border-line rounded-md p-3 overflow-x-auto scroll-thin text-dim">{codeSample(teams, seed)}</pre>
             <p className="text-dim text-[12px] mt-2">Every control in this app calls exactly these functions.</p>
           </Card>
         </div>

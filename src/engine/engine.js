@@ -1815,6 +1815,8 @@ Match.replay = function (config, commands, untilTick) {
   let k = 0;
   const apply = () => { while (k < cmds.length && cmds[k].tick <= m.tick) { const c = cmds[k++]; if (c.kind === 'sub') m.substitute(c.side, c.outId, c.inId); else if (c.kind === 'tactics') m.setTactics(c.side, c.tactics); else if (c.kind === 'formation') m.setFormation(c.side, c.formation); else if (c.kind === 'cancel') m.cancelPending(c.side, c.idx); } };
   while (!m.finished && (untilTick == null || m.tick < untilTick)) { apply(); m.step(); }
+  // commands given at the very tick the match was saved (a change made, then saved) still apply
+  if (!m.finished) apply();
   return m;
 };
 P._addThreat = function (s, xg) { const mi = Math.floor(this.clockSec() / 60); while (this.momentum.length <= mi) this.momentum.push([0, 0]); this.momentum[mi][s] += xg; };
