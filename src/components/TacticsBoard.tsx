@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, setAttr, realAttrs, ageOf } from '@/lib/util';
+import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, setAttr, realAttrs, ageOf, pickXI } from '@/lib/util';
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
@@ -54,8 +54,8 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
   const place = (slotIdx, pid) => setTeam(tm => { const xi = tm.xi.slice(), bench = tm.bench.slice(); const cur = xi[slotIdx]; const j = xi.indexOf(pid), b = bench.indexOf(pid); if (j >= 0) xi[j] = cur; else if (b >= 0) bench[b] = cur; xi[slotIdx] = pid; return { ...tm, xi, bench: bench.filter(Boolean) }; });
   const toBench = pid => setTeam(tm => (tm.bench.includes(pid) || tm.xi.includes(pid) || tm.bench.length >= 9) ? tm : { ...tm, bench: [...tm.bench, pid] });
   const toggleUnavailable = pid => setTeam(tm => ({ ...tm, players: tm.players.map(p => p.id === pid ? { ...p, unavailable: p.unavailable ? null : 'suspended' } : p) }));
-  const setFormation = f => setTeam(tm => { const pick = E.autoPick(tm.players, f); return { ...tm, formation: f, xi: pick.xi, bench: pick.bench }; });
-  const autoPick = () => setTeam(tm => { const pick = E.autoPick(tm.players, tm.formation); return { ...tm, xi: pick.xi, bench: pick.bench }; });
+  const setFormation = f => setTeam(tm => { const pick = pickXI(tm, f); return { ...tm, formation: f, xi: pick.xi, bench: pick.bench }; });
+  const autoPick = () => setTeam(tm => { const pick = pickXI(tm, tm.formation); return { ...tm, xi: pick.xi, bench: pick.bench }; });
   const roleOrder = { GK: 0, DF: 1, MF: 2, FW: 3 };
   const list = t.players.slice().sort((a, b) => sort === 'role' ? roleOrder[a.role] - roleOrder[b.role] || ovr(b) - ovr(a) : sort === 'rating' ? ovr(b) - ovr(a) : a.condition - b.condition);
   const editP = editId ? byId.get(editId) : null;
