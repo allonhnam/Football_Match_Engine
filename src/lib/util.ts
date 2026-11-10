@@ -90,7 +90,9 @@ export function pickXI(team: any, formation: string) {
     for (const p of team.players) {
       if (used.has(p.id) || p.unavailable) continue;
       const bonus = ss === 'C' ? (p.side === 'C' ? 2 : 0) : p.side === ss ? 5 : 0;
-      const sc = E.positionFit(p, formation as any, i) * 100 + E.roleRating(p) + bonus;
+      // a tired player gives way to a fresh one of similar quality (condition 1 = fully fit, no change)
+      const tired = (1 - (p.condition ?? 1)) * 40;
+      const sc = E.positionFit(p, formation as any, i) * 100 + E.roleRating(p) + bonus - tired;
       if (sc > bs) { bs = sc; best = p; }
     }
     if (best) { used.add(best.id); xi.push(best.id); }

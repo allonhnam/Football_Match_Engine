@@ -29,7 +29,7 @@ npm run dev        # visualizer at http://localhost:3000
 | `npm run build-teams` | Rebuild the real clubs and squads in `src/data/teams.json` from the downloaded data (already committed) |
 | `npm run fit-pass-odds -- 40` | Refit the pass-completion model players use to judge passes (`--write` stores it in the engine) |
 
-The visualizer has four screens: matchday setup (pick any real club, or make your own squad), a tactics board where you can click any player and set each of his ten ratings, the live match (pitch view, four playback speeds, step to the next event, skip to full time, substitutions and tactic changes from the touchline) with a post-match report, and an Engine Lab that runs the realism, balance and performance checks in the browser, with every simulated match and scoreline, and plays a full season of a real league (league table and every player's goals, assists, cards and injuries).
+The visualizer has four screens: matchday setup (pick any real club, or make your own squad), a tactics board where you can click any player and set each of his ten ratings, the live match (pitch view, four playback speeds, step to the next event, skip to full time, substitutions and tactic changes from the touchline) with a post-match report, and an Engine Lab that runs the realism, balance and performance checks in the browser, with every simulated match and scoreline, and plays a full season of a real league matchday by matchday, with injuries and bans carried over (league table and every player's goals, assists, cards, injuries and matches missed).
 
 ## Using the engine
 
@@ -97,7 +97,7 @@ The result:
 | `src/lib/` | Pitch drawing, the statistics shared by the calibration tools, league squads, the Web Worker batch runner |
 | `src/data/reference.json` | Real-football numbers built from the league data |
 | `src/data/teams.json` | The real clubs and squads, with derived ratings |
-| `tests/` | 100 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view, real squads and kits, seasons |
+| `tests/` | 103 tests: determinism, save and load, lineups, substitutions, a fuzz test, realism, the laws (including offside), cup ties, tactics, attributes, the pitch view, real squads and kits, seasons |
 | `tools/` | Headless play, data download, calibration, balance and attribute tools |
 
 ## Known limits
@@ -107,4 +107,4 @@ The result:
 - Yellow-card accumulation across a season is left to the game, which gets every player's cards in `carryOver`.
 - Player ratings are derived, not published (see Real clubs and players), and can be edited in the app. Each league is rated on its own: the best clubs of every league are about equally strong. Squad numbers are not in the data, so they are assigned.
 - Crests are the clubs' trademarks, so they are not in this repository: the browser loads them from transfermarkt and shows a kit-colour badge when offline.
-- A season in the Engine Lab plays every match with full-strength squads: there is no rotation, and injuries and suspensions do not carry from one match to the next (the game gets them in `carryOver`). Over 38 matches that makes the extremes too wide: in one Premier League season the champions took 101 points, the top scorer 46 goals and one player 20 yellow cards, all beyond real seasons.
+- A season in the Engine Lab is played matchday by matchday: injured players miss matches, bans are served (red cards, and 5, 10 and 15 yellows for 1, 2 and 3 matches) and tired players can lose their place, which keeps cards and appearances realistic (most yellows in one Premier League season: 14). The best clubs and players still finish too far ahead: in that season the champions took 97 points and the top scorer 42 goals, against about 85-95 and a record of 36. That follows from the top-shooter limit above and how far apart the derived ratings put the best and worst squads.

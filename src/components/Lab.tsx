@@ -7,7 +7,7 @@ import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC
 import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 import { LEAGUES } from '@/lib/util';
-import { seasonFixtures, tallySeason } from '@/lib/season';
+import { playSeason, tallySeason } from '@/lib/season';
 import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
 import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, histogram, lineFromEngine, compareFlow } from '@/lib/metrics';
@@ -267,7 +267,7 @@ function SeasonLeaders({ players }: any) {
 /** Every player who played: search by name or club, sort by any column. */
 function PlayerTable({ players }: any) {
   const [sort, setSort] = useState('goals'), [q, setQ] = useState('');
-  const cols = [['apps', 'Apps'], ['minutes', 'Mins'], ['goals', 'Goals'], ['assists', 'Ast'], ['yellows', 'Yel'], ['reds', 'Red'], ['injuries', 'Inj'], ['rating', 'Avg rating']];
+  const cols = [['apps', 'Apps'], ['minutes', 'Mins'], ['goals', 'Goals'], ['assists', 'Ast'], ['yellows', 'Yel'], ['reds', 'Red'], ['injuries', 'Inj'], ['missedInjured', 'Out inj'], ['missedBanned', 'Banned'], ['rating', 'Avg rating']];
   const needle = q.trim().toLowerCase();
   const shown = players.filter(p => !needle || p.name.toLowerCase().includes(needle) || p.club.toLowerCase().includes(needle))
     .sort((a, b) => b[sort] - a[sort] || a.name.localeCompare(b.name));
@@ -277,7 +277,7 @@ function PlayerTable({ players }: any) {
         <span className="text-[12.5px] font-semibold">Every player · {thousands(shown.length)} of {thousands(players.length)}</span>
         <input id="season-search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search player or club" aria-label="Search player or club" className="h-8 w-56 max-w-full rounded-md border border-line bg-bg px-2 text-[12px] outline-none focus:border-accent" />
       </div>
-      <p className="text-[10.5px] text-dim mt-1">Click a column to sort by it.</p>
+      <p className="text-[10.5px] text-dim mt-1">Click a column to sort by it. Out inj and Banned are matches missed through injury and suspension.</p>
       <div className="mt-2 max-h-[460px] overflow-auto scroll-thin rounded-md border border-line">
         <table className="w-full text-[11.5px] tnum">
           <thead className="sticky top-0 bg-surface2 text-dim text-left"><tr>
@@ -337,13 +337,12 @@ export function Lab() {
     const a = E.simulateMatch({ ...t, seed: 4242 }), b = E.simulateMatch({ ...t, seed: 4242 }); const m = new E.Match({ ...t, seed: 4242 }); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd();
     setPerf({ ms: ms / k, mps: 1000 / (ms / k), par: 48 / (par / 1000), season: 380 / (48 / (par / 1000)), h1: hash(a), h2: hash(b), h3: hash(c), events: (a as any).events.length }); setProg(0);
   };
-  // A full season of a real league: every fixture home and away, each match with both clubs' real squads at full
-  // strength (fatigue, injuries and bans between matches are left to the game, which gets them in carryOver).
+  // A full season of a real league, matchday by matchday: injuries, bans and tiredness carry from one match to the next.
   const seasonRun = async () => {
     setSeason(null); setProg(0.01);
-    const jobs = seasonFixtures(league, seasonSeed), t0 = performance.now();
-    const out = await runBatch(jobs, setProg);
-    setSeason({ league, seed: seasonSeed, secs: (performance.now() - t0) / 1000, ...tallySeason(league, jobs, out) }); setProg(0);
+    const t0 = performance.now();
+    const s = await playSeason(league, seasonSeed, jobs => runBatch(jobs), f => setProg(Math.max(0.01, f)));
+    setSeason({ league, seed: seasonSeed, secs: (performance.now() - t0) / 1000, ...tallySeason(league, s.jobs, s.results, s.status) }); setProg(0);
   };
   const run = tab === 'realism' ? realism : tab === 'balance' ? balance : tab === 'season' ? seasonRun : perfRun;
   return (
@@ -390,7 +389,7 @@ export function Lab() {
                   <MatchList matches={bal.matches} pick={pick} setPick={setPick} groups={TACTIC_META[bal.dim].opts} />
                 </div>
               </div>)}
-            {tab === 'season' && (!season ? <Empty text="Pick a league and play its whole season with the real clubs and squads: every club meets every other club home and away. You get the league table and every player's goals, assists, yellow and red cards and injuries. Each match is played with full-strength squads; carrying fatigue, injuries and suspensions from one match to the next is left to the game." /> :
+            {tab === 'season' && (!season ? <Empty text="Pick a league and play its whole season with the real clubs and squads, one matchday at a time: every club meets every other club home and away. Injured players miss matches (one matchday a week), suspensions are served (red cards, and 5, 10 and 15 yellows for 1, 2 and 3 matches), and tired players can lose their place. You get the league table and every player's goals, assists, yellow and red cards, injuries and matches missed." /> :
               <div className="flex flex-col gap-3">
                 <div className="text-[11.5px] text-dim">{LEAGUES.find(l => l.code === season.league)?.name} · {thousands(season.played)} matches · seed {season.seed} · played in {fx(season.secs, 1)} s</div>
                 <SeasonTable table={season.table} />
