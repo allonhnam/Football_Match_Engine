@@ -1,10 +1,10 @@
 'use client';
 /* eslint-disable */
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Abbr } from '@/components/ui';
+import { fx, hexSeed, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar } from '@/lib/util';
+import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Abbr } from '@/components/ui';
 import { drawPitch } from '@/lib/pitch';
 import { liveStats, eventTitle, DOT, buildInsight, whyItMatters } from '@/lib/liveHelpers';
 import { Momentum, StatRows } from '@/components/LiveParts';

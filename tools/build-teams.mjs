@@ -12,6 +12,7 @@ import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { parseCsv, csvTable } from './csv.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(root, 'data', 'football-data');
@@ -110,18 +111,6 @@ const SUB_BIAS = {
 const SIDE = { 'Left-Back': 'L', 'Left Midfield': 'L', 'Left Winger': 'L', 'Right-Back': 'R', 'Right Midfield': 'R', 'Right Winger': 'R' };
 const QUOTA = { GK: 2, DF: 7, MF: 6, FW: 5 }; // 20 players: an XI and a bench of nine
 
-function parseCsv(text) {
-  const rows = []; let row = [], f = '', q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) { if (c === '"' && text[i + 1] === '"') { f += '"'; i++; } else if (c === '"') q = false; else f += c; }
-    else if (c === '"') q = true; else if (c === ',') { row.push(f); f = ''; }
-    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; } else if (c !== '\r') f += c;
-  }
-  if (f || row.length) { row.push(f); rows.push(row); }
-  return rows.filter(r => r.some(x => x.trim()));
-}
-const table = rows => { const [h, ...b] = rows; return b.map(r => Object.fromEntries(h.map((k, i) => [k.trim(), r[i]]))); };
 
 // Three-letter code: "Man City" → MCI, "Nott'm Forest" → NFO, "Arsenal" → ARS.
 function shortCode(name, taken) {
@@ -172,7 +161,7 @@ const latest = {};
 for (const f of files) { const [season, league] = f.replace('.csv', '').split('-'); if (!latest[league] || season > latest[league]) latest[league] = season; }
 
 // ---------- Players ----------
-const readGz = f => readFile(path.join(TM, f)).then(b => table(parseCsv(gunzipSync(b).toString('utf8')))).catch(() => null);
+const readGz = f => readFile(path.join(TM, f)).then(b => csvTable(parseCsv(gunzipSync(b).toString('utf8')))).catch(() => null);
 const players = await readGz('players.csv.gz');
 if (!players) { console.error('No squads in data/transfermarkt/. Run `npm run fetch-data` first.'); process.exit(1); }
 const lastSeason = Math.max(...players.map(p => +p.last_season || 0));

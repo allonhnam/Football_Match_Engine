@@ -1,10 +1,10 @@
 'use client';
 /* eslint-disable */
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
+import { pct, lastName, ovr, TACTIC_META, posLabel } from '@/lib/util';
+import { I, Icon, Btn, Seg, Card, CondBar, CardIcon } from '@/components/ui';
 export function Sec({ label, sub, children }: any) { return <div className="px-4 py-3.5 border-b border-line"><div className="flex items-baseline justify-between gap-2 mb-2"><span className="eyebrow">{label}</span>{sub && <span className="text-[11px] text-dim text-right">{sub}</span>}</div>{children}</div>; }
 export function ManagerPanel({ m, control, bump, readOnly }: any) {
   const sides = control === 'both' ? [0, 1] : control === 'home' ? [0] : control === 'away' ? [1] : [];

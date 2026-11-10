@@ -1,12 +1,11 @@
 'use client';
 /* eslint-disable */
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr } from '@/components/ui';
+import { fx, pct, club, TACTIC_META, findLeague, randomSeed, LEAGUES } from '@/lib/util';
+import { I, Icon, Btn, Seg, Card, Badge, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
-import { LEAGUES } from '@/lib/util';
 import { playSeason, tallySeason } from '@/lib/season';
 import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
@@ -353,7 +352,7 @@ export function Lab() {
   // Every run uses the seed shown, then a new one is drawn, so each run is a fresh batch; typing a seed repeats a run
   // exactly. A run's matches use seeds spread out from it (seed × 4099 + match number), so two seeds never share a match.
   const [labSeed, setLabSeed] = useState(1);
-  const newSeed = () => Math.floor(Math.random() * 1e6);
+  const newSeed = () => randomSeed(1e6);
   useEffect(() => { setLabSeed(newSeed()); }, []);
   const spread = (sd: number) => sd * 4099;
   const teamsFor = (i, g) => { const sw = i % 2; return { home: E.makeTeam({ name: 'Lab Home', seed: sw ? 202 : 101, strength: 12 + Math.ceil(g / 2) }), away: E.makeTeam({ name: 'Lab Away', seed: sw ? 101 : 202, strength: 12 - Math.floor(g / 2) }) }; };
@@ -442,7 +441,7 @@ export function Lab() {
               </div>)}
             {tab === 'season' && (!season ? <Empty text="Pick a league and play its whole season with the real clubs and squads, one matchday at a time: every club meets every other club home and away. Injured players miss matches (one matchday a week), suspensions are served (red cards, and 5, 10 and 15 yellows for 1, 2 and 3 matches), and tired players can lose their place. You get the league table and every player's goals, assists, yellow and red cards, injuries and matches missed." /> :
               <div className="flex flex-col gap-3">
-                <div className="text-[11.5px] text-dim">{LEAGUES.find(l => l.code === season.league)?.name} · {thousands(season.played)} matches · seed {season.seed} · played in {fx(season.secs, 1)} s</div>
+                <div className="text-[11.5px] text-dim">{findLeague(season.league)?.name} · {thousands(season.played)} matches · seed {season.seed} · played in {fx(season.secs, 1)} s</div>
                 <SeasonTable table={season.table} />
                 <SeasonLeaders players={season.players} />
                 <PlayerTable players={season.players} />
