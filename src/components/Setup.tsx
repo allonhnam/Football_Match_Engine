@@ -1,14 +1,10 @@
 'use client';
-/* eslint-disable */
-import * as React from 'react';
 import { useState } from 'react';
 import * as E from '@/engine/engine';
-import { fx, club, hexSeed, ovr, TACTIC_META, rebuildSquad, LEAGUES, realTeam, findLeague, randomSeed } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, PageHead } from '@/components/ui';
-import { runBatch } from '@/lib/batch';
+import { fx, hexSeed, ovr, TACTIC_META, rebuildSquad, LEAGUES, realTeam, findLeague, randomSeed } from '@/lib/util';
+import { Icon, Btn, Seg, Card, Badge, PageHead } from '@/components/ui';
 
-// The "use the engine in code" sample, written for the two teams picked on Matchday: a real club comes from
-// realTeam (its real 2025/26 squad), a custom squad from makeTeam. It runs as shown.
+// The 'use the engine in code' sample for the two teams picked.
 function codeSample(teams: any, seed: number) {
   const str = (s: string) => (s.includes("'") ? `"${s}"` : `'${s}'`);
   const team = (t: any) => t.league
@@ -31,6 +27,7 @@ const res = m.runToEnd();      // score, events, stats,
                                // carryOver, explanation`;
 }
 
+// The match setup screen: pick clubs, seed, venue and competition, then kick off.
 export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control, setControl, competition, setCompetition, onKickoff, onSimulate, history, onReplay, onEditTactics }: any) {
   const errs = { home: E.validateLineup(teams.home), away: E.validateLineup(teams.away) };
   const ok = !errs.home.length && !errs.away.length;

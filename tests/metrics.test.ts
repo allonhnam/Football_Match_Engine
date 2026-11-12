@@ -6,6 +6,7 @@ import {
   type MatchLine,
 } from '@/lib/metrics';
 
+// A sample match line for the tests.
 const line = (over: Partial<MatchLine> = {}): MatchLine => ({
   goalsH: 1, goalsA: 1, shotsH: 12, shotsA: 10, onTargetH: 4, onTargetA: 3, cornersH: 5, cornersA: 4,
   foulsH: 11, foulsA: 12, yellowsH: 2, yellowsA: 1, redsH: 0, redsA: 0, ...over,
@@ -14,7 +15,6 @@ const line = (over: Partial<MatchLine> = {}): MatchLine => ({
 describe('histogram', () => {
   it('puts values in bins defined by inner edges and sums to one', () => {
     const h = histogram([0, 1, 1, 2, 3, 9], [1, 2, 3]);
-    // bins: below 1, 1 to 2, 2 to 3, 3 or more
     expect(h).toEqual([1 / 6, 2 / 6, 1 / 6, 2 / 6]);
     expect(h.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
   });
@@ -51,7 +51,6 @@ describe('analyse', () => {
 
 describe('halves and scorelines', () => {
   const half = (key: string) => HALF_METRICS.find(m => m.key === key)!;
-  // 1-0 at half-time: won 2-0, drawn 1-1, lost 1-2. Level 0-0 at half-time: 1-1. No half-time score: ignored.
   const lines = [
     line({ goalsH: 2, goalsA: 0, htH: 1, htA: 0 }), line({ goalsH: 1, goalsA: 1, htH: 1, htA: 0 }),
     line({ goalsH: 1, goalsA: 2, htH: 1, htA: 0 }), line({ goalsH: 1, goalsA: 1, htH: 0, htA: 0 }),
@@ -65,9 +64,7 @@ describe('halves and scorelines', () => {
     expect(a.half.leadLost).toBeCloseTo(1 / 3);
     expect(a.half.htLevel).toBeCloseTo(1 / 4);
     expect(a.half.htZeroZero).toBeCloseTo(1 / 4);
-    // goals 2+2+3+2 = 9, of which 1+1+1+0 = 3 before the break
     expect(a.half.secondHalfGoals).toBeCloseTo(6 / 9);
-    // an away lead held counts the same as a home one
     expect(analyse([line({ goalsH: 0, goalsA: 2, htH: 0, htA: 1 })]).half.leadHeld).toBe(1);
   });
 
@@ -104,13 +101,13 @@ describe('comparisons', () => {
   });
 
   it('is more forgiving when the simulated batch is noisy', () => {
-    const noisy = Array.from({ length: 10 }, (_, i) => (i % 2 ? 0 : 5.2)); // mean 2.6, huge spread, few matches
+    const noisy = Array.from({ length: 10 }, (_, i) => (i % 2 ? 0 : 5.2));
     expect(compareCount(real, noisy).ok).toBe(true);
   });
 
   it('compares shares and ratios', () => {
-    expect(compareRate(0.435, 220, 500).ok).toBe(true);   // 44%
-    expect(compareRate(0.435, 100, 500).ok).toBe(false);  // 20%
+    expect(compareRate(0.435, 220, 500).ok).toBe(true);
+    expect(compareRate(0.435, 100, 500).ok).toBe(false);
     expect(compareRatio(0.349, 0.33).ok).toBe(true);
     expect(compareRatio(0.349, 0.2).ok).toBe(false);
   });
@@ -139,7 +136,7 @@ describe('real-data reference', () => {
   });
 
   it('has half-time numbers and a scoreline distribution', () => {
-    expect(reference.half.secondHalfGoals).toBeGreaterThan(0.5); // more goals after the break
+    expect(reference.half.secondHalfGoals).toBeGreaterThan(0.5);
     expect(reference.half.leadHeld + reference.half.leadDrawn + reference.half.leadLost).toBeCloseTo(1);
     expect(reference.scorelines.keys).toEqual(SCORELINES);
     expect(reference.scorelines.hist.reduce((a, b) => a + b, 0)).toBeCloseTo(1);

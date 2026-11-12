@@ -1,7 +1,4 @@
-// CSV parsing shared by the data tools (build-reference, build-teams).
-
-/** Rows of fields. Handles quoted fields (with "" for a quote), \n, \r\n or \r line ends and a leading BOM, and skips
- * rows that are empty or only whitespace. */
+// Parse CSV text into rows of fields.
 export function parseCsv(text) {
   const rows = [];
   let row = [], field = '', quoted = false;
@@ -22,7 +19,7 @@ export function parseCsv(text) {
   return rows;
 }
 
-/** Rows as objects keyed by the header row. */
+// Parse CSV text into objects keyed by the header row.
 export function csvTable(rows) {
   const [header, ...body] = rows;
   return body.map(r => Object.fromEntries(header.map((k, i) => [k.trim(), r[i]])));

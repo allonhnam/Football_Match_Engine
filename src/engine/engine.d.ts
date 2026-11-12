@@ -1,5 +1,5 @@
-// Public API of the match engine. The implementation is plain JavaScript (engine.js);
-// these declarations describe what a management game can rely on.
+/** Public API of the match engine. */
+/** these declarations describe what a management game can rely on. */
 
 export type Side = 0 | 1;
 export type Role = 'GK' | 'DF' | 'MF' | 'FW';
@@ -24,7 +24,7 @@ export interface Player {
   condition: number;
   /** Reason the player cannot play (for example "suspended"), or null. */
   unavailable: string | null;
-  /** Optional details the game may carry; the engine ignores them. Flag is an ISO 3166 code (gb-eng for England). */
+  /** Optional details the game may carry; the engine ignores them. */
   flag?: string | null;
   nation?: string;
   born?: string | null;
@@ -74,9 +74,7 @@ export interface MatchConfig {
   /** Which side(s) a human manages; the AI manager runs the others. */
   control?: 'home' | 'away' | 'both' | 'none';
   neutral?: boolean;
-  /** A knockout tie: if level after 90 minutes, two halves of 15 minutes of extra time (a sixth substitute and a
-   * fourth window), then a penalty shootout. For the second leg of a two-legged tie pass the goals each side
-   * scored in earlier legs; the tie is then decided on aggregate. */
+  /** A knockout tie: if level after 90 minutes, two halves of 15 minutes of extra time (a sixth substitute and a fourth window), then a penalty shootout. */
   knockout?: boolean | { aggregate: [number, number] };
   /** Move the referee and assistants (default true for a Match, false for simulateMatch, which nobody watches). */
   officials?: boolean;
@@ -91,8 +89,7 @@ export type EventType =
   | 'stoppage'
   /** A player leaves the field for treatment, or (with back: true) returns one minute after play restarted. */
   | 'treatment'
-  /** The referee starts a 5-second countdown on a delayed throw-in or goal kick; with expired: true, it ran out and
-   * the throw-in went to the opponents (or the goal kick became a corner to them). */
+  /** The referee starts a 5-second countdown on a delayed throw-in or goal kick; with expired: true, it ran out and the throw-in went to the opponents (or the goal kick became a corner to them). */
   | 'countdown'
   /** Goalkeeper held the ball in his hands for more than 8 seconds: corner to the opponents. */
   | 'keeperholding'
@@ -103,8 +100,7 @@ export type EventType =
   /** One kick of a penalty shootout: scored, and the shootout score so far. */
   | 'shootoutkick';
 
-/** What kind of offence a 'foul' event is: 'challenge' and 'handball' give a direct free kick or penalty,
- * 'dangerous' (playing in a dangerous manner) and 'backpass' (keeper handles a back-pass) an indirect free kick. */
+/** What kind of offence a 'foul' event is: 'challenge' and 'handball' give a direct free kick or penalty, 'dangerous' (playing in a dangerous manner) and 'backpass' (keeper handles a back-pass) an indirect free kick. */
 export type Offence = 'challenge' | 'handball' | 'dangerous' | 'backpass';
 
 export interface MatchEvent {
@@ -168,7 +164,7 @@ export interface CarryOver {
 
 export interface MatchExplanation {
   verdict: string;
-  /** Ranked reasons. good: the factor helped `side` (false: it hurt them). */
+  /** Ranked reasons. */
   factors: { title: string; body: string; weight: number; side: Side; good: boolean; t?: number }[];
 }
 
@@ -246,10 +242,7 @@ export class Match {
   runToEnd(): MatchResult;
   result(): MatchResult;
   explain(): MatchExplanation;
-  /** A frame for drawing: clock, score, ball (x, y, height z), players, the referee and two assistants, and the
-   * keeper holding the ball (with seconds held, for the 8-second rule). px/py are positions one tick earlier.
-   * Players off the field for treatment or walking off after a substitution are included with `off` set, and
-   * `restartCountdown` gives the seconds counted at a delayed throw-in or goal kick (Laws 15 and 16). */
+  /** A frame for drawing: clock, score, ball (x, y, height z), players, the referee and two assistants, and the keeper holding the ball (with seconds held, for the 8-second rule). */
   snapshot(): any;
   /** Referee and assistant referees: [referee, assistant (top touchline, left half), assistant (bottom, right half)]. */
   officials: { role: 'referee' | 'assistant'; x: number; y: number; px: number; py: number }[];
@@ -260,7 +253,7 @@ export class Match {
   minuteLabel(): string;
   on(listener: (e: MatchEvent) => void): () => void;
 
-  /** Queued until the next stoppage (applied at once at half-time). Max 5 subs in 3 windows. */
+  /** Queued until the next stoppage (applied at once at half-time). */
   substitute(side: Side, outId: string, inId: string, replay?: boolean): CommandAck;
   setTactics(side: Side, tactics: Partial<Tactics>, replay?: boolean): CommandAck;
   setFormation(side: Side, formation: FormationName, replay?: boolean): CommandAck;
@@ -268,8 +261,7 @@ export class Match {
 
   /** JSON of the engine version, the inputs and the manager command log. */
   save(): string;
-  /** Rebuild a saved match. It replays exactly when it was saved on this engine version; otherwise it still loads,
-   * with replayExact false (the same inputs then give a different match). */
+  /** Rebuild a saved match. */
   static load(saved: string): Match;
   /** Set by load: the engine version the save came from (null for saves older than 0.6), and whether it matches. */
   savedEngineVersion?: string | null;
@@ -295,7 +287,7 @@ export const DEFAULT_TACTICS: Tactics;
 export const ATTRS: AttributeKey[];
 export const PITCH: { L: number; W: number };
 export const ENGINE_VERSION: string;
-/** The calibration settings (see the comments in engine.js). Changing them changes every match. */
+/** The calibration settings (see the comments in engine.js). */
 export const TUNING: Record<string, number>;
 /** Tactic trade-offs as multipliers on chance quality (see engine.js). */
 export const TACTIC_EDGE: {

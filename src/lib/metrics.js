@@ -1,15 +1,6 @@
-// Statistics shared by the real-data builder, the calibrate script and the Engine Lab, so that a number
-// like "shots per match" is defined and binned the same way for real matches and simulated ones.
-//
-// A "match line" is a plain object with the per-team totals both data sources can provide:
-//   { goalsH, goalsA, shotsH, shotsA, onTargetH, onTargetA, cornersH, cornersA,
-//     foulsH, foulsA, yellowsH, yellowsA, redsH, redsA, htH, htA }
-// htH and htA are the half-time goals; NaN when unknown (lines without them are left out of the half-time checks).
+// Statistics shared by the real-data builder, the calibrate script and the Engine Lab, so that a number like "shots per match" is defined and binned the same way for real matches and simulated ones.
 
-/**
- * Per-match counts (both teams combined). `edges` are the inner bin boundaries: with edges [1, 2, 3] the bins are
- * below 1, 1 to 2, 2 to 3, and 3 or more.
- */
+// Per-match counts (both teams combined).
 export const COUNT_METRICS = [
   { key: 'goals', label: 'Goals / match', edges: [1, 2, 3, 4, 5, 6], decimals: 2, value: l => l.goalsH + l.goalsA },
   { key: 'shots', label: 'Shots / match', edges: [14, 18, 22, 26, 30, 34], decimals: 1, value: l => l.shotsH + l.shotsA },
@@ -22,7 +13,7 @@ export const COUNT_METRICS = [
   { key: 'margin', label: 'Goal margin', edges: [1, 2, 3, 4], decimals: 2, value: l => Math.abs(l.goalsH - l.goalsA) },
 ];
 
-/** Shares of matches, and ratios of totals. */
+// Shares of matches, and ratios of totals.
 export const RATE_METRICS = [
   { key: 'homeWin', label: 'Home win rate', hit: l => l.goalsH > l.goalsA },
   { key: 'draw', label: 'Draw rate', hit: l => l.goalsH === l.goalsA },
@@ -34,13 +25,13 @@ export const RATIO_METRICS = [
   { key: 'goalsPerShot', label: 'Goals / shot', num: l => l.goalsH + l.goalsA, den: l => l.shotsH + l.shotsA },
 ];
 
+// Whether a match line has a half-time score.
 const hasHt = l => Number.isFinite(l.htH) && Number.isFinite(l.htA);
+// Whether one side led at half-time.
 const htLead = l => hasHt(l) && l.htH !== l.htA;
+// The sign of a number: 1, -1 or 0.
 const sign = v => (v > 0 ? 1 : v < 0 ? -1 : 0);
-/**
- * How matches unfold over the two halves, from the half-time score. Each value is sum(num) / sum(den) over the lines
- * where `when` holds: a share of matches (den 1) or, for second-half goals, a share of goals.
- */
+// How matches unfold over the two halves, from the half-time score.
 export const HALF_METRICS = [
   { key: 'secondHalfGoals', label: 'Goals in the second half', when: hasHt, num: l => l.goalsH + l.goalsA - l.htH - l.htA, den: l => l.goalsH + l.goalsA },
   { key: 'htLevel', label: 'Level at half-time', when: hasHt, num: l => +(l.htH === l.htA), den: () => 1 },
@@ -50,34 +41,37 @@ export const HALF_METRICS = [
   { key: 'leadLost', label: 'Half-time leader loses', when: htLead, num: l => +(sign(l.goalsH - l.goalsA) === -sign(l.htH - l.htA)), den: () => 1 },
 ];
 
-/** Final scores in the order a results page would list them; anything else counts as 'other'. */
+// Final scores in the order a results page would list them; anything else counts as 'other'.
 export const SCORELINES = ['0-0', '1-0', '0-1', '1-1', '2-0', '0-2', '2-1', '1-2', '2-2', '3-0', '0-3', '3-1', '1-3', '3-2', '2-3', 'other'];
+// A match's final score as a key, or 'other' for rare scorelines.
 export function scorelineKey(l) {
   const k = l.goalsH + '-' + l.goalsA;
   return SCORELINES.includes(k) ? k : 'other';
 }
-/** Share of matches ending in each scoreline, in SCORELINES order. */
-export function scorelineHist(lines) {
+// Share of matches ending in each scoreline.
+function scorelineHist(lines) {
   const counts = Object.fromEntries(SCORELINES.map(k => [k, 0]));
   for (const l of lines) counts[scorelineKey(l)]++;
   return SCORELINES.map(k => counts[k] / (lines.length || 1));
 }
 
+// Sum of a list of numbers.
 const sum = a => a.reduce((s, v) => s + v, 0);
+// Average of a list of numbers.
 const mean = a => (a.length ? sum(a) / a.length : 0);
 
+// A half-time metric's value and its standard error over a batch.
 function halfValue(m, lines) {
   const use = lines.filter(m.when), den = sum(use.map(m.den)), value = sum(use.map(m.num)) / (den || 1);
-  // Standard error of a ratio, counted match by match: goals cluster within matches (an open game has more of them
-  // in both halves), so treating every goal as an independent coin flip would claim too much precision for a small
-  // batch. For a per-match rate (den 1 each) this is the usual binomial error.
   const se = den ? Math.sqrt(sum(use.map(l => (m.num(l) - value * m.den(l)) ** 2))) / den : 0;
   return { value, n: use.length, den, se };
 }
+// Standard deviation of a list of numbers.
 const sd = a => { const m = mean(a); return a.length > 1 ? Math.sqrt(sum(a.map(v => (v - m) * (v - m))) / (a.length - 1)) : 0; };
+// The value at a quantile of a sorted list.
 const quantile = (sorted, q) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : 0);
 
-/** Fraction of values in each bin defined by inner `edges`. */
+// Fraction of values falling in each bin.
 export function histogram(values, edges) {
   const bins = new Array(edges.length + 1).fill(0);
   for (const v of values) {
@@ -88,12 +82,12 @@ export function histogram(values, edges) {
   return bins.map(c => c / (values.length || 1));
 }
 
-/** Total variation distance between two histograms: 0 identical, 1 completely different. */
+// How different two histograms are, from 0 (identical) to 1 (unrelated).
 export function totalVariation(a, b) {
   return 0.5 * sum(a.map((v, i) => Math.abs(v - (b[i] || 0))));
 }
 
-/** Everything the tools compare, computed from a list of match lines. */
+// Every statistic the tools compare, computed from a list of matches.
 export function analyse(lines) {
   const counts = {};
   for (const m of COUNT_METRICS) {
@@ -113,10 +107,7 @@ export function analyse(lines) {
   return { n: lines.length, counts, rates, ratios, half, scorelines: { keys: SCORELINES, hist: scorelineHist(lines) } };
 }
 
-/**
- * Compare a simulated mean with the real one. The engine passes if it is within 7% of the real mean, or within
- * 2.5 standard errors of its own sample (so small batches are not judged too harshly).
- */
+// Compare a simulated per-match count with the real one.
 export function compareCount(real, engineValues) {
   const m = mean(engineValues);
   const se = sd(engineValues) / Math.sqrt(engineValues.length || 1);
@@ -124,31 +115,27 @@ export function compareCount(real, engineValues) {
   return { mean: m, tol, ok: Math.abs(m - real.mean) <= tol, tv: totalVariation(histogram(engineValues, real.edges), real.hist) };
 }
 
+// Compare a simulated rate, such as home wins, with the real one.
 export function compareRate(realRate, hits, n) {
   const p = hits / (n || 1);
   const tol = Math.max(0.04, 2.5 * Math.sqrt((p * (1 - p)) / (n || 1)));
   return { mean: p, tol, ok: Math.abs(p - realRate) <= tol };
 }
 
+// Compare a simulated ratio, such as goals per shot, with the real one.
 export function compareRatio(realRatio, value) {
   const tol = 0.07 * realRatio;
   return { mean: value, tol, ok: Math.abs(value - realRatio) <= tol };
 }
 
-/**
- * Compare a half-time metric. The engine passes if it is within 2.5 percentage points of the real value, or within
- * 2.5 standard errors of its own sample (a binomial error over the matches, or goals, it is a share of).
- */
+// Compare a half-time statistic with the real one.
 export function compareHalf(metric, realValue, lines) {
   const { value, n, se } = halfValue(metric, lines);
   const tol = Math.max(0.025, 2.5 * se);
   return { mean: value, tol, ok: Math.abs(value - realValue) <= tol, n };
 }
 
-/**
- * Compare the scoreline distribution. The gap is the total variation distance; it passes if it is below 0.05, or
- * twice the gap expected from sampling noise alone in a batch this size, whichever is larger.
- */
+// Compare the spread of final scorelines with the real one.
 export function compareScorelines(realHist, lines) {
   const hist = scorelineHist(lines), n = lines.length || 1;
   const noise = 0.5 * sum(realHist.map(p => Math.sqrt((2 * p * (1 - p)) / (Math.PI * n))));
@@ -157,7 +144,7 @@ export function compareScorelines(realHist, lines) {
   return { hist, tv, tol, ok: tv <= tol };
 }
 
-/** Turn an engine result (or a batch summary with the same fields) into a match line. */
+// Turn an engine result into a match line like the real data's.
 export function lineFromEngine(score, teamStats, halftimeScore) {
   const [h, a] = teamStats;
   return {
@@ -168,11 +155,7 @@ export function lineFromEngine(score, teamStats, halftimeScore) {
   };
 }
 
-// ----- How a match flows and who does what -----
-// Not in the dataset: compared with published top-league averages (reference.estimates). The same code serves the
-// calibrate tool and the Engine Lab.
-
-/** Reduce an engine result to the numbers the match-flow checks need. */
+// Match-flow numbers from one result: passes, ball in play, restarts and who shoots.
 export function matchFlow(r) {
   const [h, a] = r.teamStats, byPos = { FW: 0, MF: 0, DF: 0, GK: 0 };
   let shots = 0, headers = 0, outside = 0;
@@ -194,12 +177,16 @@ export function matchFlow(r) {
   };
 }
 
+// Share of all shots taken by one group of players.
 const share = (flows, f) => { const pos = flows.reduce((t, x) => t + x.byPos.FW + x.byPos.MF + x.byPos.DF + x.byPos.GK, 0) || 1; return flows.reduce((t, x) => t + f(x), 0) / pos; };
+// Average of a list of numbers.
 const avg = a => (a.length ? a.reduce((t, v) => t + v, 0) / a.length : 0);
+// Average of a match-flow number per match.
 const per = (flows, k) => flows.reduce((t, f) => t + f[k], 0) / (flows.length || 1);
+// A match-flow count as a share of all shots.
 const ofShots = (flows, k) => flows.reduce((t, f) => t + f[k], 0) / (flows.reduce((t, f) => t + f.shots, 0) || 1);
-/** key in reference.estimates, label, how to aggregate, whether it is a share, decimals. */
-export const FLOW_METRICS = [
+// key in reference.estimates, label, how to aggregate, whether it is a share, decimals.
+const FLOW_METRICS = [
   { key: 'passesPerTeam', label: 'Passes per team', value: fl => per(fl, 'passes') / 2, pct: false, decimals: 0 },
   { key: 'ballInPlay', label: 'Ball in play (min)', value: fl => per(fl, 'ballInPlay'), pct: false, decimals: 1 },
   { key: 'throwIns', label: 'Throw-ins / match', value: fl => per(fl, 'throwIns'), pct: false, decimals: 1 },
@@ -213,7 +200,7 @@ export const FLOW_METRICS = [
   { key: 'hatTricks', label: 'Hat-tricks / match', value: fl => per(fl, 'hatTricks'), pct: false, decimals: 3 },
   { key: 'distance', label: 'Km per outfield player', value: fl => avg(fl.flatMap(f => f.km)), pct: false, decimals: 1 },
 ];
-/** Each flow metric against its published range. */
+// Check each match-flow number against its published range.
 export function compareFlow(estimates, flows) {
   return FLOW_METRICS.filter(m => estimates[m.key]).map(m => {
     const e = estimates[m.key], v = m.value(flows);

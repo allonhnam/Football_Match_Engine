@@ -2,15 +2,18 @@ import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import type { MatchConfig, TeamSheet } from '@/engine/engine';
 import { breathe } from './breathe';
-import { describeStatistical, itStatistical } from './statistical';
+import { describeStatistical } from './statistical';
 
+// A generated team for the tests.
 const team = (name: string, seed: number, strength = 12, extra: object = {}): TeamSheet =>
   E.makeTeam({ name, seed, strength, ...extra });
 
+// A match config between two test teams.
 const config = (seed: number, over: Partial<MatchConfig> = {}): MatchConfig => ({
   home: team('Home FC', 11), away: team('Away United', 22), seed, control: 'none', ...over,
 });
 
+// A string that is the same only for identical matches.
 const fingerprint = (r: any) =>
   JSON.stringify([r.score, r.events.map((e: any) => [e.tick, e.type, e.player ?? null, e.side ?? null])]);
 
@@ -49,7 +52,7 @@ describe('determinism', () => {
       m.runUntil({ minute: 60 });
       if (act === 'tactics') expect(m.setTactics(0, { pressing: 2 }).ok).toBe(true);
       else expect(m.substitute(0, m.onPitch(0).find((q: any) => q.slot === 9).id, m.teams[0].sheet.bench[0]).ok).toBe(true);
-      const saved = m.save(); // saved at the same tick as the change
+      const saved = m.save();
       const finished = m.runToEnd();
       expect(fingerprint(E.Match.load(saved).runToEnd()), act).toBe(fingerprint(finished));
     }
@@ -62,7 +65,7 @@ describe('determinism', () => {
     expect(saved.engineVersion).toBe(E.ENGINE_VERSION);
     expect(E.Match.load(JSON.stringify(saved)).replayExact).toBe(true);
     const old = E.Match.load(JSON.stringify({ ...saved, engineVersion: '0.5.0' }));
-    expect(old.replayExact).toBe(false); // still loads, never throws
+    expect(old.replayExact).toBe(false);
     expect(old.savedEngineVersion).toBe('0.5.0');
     const { engineVersion, ...older } = saved;
     expect(E.Match.load(JSON.stringify(older)).savedEngineVersion).toBe(null);
@@ -119,7 +122,6 @@ describe('substitutions', () => {
     const outfield = m.onPitch(0).filter((q: any) => q.slot !== 0);
     const bench = m.teams[0].bench.filter((p: any) => p.role !== 'GK');
     for (let i = 0; i < 5; i++) expect(m.substitute(0, outfield[i].id, bench[i].id).ok).toBe(true);
-    // Subs made in open play wait for the next stoppage; run until all five are on.
     while (m.events.filter((e: any) => e.type === 'sub' && e.side === 0).length < 5 && !m.finished) m.runUntil({ event: 'sub' });
     expect(m.teams[0].windowsUsed).toBe(1);
     expect(m.teams[0].subsUsed).toBe(5);
@@ -164,7 +166,6 @@ describe('robustness', () => {
         expect(m.onPitch(0).length).toBeLessThanOrEqual(11);
         expect(m.onPitch(1).length).toBeLessThanOrEqual(11);
         expect(Number.isFinite(m.ball.x) && Number.isFinite(m.ball.y)).toBe(true);
-        // The match clock restarts at 45:00 for the second half, so it only has to move forward within a half.
         const clock = m.clockSec();
         if (m.half === lastHalf) expect(clock).toBeGreaterThanOrEqual(lastClock);
         lastClock = clock;
@@ -186,7 +187,6 @@ describeStatistical('realism guard rails', () => {
     let goals = 0, shots = 0, yellows = 0;
     const n = 30;
     for (let s = 1; s <= n; s++) { await breathe();
-      // a fresh pair of equal-strength squads every match: one fixed pair gives squad-specific numbers
       const r: any = E.simulateMatch({ home: team('H', 100 + 2 * s), away: team('A', 101 + 2 * s), seed: s, control: 'none', neutral: true });
       goals += r.score[0] + r.score[1];
       shots += r.teamStats[0].shots + r.teamStats[1].shots;

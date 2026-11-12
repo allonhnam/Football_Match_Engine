@@ -1,7 +1,3 @@
-// Fit the pass-completion model that players use to judge a pass (PASS_ODDS in src/engine/engine.js).
-// A share of passes go to a random team-mate in range, so the fit also sees the risky passes players avoid.
-//   npm run fit-pass-odds -- 60            (matches, default 40)
-//   npm run fit-pass-odds -- 60 --write    (also write the weights into engine.js)
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { Match } from '../src/engine/engine.js';
@@ -12,11 +8,13 @@ const N = Number(args.find(a => /^\d+$/.test(a))) || 40, EXPLORE = 0.3;
 const P = Match.prototype, X = [], Y = [];
 let pending = null;
 const origPass = P._pass, origDecide = P._decide;
+// Record each pass's features before playing it.
 P._pass = function (i, j, tx, ty, isThrow) {
   const q = this.players[i], m = this.players[j];
   pending = { f: this._passFeatures(q, m, tx, ty, Math.hypot(tx - q.x, ty - q.y)), side: q.side, recv: j };
   return origPass.call(this, i, j, tx, ty, isThrow);
 };
+// Sometimes play a random pass instead, so the fit sees risky passes too.
 P._decide = function (i) {
   const q = this.players[i];
   if (q.slot !== 0 && this.rng() < EXPLORE) {
@@ -39,7 +37,6 @@ for (let s = 0; s < N; s++) {
     m.step();
     if (pending && pending !== before) { if (m.ball.flight && m.ball.flight.kind === 'pass') { watch = pending; landed = -1; } pending = null; }
     if (!watch || (m.ball.flight && m.ball.flight.kind === 'pass')) continue;
-    // Completed when a team-mate has it, including a receiver who runs onto it within 3 s of it landing.
     const b = m.ball;
     if (b.owner >= 0 || m.phase !== 'play') {
       X.push(watch.f); Y.push(b.owner >= 0 && m.players[b.owner].side === watch.side ? 1 : 0); watch = null;

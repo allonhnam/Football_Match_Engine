@@ -1,14 +1,12 @@
 'use client';
-/* eslint-disable */
-import * as React from 'react';
 import { useState } from 'react';
-import * as E from '@/engine/engine';
 import { fx, pct, lastName, hexSeed } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, Flag, Abbr } from '@/components/ui';
+import { Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, Flag, Abbr } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 import { StatRows } from '@/components/LiveParts';
 
-export function XgRace({ R, teams }: any) {
+// The cumulative xG chart, with goals, red cards and changes marked.
+function XgRace({ R, teams }: any) {
   const tl = R.xgTimeline, end = Math.max(95 * 60, tl[tl.length - 1][0]);
   const maxX = Math.max(1, ...tl.map(p => Math.max(p[1], p[2]))) * 1.15;
   const W = 640, H = 240, L = 36, Rm = 14, T = 14, B = 26;
@@ -28,7 +26,8 @@ export function XgRace({ R, teams }: any) {
     </svg>
   );
 }
-export function ShotMap({ R, side, teams }: any) {
+// Where one side's shots came from, sized by xG.
+function ShotMap({ R, side, teams }: any) {
   const shots = R.events.filter(e => (e.type === 'shot' || e.type === 'goal') && !e.ownGoal && e.side === side);
   const W = 340, H = 250, s = W / 68;
   const pos = e => { const d = (e.side === 0) === (e.half === 1) ? 1 : -1; const x = d > 0 ? e.x : 105 - e.x, y = d > 0 ? e.y : 68 - e.y; return { cx: (68 - y) * s, cy: (105 - x) * s + 6 }; };
@@ -40,6 +39,7 @@ export function ShotMap({ R, side, teams }: any) {
     </svg>
   );
 }
+// The post-match report: score, explanation, charts, player stats and carry-over.
 export function Report({ report, onReplay, onBack }: any) {
   const { R, teams, config } = report;
   const [sideMap, setSideMap] = useState(0), [sort, setSort] = useState({ k: 'rating', d: -1 });

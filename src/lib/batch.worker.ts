@@ -1,8 +1,7 @@
 import { simulateMatch } from '@/engine/engine';
 import { summarise } from '@/lib/summarise';
 
-// Receives { batch, jobs: [{ i, cfg }] } and replies with one summary per job, then { batch, end: true }. The worker
-// stays alive between batches; `batch` tells the page which batch a reply belongs to.
+// Simulate each job in a batch and reply with its summary.
 self.onmessage = (ev: MessageEvent) => {
   const { batch, jobs } = ev.data;
   for (const job of jobs) {

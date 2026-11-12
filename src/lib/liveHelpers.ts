@@ -1,11 +1,11 @@
-import * as E from '@/engine/engine';
 import { fx, pct, club } from '@/lib/util';
 
-
+// Each team's live statistics, with possession and pass completion as percentages.
 export function liveStats(m) {
   const pos = m.teams[0].stats.possession + m.teams[1].stats.possession || 1;
   return m.teams.map(t => ({ ...t.stats, possessionPct: Math.round(100 * t.stats.possession / pos), passPct: t.stats.passes ? Math.round(100 * t.stats.passesOk / t.stats.passes) : 0, cards: t.stats.yellows + t.stats.reds }));
 }
+// The headline and detail line for an event in the live feed.
 export function eventTitle(e, m) {
   const T = e.side != null ? club(m.teams[e.side]) : '';
   const P = id => { const q = m.players.find(x => x.id === id); if (q) return q.p.name; for (const t of m.teams) { const b = (t.sheet.players || []).find(p => p.id === id); if (b) return b.name; } return ''; };
@@ -39,6 +39,7 @@ export function eventTitle(e, m) {
   }
 }
 export const DOT = { goal: 'bg-accent', yellow: 'bg-card', red: 'bg-bad', injury: 'bg-bad', penalty: 'bg-accent', disallowed: 'bg-bad', extratime: 'bg-accent' };
+// Pick the most telling trend of the last few minutes for the live insight card.
 export function buildInsight(m, now) {
   const mi = Math.floor(now / 60), from = Math.max(0, mi - 7);
   const sum = (arr, s) => { let v = 0; for (let k = from; k < Math.min(arr.length, mi + 1); k++) v += (arr[k] || [0, 0])[s]; return v; };
@@ -59,6 +60,7 @@ export function buildInsight(m, now) {
   cands.sort((a, b) => b.w - a.w);
   return { ...cands[0], range, at: mi };
 }
+// A sentence on why a statistic matters in this match.
 export function whyItMatters(key, m, ts) {
   const shots = m.events.filter(e => e.type === 'shot' || e.type === 'goal');
   const lead = k => ts[0][k] >= ts[1][k] ? 0 : 1;

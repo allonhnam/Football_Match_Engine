@@ -1,7 +1,7 @@
 import * as E from '@/engine/engine';
 import { lastName, textOn } from '@/lib/util';
 
-
+// Draw the pitch, players, officials and ball for one frame of the live match.
 export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
   const M = 4, s0 = Math.min(Wc / (105 + 2 * M), Hc / (68 + 2 * M));
   let s = s0, X, Y;
@@ -45,7 +45,6 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
   const r = Math.max(8, s * 0.95);
   const now = m.clockSec();
 
-  // Ball in flight: a shot traces a line in the shooter's colour; a pass or cross shows where it is meant to land.
   if (b.flight) {
     const f = b.flight, cx = lerp(b.px, b.x), cy = lerp(b.py, b.y);
     const shooter = m.players[f.shooter ?? f.passer], tc = shooter ? m.teams[shooter.side].color : '#fff';
@@ -61,7 +60,6 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
     ctx.restore();
   }
 
-  // Officials: the referee in black, the assistants on the touchlines with their flag up just after an offside.
   if (m.officials) {
     let offsideX = null;
     for (let k = m.events.length - 1; k >= 0 && m.events[k].t > now - 4; k--) if (m.events[k].type === 'offside') { offsideX = m.events[k].x; break; }
@@ -69,7 +67,7 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
       const x = X(lerp(o.px, o.x)), y = Y(lerp(o.py, o.y)), ro = r * (o.role === 'referee' ? 0.62 : 0.5);
       if (o.role === 'assistant') {
         const up = offsideX != null && (k === 1 ? offsideX < 52.5 : offsideX >= 52.5);
-        const dir = k === 1 ? 1 : -1; // flag points onto the field
+        const dir = k === 1 ? 1 : -1;
         ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y);
         const fx = x + (up ? 0 : ro * 1.2), fy = y + dir * (up ? ro * 2.6 : ro * 1.4); ctx.lineTo(fx, fy); ctx.stroke();
         ctx.fillStyle = up ? '#FF5A36' : '#F5D90A'; ctx.fillRect(fx - (up ? 0 : 0), fy - (dir > 0 ? 0 : ro * 0.9), ro * 1.2, ro * 0.9);
@@ -80,17 +78,16 @@ export function drawPitch(ctx, Wc, Hc, m, alpha, opts, col, flash, cam) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const labels = [];
   for (const q of m.players) {
-    const offField = !q.onPitch && (q.treat || q.leaving); // off for treatment, or walking off after a substitution
+    const offField = !q.onPitch && (q.treat || q.leaving);
     if (!q.onPitch && !offField) continue;
     ctx.globalAlpha = offField ? 0.5 : 1;
     const x = X(lerp(q.px, q.x)), y = Y(lerp(q.py, q.y));
     const gk = q.slot === 0, c = gk ? (q.side === 0 ? '#FFD23C' : '#3DDC97') : m.teams[q.side].color;
     if (owner === q && m.gkHands === b.owner) {
-      const held = Math.min(8, now - m.gkHandsT), frac = held / 8, late = held > 3; // the referee counts down the last 5 seconds
+      const held = Math.min(8, now - m.gkHandsT), frac = held / 8, late = held > 3;
       ctx.save(); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = late ? col.bad : '#fff'; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke(); ctx.restore();
     } else if (m.restart && m.restart.countdown && m.players[m.restart.taker] === q) {
-      // the referee's 5-second countdown at a delayed throw-in or goal kick (Laws 15 and 16)
       const frac = Math.min(1, (now - m.restart.countdown.start) / 5);
       ctx.save(); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = frac > 0.6 ? col.bad : '#fff'; ctx.beginPath(); ctx.arc(x, y, r + 5, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke(); ctx.restore();
