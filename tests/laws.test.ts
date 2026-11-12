@@ -2,18 +2,21 @@ import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { leagueTeams } from '@/lib/league';
 import { breathe } from './breathe';
-import { describeStatistical, itStatistical } from './statistical';
+import { describeStatistical } from './statistical';
 
 const L = 105, W = 68;
+// A match a few minutes in, with the ball in play.
 const newMatch = (seed = 3) => {
   const m: any = new E.Match({ home: E.makeTeam({ name: 'Home', seed: 11 }), away: E.makeTeam({ name: 'Away', seed: 22 }), seed, control: 'none' });
   m.runUntil({ minute: 5 });
   while (m.phase !== 'play') m.step();
   return m;
 };
+// Index of the first on-field player of a side that matches a test.
 const idx = (m: any, side: number, pred: (q: any) => boolean) => m.players.findIndex((q: any) => q.onPitch && q.side === side && pred(q));
+// The latest event of a type.
 const lastEvent = (m: any, type: string) => m.events.filter((e: any) => e.type === type).pop();
-/** Put the ball at a point in the penalty area that `side` attacks. */
+// Put the ball in the penalty area a side attacks.
 const intoBox = (m: any, side: number) => { const d = m.dir(side); m.ball.x = d > 0 ? L - 8 : 8; m.ball.y = W / 2; };
 
 describe('laws of the game', () => {
@@ -82,7 +85,7 @@ describe('laws of the game', () => {
     const d = m.dir(0); g.x = d > 0 ? 6 : L - 6; g.y = W / 2;
     m._giveKeeper(gk, false);
     expect(m.gkHands).toBe(gk);
-    m.decisionT = 99; // a time-wasting keeper
+    m.decisionT = 99;
     for (let i = 0; i < 40 && m.phase === 'play'; i++) m.step();
     expect(lastEvent(m, 'keeperholding')).toBeTruthy();
     expect(m.restart.type).toBe('corner');
@@ -113,7 +116,7 @@ describe('laws of the game', () => {
   it('stops play for a serious injury and restarts with a dropped ball (Law 8)', () => {
     const m = newMatch();
     const p = idx(m, 0, q => q.slot !== 0);
-    m.rng = () => 0.9; // a long injury
+    m.rng = () => 0.9;
     expect(m._injure(p, true)).toBe(true);
     expect(m.restart.type).toBe('dropball');
   });
@@ -147,8 +150,6 @@ describe('laws of the game', () => {
     expect(recalled).toBeLessThan(advantages);
   });
 
-  // A last-man foul 20 m out by `slot 2` of the away side on the home centre-forward, with the home side keeping the
-  // ball. `rolls` are the referee's random draws in order (card decisions, injury, advantage).
   const lastManFoul = (rolls: number[]) => {
     const m = newMatch(), d = m.dir(0);
     const oi = idx(m, 0, q => q.slot === 9), ti = idx(m, 1, q => q.slot === 2), o = m.players[oi], t = m.players[ti];
@@ -164,7 +165,7 @@ describe('laws of the game', () => {
   it('cautions instead of sending off when advantage is played for denying a goal-scoring chance (Law 12)', () => {
     const { m, t } = lastManFoul([0, 0.5, 0.1]);
     expect(m.advantage).toBeTruthy();
-    expect(m.pendingCards[0].orig.card).toBe('red'); // a red had play been stopped
+    expect(m.pendingCards[0].orig.card).toBe('red');
     m._setRestart('throwin', 0, 50, 0, 3);
     expect(t.red).toBe(false);
     expect(t.yellow).toBe(1);
@@ -182,7 +183,7 @@ describe('laws of the game', () => {
 
   it('goes back to the red card when the advantage does not follow', () => {
     const { m, t } = lastManFoul([0, 0.5, 0.1]);
-    m.ball.owner = m.players.indexOf(t); // the defenders win it straight back
+    m.ball.owner = m.players.indexOf(t);
     m.step();
     expect(lastEvent(m, 'advantage').text).toMatch(/^No advantage/);
     expect(t.red).toBe(true);
@@ -197,7 +198,6 @@ describe('laws of the game', () => {
   });
 
   it('counts the attackers in support when judging a denied goal-scoring chance (Law 12, 2026/27)', () => {
-    // one defender still goal-side: an obvious chance only if two attackers are in support
     const foul = (support: boolean) => {
       const m = newMatch(), d = m.dir(0);
       const oi = idx(m, 0, q => q.slot === 9), ti = idx(m, 1, q => q.slot === 2), o = m.players[oi], t = m.players[ti];
@@ -222,23 +222,22 @@ describe('laws of the game', () => {
   it('drops the ball for the defending keeper in his area, else for the team that would have kept or won it (Law 8, 2026/27)', () => {
     const m = newMatch(), d1 = m.dir(1);
     m.ball.owner = -1; m.ball.flight = null;
-    m.ball.x = d1 > 0 ? L - 8 : 8; m.ball.y = W / 2; // in the area side 0 defends
+    m.ball.x = d1 > 0 ? L - 8 : 8; m.ball.y = W / 2;
     expect(m._droppedBallSide()).toBe(0);
     m.ball.x = L / 2; m.ball.y = W / 2;
-    expect(m._droppedBallSide(1)).toBe(1); // side 1 had just won it
+    expect(m._droppedBallSide(1)).toBe(1);
     const q = m.players[idx(m, 0, p => p.slot === 6)];
     m.ball.x = q.x + 0.5; m.ball.y = q.y; m.ball.lastSide = 1;
     if (m._inOwnBox(0, m.ball.x, m.ball.y) || m._inOwnBox(1, m.ball.x, m.ball.y)) return;
-    expect(m._droppedBallSide()).toBe(0); // loose, nearest to a side-0 player
+    expect(m._droppedBallSide()).toBe(0);
   });
 
-  // A late throw-in or goal kick by a side protecting a lead, with the referee's response forced through TUNING.
   const delayedRestart = (type: 'throwin' | 'goalkick', settings: Record<string, number>) => {
     const m: any = new E.Match({ home: E.makeTeam({ name: 'Home', seed: 11 }), away: E.makeTeam({ name: 'Away', seed: 22 }), seed: 3, control: 'none' });
     m.runUntil({ minute: 77 });
     while (m.phase !== 'play') m.step();
     m.teams[0].score = m.teams[1].score + 1;
-    m.players.forEach((q: any) => { q.yellow = 0; }); // so a caution is a yellow, not a second yellow
+    m.players.forEach((q: any) => { q.yellow = 0; });
     const saved: Record<string, number> = {};
     for (const k in settings) { saved[k] = (E.TUNING as any)[k]; (E.TUNING as any)[k] = settings[k]; }
     try {
@@ -284,9 +283,9 @@ describe('laws of the game', () => {
 
   it('sends a treated player off the field until a minute after the restart; keepers are exempt (Law 5, 2026/27)', () => {
     const m = newMatch();
-    m.teams[0].subsUsed = 5; // no substitutes left, so he cannot simply be replaced
+    m.teams[0].subsUsed = 5;
     const p = idx(m, 0, q => q.slot !== 0), q = m.players[p];
-    const rng = m.rng; m.rng = () => 0.9; // a long injury
+    const rng = m.rng; m.rng = () => 0.9;
     expect(m._injure(p, true)).toBe(true);
     m.rng = rng;
     expect(q.onPitch).toBe(false);
@@ -309,14 +308,14 @@ describe('laws of the game', () => {
     const m = newMatch();
     m._setRestart('throwin', 0, 50, 0, 1);
     const out = m.players.find((q: any) => q.onPitch && q.side === 1 && q.slot === 5);
-    out.x = 60; out.y = W / 2; // as far from the boundary as a player can be
+    out.x = 60; out.y = W / 2;
     const inId = m.teams[1].bench[0].id;
     expect(m.substitute(1, out.id, inId).ok).toBe(true);
     const sub = m.players.find((q: any) => q.id === inId);
     expect(out.leaving).toBeTruthy();
     const t0 = m.clockSec();
     while (out.leaving) {
-      expect(m.phase).toBe('dead'); // play waits for the change
+      expect(m.phase).toBe('dead');
       expect(sub.x).toBe(L / 2);
       m.step();
     }
@@ -338,11 +337,7 @@ describe('laws of the game', () => {
   });
 });
 
-// Offside is judged when a team-mate plays the ball. In open play the engine adds a small random error near the line
-// (a run or a pass a fraction too early or late, larger for a passer with poor vision). These tests fix the random
-// draw at its midpoint, so that error is zero and they check the rule itself.
 describe('offside (Law 11)', () => {
-  /** Line up an attack by side 0. Positions are metres from the goal side 0 defends (105 = the goal it attacks). */
   function lineUp(o: { opp: (q: any, n: number) => number; passer: number; ball?: number; recv: number }) {
     const m = newMatch();
     const d = m.dir(0), X = (fx: number) => (d > 0 ? fx : L - fx);
@@ -357,8 +352,7 @@ describe('offside (Law 11)', () => {
     const flagged = () => m.teams[0].stats.offsides > before;
     return { m, passer, recv, r, X, flagged };
   }
-  /** A back line at 80 m and the keeper on his line. */
-  const backLine = (q: any, n: number) => (n < 0 ? 103 : 80);
+  const backLine = (_: any, n: number) => (n < 0 ? 103 : 80);
 
   it('flags a player beyond the second-last opponent and gives an indirect free kick where he stood', () => {
     const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 60, recv: 88 });
@@ -379,22 +373,18 @@ describe('offside (Law 11)', () => {
   });
 
   it('counts the keeper: with the keeper out, one defender behind the attacker is not enough', () => {
-    // one defender back on the line at 100 m, the keeper out at 70 m, everyone else at 60 m: the second-last
-    // opponent is the keeper, so an attacker at 85 m is offside even with a defender behind him
-    const { m, passer, recv, r, flagged } = lineUp({ opp: (q, n) => (n < 0 ? 70 : n === 0 ? 100 : 60), passer: 55, recv: 85 });
+    const { m, passer, recv, r, flagged } = lineUp({ opp: (_, n) => (n < 0 ? 70 : n === 0 ? 100 : 60), passer: 55, recv: 85 });
     m._pass(passer, recv, r.x, r.y);
     expect(flagged()).toBe(true);
   });
 
   it('never flags a player in his own half', () => {
-    // a very high line at 40 m: the attacker at 50 m is beyond it but still in his own half
-    const { m, passer, recv, r, flagged } = lineUp({ opp: (q, n) => (n < 0 ? 60 : 40), passer: 30, recv: 50 });
+    const { m, passer, recv, r, flagged } = lineUp({ opp: (_, n) => (n < 0 ? 60 : 40), passer: 30, recv: 50 });
     m._pass(passer, recv, r.x, r.y);
     expect(flagged()).toBe(false);
   });
 
   it('never flags a player behind the ball', () => {
-    // the passer is already beyond the line at 90 m and lays it back to a team-mate at 85 m
     const { m, passer, recv, r, flagged } = lineUp({ opp: backLine, passer: 90, recv: 85 });
     m._pass(passer, recv, r.x, r.y);
     expect(flagged()).toBe(false);
@@ -409,7 +399,6 @@ describe('offside (Law 11)', () => {
     }
   });
 
-  /** One attacker alone in the box at 95 m, the rest of side 0 well away from it. */
   function setPiece() {
     const s = lineUp({ opp: backLine, passer: 75, recv: 95 });
     const { m, passer, recv, X } = s;
@@ -434,7 +423,6 @@ describe('offside (Law 11)', () => {
 });
 
 describeStatistical('tactics', () => {
-  // Same squads and seeds, one setting changed for the home side: every option has to show up somewhere.
   const play = async (tactics: object, n = 24) => {
     const sum: Record<string, number> = { shots: 0, fouls: 0, passPct: 0, cond: 0 };
     for (let i = 0; i < n; i++) {
@@ -464,7 +452,7 @@ describeStatistical('tactics', () => {
     const e = E as any;
     const T = (o: object) => ({ ...E.DEFAULT_TACTICS, ...o });
     const m: any = new E.Match({ home: E.makeTeam({ name: 'H', seed: 1, tactics: T({ passing: 2 }) }), away: E.makeTeam({ name: 'A', seed: 2, tactics: T({ line: 2 }) }), seed: 1, control: 'none' });
-    expect(m._edge[0]).toBeGreaterThan(1.2); // direct balls against a high line
+    expect(m._edge[0]).toBeGreaterThan(1.2);
     expect(e.MATCHUPS.length).toBeGreaterThan(4);
   });
 });

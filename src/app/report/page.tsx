@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/components/AppProvider';
 import { Report } from '@/components/Report';
 
+// The post-match report page.
 export default function ReportPage() {
   const app = useApp();
   const router = useRouter();

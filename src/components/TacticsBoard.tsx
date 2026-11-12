@@ -1,15 +1,13 @@
 'use client';
-/* eslint-disable */
-import * as React from 'react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import * as E from '@/engine/engine';
 import { fx, pct, lastName, ovr, ATTR_LABEL, TACTIC_META, posLabel, textOn, setAttr, realAttrs, ageOf, pickXI } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, Progress, PageHead, Flag, Abbr, GLOSSARY } from '@/components/ui';
+import { Icon, Btn, Seg, Card, Badge, Progress, PageHead, Flag, Abbr, GLOSSARY } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
 const ROLE_NAME = { GK: 'Goalkeeper', DF: 'Defender', MF: 'Midfielder', FW: 'Forward' };
 
-// Edit one player's ten attributes (1 to 20). Every change goes straight into the team sheet the engine plays.
+// Edit one player's ten attributes.
 function PlayerEditor({ p, team, onSet, onReset, onClose }: any) {
   const base = realAttrs(team.league, team.name, p.id);
   const changed = base && E.ATTRS.some(k => base[k] !== p.attrs[k]);
@@ -44,9 +42,10 @@ function PlayerEditor({ p, team, onSet, onReset, onClose }: any) {
   );
 }
 
-// A formation slot's caption, as one string (a title with several text children does not hydrate cleanly).
+// A formation slot's caption as one string.
 const slotTitle = (pos: string, p: any) => `${pos}${GLOSSARY[pos] ? ` · ${GLOSSARY[pos]}` : ''}${p ? `: ${p.name}` : ': empty, click to pick a player'}`;
 
+// The squad and tactics board: formation, lineup, bench and tactic settings.
 export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
   const t = teams[side];
   const [sel, setSel] = useState(null), [sort, setSort] = useState('role'), [hover, setHover] = useState(null), [editId, setEditId] = useState(null);

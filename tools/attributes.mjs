@@ -1,8 +1,3 @@
-// Check that every player attribute matters, and by a sensible amount. Both sides get the same squad at a neutral
-// ground; one side gets +3 in a single attribute (every player), and we compare results and the statistic that
-// attribute should move. "All attributes" (+3 in everything) is the reference for a stronger squad.
-//   npm run attributes -- 400        (matches per attribute, default 300)
-//   npm run attributes -- 1500 --only shooting,passing
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
@@ -23,22 +18,22 @@ const MECHANISM = {
   keeping: ['goals against', (r, s) => r.score[1 - s], -1],
   all: ['goal difference', (r, s) => r.score[s] - r.score[1 - s]],
 };
+// Average of a list of numbers.
 const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 
-// The same squad on both sides, so players match one-for-one. Where +3 would pass the cap of 20 (most keepers start
-// at 18-20), the rest of the gap comes off the opponent's copy of that player, so every comparison is a real 3 points.
+// A copy of a team with one attribute raised for every player.
 function boosted(team, other, attr) {
   team.players.forEach((p, i) => { for (const k of ATTRS) if (attr === 'all' || k === attr) {
-    if (k === 'keeping' && p.role !== 'GK') continue; // outfield keeping is meaningless
+    if (k === 'keeping' && p.role !== 'GK') continue;
     const up = Math.min(20, p.attrs[k] + BOOST) - p.attrs[k];
     p.attrs[k] += up; other.players[i].attrs[k] -= BOOST - up;
   } });
   return team;
 }
 
+// Play this worker's share of the attribute matches.
 function runJobs(jobs) {
   return jobs.map(({ attr, i }) => {
-    // the same squad on both sides; the boosted side alternates home and away so venue cannot matter
     const seed = 500 + i, side = i % 2;
     const teams = [makeTeam({ name: 'H', seed, strength: 12 }), makeTeam({ name: 'A', seed, strength: 12 })];
     if (attr !== 'none') boosted(teams[side], teams[1 - side], attr);
@@ -48,6 +43,7 @@ function runJobs(jobs) {
   });
 }
 
+// Run the attribute check on all cores and print the table.
 async function main() {
   const per = Number(process.argv.slice(2).find(a => /^\d+$/.test(a))) || 300;
   const oi = process.argv.indexOf('--only');
@@ -70,7 +66,6 @@ async function main() {
     const w = rs.filter(r => r.gf > r.ga).length / n, d = rs.filter(r => r.gf === r.ga).length / n;
     const gd = avg(rs.map(r => r.gf - r.ga)), mine = avg(rs.map(r => r.mine)), theirs = avg(rs.map(r => r.theirs));
     const m = MECHANISM[attr === 'none' ? 'all' : attr], dir = m[2] || 1;
-    // a dead attribute moves neither the result nor its own statistic; an overpowered one decides matches on its own
     const moved = attr !== 'none' && dir * (mine - theirs) > 0.03 * Math.max(1, Math.abs(theirs));
     const note = attr === 'none' ? '(baseline)' : attr === 'all' ? '(reference)' : !moved && gd < 0.1 ? 'DEAD' : w > 0.6 ? 'TOO STRONG' : '';
     if (note === 'DEAD' || note === 'TOO STRONG') flagged++;

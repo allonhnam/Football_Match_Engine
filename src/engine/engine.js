@@ -1,6 +1,4 @@
-/* Match Engine — a compact, deterministic 2D tick engine.
- Pitch: x 0..105 (length), y 0..68 (width), metres. One tick = 0.25 s of game time.
- Same inputs + seed + command log => identical match. */
+// Match Engine — a compact, deterministic 2D tick engine.
 const L = 105, W = 68, DT = 0.25, HALF = 2700;
 // Periods: two halves of 45 minutes, then (knockout matches only) two halves of 15 minutes of extra time.
 const PERIOD_LEN = [0, 2700, 2700, 900, 900], PERIOD_START = [0, 0, 2700, 5400, 6300], PERIOD_END_MIN = [0, 45, 90, 105, 120];
@@ -18,8 +16,7 @@ const TUNING = {
   homeAdvantage: 0.3,   // attribute points the home side gains on every skill
   onTarget: 0.128,        // base chance a shot is on target, before skill and shot quality
   offsideTiming: 2.44,   // metres a run or a pass can be mistimed by (more for a passer with poor vision)
-  // How a player on the ball weighs his options (see _decide): each is worth its chance of success times the value
-  // of where the ball ends up, minus the chance of losing it times what that gives the opponent.
+  // How a player on the ball weighs his options (see _decide): each is worth its chance of success times the value of where the ball ends up, minus the chance of losing it times what that gives the opponent.
   threat: 0.45,          // possession value near goal (see _possValue)
   room: 0.06,           // per metre of space a receiver has: a tightly marked player gets half of a position's value
   shotAppetite: -0.0226,  // extra pull of a shot regardless of its quality: players shoot from range more than pure value says
@@ -40,11 +37,9 @@ const TUNING = {
   heavyLoft: 0.08,      // and harder to control as it drops
   touchCost: 0.5,       // a throw-in conceded deep in your own half, relative to losing the ball there
   deflect: 0.5,        // share of interceptions that only deflect the ball, leaving it loose
-  overhit: 0.35, 
-  crossBlock: 0.1, 
+  overhit: 0.35,       // chance an average crosser over-hits it out of play
+  crossBlock: 0.1,      // chance an open-play cross is blocked by a defender standing in front of the crosser
   blockCorner: 0.3,     // share of blocked shots that go behind for a corner
-     // chance an open-play cross is blocked by a defender standing in front of the crosser
-       // chance an average crosser over-hits it out of play
   ballFriction: 0.789,    // share of a loose ball's speed left after a second on the grass
   headedBehind: 0.18,   // share of headers the defenders win at a cross that go behind for a corner
   aerialWin: 0.272,      // base chance the attacker wins the header where a cross lands (before heading skill)
@@ -61,8 +56,7 @@ const TUNING = {
   reaction: 0.35,       // seconds before defenders react to a pass
   firstTouch: 0.4,      // metres of head start the intended receiver has when the ball arrives among several players
   goalRestart: 55,     // seconds from a goal to the kick-off: celebrations and the walk back (Law 8: all in own half)
-  // Game state, tuned against half-time and full-time scores (55% of real goals come after the break; a half-time
-  // leader wins 73% and loses 9%). Multipliers on the chances a side creates, applied to every side and tactic alike.
+  // Game state, tuned against half-time and full-time scores (55% of real goals come after the break; a half-time leader wins 73% and loses 9%).
   lateOpenness: 0.32,   // chances improve through the match (tired legs, stretched games): x(1 + k * (minute/90 - 0.5))
   chasing: 0.14,        // per goal behind (up to 2): the trailing side commits men forward
   sittingOn: 0.03,      // per goal ahead (up to 2): the leading side drops off and creates less
@@ -72,9 +66,7 @@ const TUNING = {
   countdownUse: 0.35,   // chance the referee starts the 5-second countdown at a delayed throw-in or goal kick
   countdownBeat: 0.93,  // chance the taker beats the count (otherwise the restart goes to the opponents)
 };
-// Tactical trade-offs. The 2D model produces most effects of a tactic by itself (shape, pressing runs, pass
-// length, decision speed, stamina), but it is too coarse to make every option cost something, so each setting
-// also scales the quality of the chances a side creates or concedes (1 = no effect). Tuned with npm run balance.
+// Tactical trade-offs.
 const TACTIC_EDGE = {
   // our setting -> multiplier on the chances the opponent creates against us
   concede: { mentality: [0.82, 1, 1.18], pressing: [0.8, 1, 1.03], line: [0.85, 1, 1.18], tempo: [1, 1, 1], width: [1, 1, 1], passing: [1, 1, 1] },
@@ -111,13 +103,13 @@ const TACTIC_LABELS = {
   width: ['Narrow', 'Normal', 'Wide'], tempo: ['Slow', 'Normal', 'Fast'], passing: ['Short', 'Mixed', 'Direct'],
 };
 const DEFAULT_TACTICS = { mentality: 1, pressing: 1, line: 1, width: 1, tempo: 1, passing: 1 };
-// Seconds from the ball going dead to the restart: [minimum, random extra]. Roughly the averages in top leagues.
+// Seconds from the ball going dead to the restart: [minimum, random extra].
 const RESTART_TIME = { throwin: [9, 11], goalkick: [22, 18], corner: [28, 20], freekick: [24, 28], penalty: [50, 40], dropball: [10, 10] };
 const ATTRS = ['pace', 'stamina', 'passing', 'vision', 'dribbling', 'shooting', 'heading', 'tackling', 'positioning', 'keeping'];
 const ENGINE_VERSION = '0.6.1';
 const KEY_EVENTS = { shootoutkick: 1, extratime: 1, goal: 1, yellow: 1, red: 1, sub: 1, injury: 1, halftime: 1, fulltime: 1, penalty: 1, abandoned: 1, disallowed: 1 };
 
-// ---------- RNG (mulberry32, serialisable) ----------
+// Seeded random number generator (mulberry32) whose state can be saved and restored.
 function makeRng(seed) {
   let s = seed >>> 0;
   const r = () => {
@@ -130,15 +122,17 @@ function makeRng(seed) {
   r.getState = () => s; r.setState = v => { s = v >>> 0; };
   return r;
 }
+// Limit a value to the range a to b.
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+// Distance between two points.
 const dist = (ax, ay, bx, by) => Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+// Distance from a point to the line segment from A to B.
 function segDist(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
   let u = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; u = clamp(u, 0, 1);
   return dist(px, py, ax + u * dx, ay + u * dy);
 }
 
-// ---------- Squads ----------
 const FIRST = ['Leo', 'Mateo', 'Noah', 'Kai', 'Elias', 'Tomas', 'Rafa', 'Ilya', 'Jonas', 'Sami', 'Oscar', 'Theo', 'Luca', 'Andre', 'Felix', 'Hugo', 'Milan', 'Enzo', 'Bruno', 'Arlo', 'Dario', 'Nils', 'Joao', 'Kofi', 'Yuki', 'Emil', 'Tariq', 'Ivo', 'Marek', 'Cian'];
 // Surnames are drawn without repeats inside a squad, so no two team-mates share one.
 const LAST = ['Silva', 'Okafor', 'Novak', 'Haas', 'Lindqvist', 'Moreau', 'Tanaka', 'Costa', 'Bennett', 'Duarte', 'Kowalski', 'Mensah', 'Ferreira', 'Holm', 'Petrov', 'Garcia', 'Nakamura', 'Visser', 'Romero', 'Adeyemi', 'Larsen', 'Brandt', 'Ortega', 'Byrne', 'Rossi', 'Dubois', 'Sato', 'Varga', 'Quinn', 'Moretti',
@@ -154,6 +148,7 @@ const ROLE_BIAS = {
   MF: { passing: 4, vision: 3, stamina: 2, keeping: -12 },
   FW: { shooting: 4, dribbling: 3, pace: 2, tackling: -4, positioning: -1, keeping: -12 },
 };
+// Build a random 18-player squad of the given strength from a seed.
 function generateSquad(seed, name, strength) {
   const r = makeRng(seed * 7919 + 13);
   const surnames = LAST.slice();
@@ -170,8 +165,11 @@ function generateSquad(seed, name, strength) {
   return players;
 }
 const ROLE_KEYS = { GK: ['keeping', 'positioning', 'passing'], DF: ['tackling', 'positioning', 'heading', 'pace'], MF: ['passing', 'vision', 'stamina', 'dribbling'], FW: ['shooting', 'dribbling', 'pace', 'heading'] };
+// Average of the attributes that matter most for a player's position.
 function roleRating(p) { const ks = ROLE_KEYS[p.role]; return ks.reduce((s, k) => s + p.attrs[k], 0) / ks.length; }
+// Which flank a formation slot is on: left, centre or right.
 function slotSide(sy) { return sy < 0.3 ? 'L' : sy > 0.7 ? 'R' : 'C'; }
+// How well a player suits a formation slot, from 0 to 1.
 function positionFit(player, formation, slotIdx) {
   const [role, , sy] = FORMATIONS[formation][slotIdx];
   if (role === 'GK') return player.role === 'GK' ? 1 : 0.15;
@@ -183,6 +181,7 @@ function positionFit(player, formation, slotIdx) {
   if (ss !== 'C' && player.side !== ss && player.side !== 'C') f *= 0.85;
   return f;
 }
+// Pick the best starting eleven and bench for a formation.
 function autoPick(players, formation) {
   const used = new Set(), xi = [];
   FORMATIONS[formation].forEach((_, i) => {
@@ -198,6 +197,7 @@ function autoPick(players, formation) {
   const bench = players.filter(p => !used.has(p.id)).slice(0, 9).map(p => p.id);
   return { xi, bench };
 }
+// Build a team sheet: squad, formation, starting eleven, bench and tactics.
 function makeTeam(opts) {
   const players = opts.players || generateSquad(opts.seed || 1, opts.name, opts.strength || 12);
   const formation = opts.formation || '4-3-3';
@@ -205,7 +205,7 @@ function makeTeam(opts) {
   return { name: opts.name, seed: opts.seed || 1, strength: opts.strength || 12, short: opts.short || opts.name.slice(0, 3).toUpperCase(), color: opts.color || '#3b82f6', color2: opts.color2 || '#ffffff', players, formation, xi: pick.xi, bench: pick.bench, tactics: Object.assign({}, DEFAULT_TACTICS, opts.tactics || {}) };
 }
 
-// ---------- Lineup validation (never throws) ----------
+// List everything illegal about a team sheet, without throwing.
 function validateLineup(team) {
   const errs = [];
   if (!team || !Array.isArray(team.players)) return [{ code: 'NO_SQUAD', message: 'Team has no squad' }];
@@ -227,27 +227,25 @@ function validateLineup(team) {
   return errs;
 }
 
-// ---------- Match ----------
+// Create a match from two team sheets, a seed and options, ready to kick off.
 function Match(config) {
   const errs = [].concat(validateLineup(config.home).map(e => Object.assign({ side: 'home' }, e)), validateLineup(config.away).map(e => Object.assign({ side: 'away' }, e)));
   if (errs.length) { this.errors = errs; return; }
   this.config = config;
   this.seed = config.seed >>> 0;
   this.rng = makeRng(this.seed);
-  this.control = config.control || 'home'; // which side(s) the human manages; others use the AI manager
+  this.control = config.control || 'home';
   this.tick = 0; this.half = 1; this.t = 0; this.added = [0, 0, 0, 0]; this.htScore = null;
-  // Knockout ties: true, or { aggregate: [home, away] } with the goals each side scored in earlier legs.
   this.knockout = config.knockout ? { aggregate: (config.knockout.aggregate || [0, 0]).slice(0, 2) } : null;
   this.shootout = null; this.winner = null;
   this.phase = 'dead'; this.finished = false; this.abandoned = null;
-  // Every field the match uses is created here, so the object keeps one shape (much faster in V8).
   this.stoppage = 0; this.goalsThisHalf = 0; this.injuries = 0; this.addedAnnounced = false; this.restartType = null;
-  this.kickT = 0; this.subTimes = []; this._possSide = -1; this._ballKey = -99; this.restart = null; this.decisionT = 0;
-  this.lastPasser = -1; this.lastPasserT = -99; this._edge = [1, 1]; this._central = [1, 1]; this._crossEdge = [1, 1]; this._cutOut = [1, 1]; this._edgeSum = [0, 0]; this._edgeN = 0; this._keyPass = null; this._loosePass = null; this._side = [[], []]; this._markOrder = []; this._trace = null; // set _trace to an array to record every option a player weighs (debugging)
+  this._possSide = -1; this._ballKey = -99; this.restart = null; this.decisionT = 0;
+  this.lastPasser = -1; this.lastPasserT = -99; this._edge = [1, 1]; this._central = [1, 1]; this._crossEdge = [1, 1]; this._cutOut = [1, 1]; this._edgeSum = [0, 0]; this._edgeN = 0; this._keyPass = null; this._loosePass = null; this._side = [[], []]; this._markOrder = []; this._trace = null;
   this.gkHands = -1; this.gkHandsT = 0; this.advantage = null; this.pendingCards = [];
-  this.etFirstKick = 0; this.treating = []; this.leaving = []; // players off the field for treatment, and substituted players walking off
+  this.etFirstKick = 0; this.treating = []; this.leaving = [];
   this.events = []; this.commands = []; this.listeners = [];
-  this.momentum = []; // per minute [homeThreat, awayThreat]
+  this.momentum = [];
   this.possMin = []; this.boxMin = []; this.f3Min = []; this._zone = [0, 0];
   this.xgTimeline = [[0, 0, 0]];
   this.firstKick = this.rng() < 0.5 ? 0 : 1;
@@ -263,14 +261,12 @@ function Match(config) {
     tm.sheet.xi.forEach((id, slot) => this.players.push(this._mkRuntime(byId.get(id), s, slot, true)));
     tm.bench = tm.sheet.bench.map(id => byId.get(id)).filter(Boolean);
   });
-  this.ball = { x: L / 2, y: W / 2, z: 0, px: L / 2, py: W / 2, pz: 0, owner: -1, lastSide: 0, lastIdx: -1, flight: null, vx: 0, vy: 0 };
+  this.ball = { x: L / 2, y: W / 2, z: 0, px: L / 2, py: W / 2, pz: 0, owner: -1, lastSide: 0, flight: null, vx: 0, vy: 0 };
   this.restart = null; this.decisionT = 0; this.lastPasser = -1; this.lastPasserT = -99;
   this._emit({ type: 'kickoff', side: this.firstKick, text: 'Kick-off. ' + this.teams[0].name + ' v ' + this.teams[1].name });
   this._setRestart('kickoff', this.firstKick, L / 2, W / 2, 3);
   this._sides(); this._targets(); this._restartTargets();
-  this.officialsOn = config.officials !== false; // headless runs (simulateMatch) skip them: they are only drawn
-  // Match officials (Law 5 and 6): the referee works the diagonal, the assistants each take one touchline and
-  // half, level with the second-last defender. They are for display only and never touch the random numbers.
+  this.officialsOn = config.officials !== false;
   this.officials = [
     { role: 'referee', x: L / 2 - 4, y: W / 2 + 10, px: L / 2 - 4, py: W / 2 + 10 },
     { role: 'assistant', x: L / 4, y: -1, px: L / 4, py: -1 },
@@ -280,27 +276,37 @@ function Match(config) {
 }
 const P = Match.prototype;
 
+// Create the in-match state for one player.
 P._mkRuntime = function (p, side, slot, onPitch) {
-  return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, tackleImmune: 0, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, tackleCd: 0, runOff: 0, boxRun: false, spaceK: 0, turned: true, treat: null, waitFor: null, leaving: null, gd: 0,
+  return { id: p.id, p, side, slot, onPitch, x: 0, y: 0, px: 0, py: 0, tx: 0, ty: 0, urgent: 0, chased: -1, marking: -1, carry: null, fit: 1, fitSlot: -1, fitForm: null, ePace: 0, eStam: 0, cond: p.condition == null ? 1 : p.condition, speed: 0, yellow: 0, red: false, redReason: null, injured: null, subOff: false, tackleCd: 0, runOff: 0, boxRun: false, spaceK: 0, turned: true, treat: null, waitFor: null, leaving: null, gd: 0,
     st: { ownGoals: 0, claims: 0, minutes: 0, passes: 0, passesOk: 0, shots: 0, goals: 0, assists: 0, xg: 0, tackles: 0, interceptions: 0, fouls: 0, saves: 0, dist: 0, onAt: onPitch ? 0 : null, offAt: null } };
 };
-P.dir = function (side) { return (side === 0) === (this.half % 2 === 1) ? 1 : -1; }; // teams change ends every period
+// Which way a side is attacking this period: +1 towards x = 105, -1 towards x = 0.
+P.dir = function (side) { return (side === 0) === (this.half % 2 === 1) ? 1 : -1; };
+// Seconds of game time since kick-off.
 P.clockSec = function () { return PERIOD_START[this.half] + this.t; };
+// The current minute of the match.
 P.minute = function () { return Math.min(PERIOD_END_MIN[this.half], Math.floor(this.clockSec() / 60) + 1); };
+// The match clock as text, such as 67:12 or 90+3.
 P.clockLabel = function () {
   if (this.t >= PERIOD_LEN[this.half]) { const ex = Math.floor((this.t - PERIOD_LEN[this.half]) / 60) + 1; return PERIOD_END_MIN[this.half] + '+' + ex; }
   const s = Math.floor(this.clockSec()); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 };
+// The current minute as text, such as 67′ or 90+3′.
 P.minuteLabel = function () { const len = PERIOD_LEN[this.half]; return this.t >= len ? PERIOD_END_MIN[this.half] + '+' + (Math.floor((this.t - len) / 60) + 1) + '′' : this.minute() + '′'; };
+// Subscribe to match events; returns a function that unsubscribes.
 P.on = function (fn) { this.listeners.push(fn); return () => { this.listeners = this.listeners.filter(f => f !== fn); }; };
+// Stamp an event with the time and position, record it and tell the listeners.
 P._emit = function (e) {
   e.t = this.clockSec(); e.tick = this.tick; e.minute = this.minuteLabel(); e.half = this.half; e.key = !!KEY_EVENTS[e.type];
   if (e.x == null) { e.x = this.ball ? this.ball.x : L / 2; e.y = this.ball ? this.ball.y : W / 2; }
   this.events.push(e); for (const f of this.listeners) f(e);
 };
+// Players currently on the field, for one side or both.
 P.onPitch = function (side) { return this.players.filter(q => q.onPitch && (side == null || q.side === side)); };
+// A player's effective attribute after fatigue, home advantage and position.
 P.eff = function (q, k) {
-  const f = 0.4 + 0.6 * q.cond; // tiredness costs a little from the first minute and more as legs go
+  const f = 0.4 + 0.6 * q.cond;
   const home = q.side === 0 && !this.config.neutral ? TUNING.homeAdvantage : 0;
   const fm = this.teams[q.side].formation;
   if (q.fitSlot !== q.slot || q.fitForm !== fm) { q.fitSlot = q.slot; q.fitForm = fm; q.fit = positionFit(q.p, fm, q.slot); }
@@ -308,17 +314,14 @@ P.eff = function (q, k) {
   return (q.p.attrs[k] + home) * f * (k === 'keeping' ? 1 : 0.82 + 0.18 * fit);
 };
 
-// ----- restarts -----
+// Stop play and set up a restart, applying any queued cards and changes.
 P._setRestart = function (type, side, x, y, delay, extra) {
   this.stoppage = (this.stoppage || 0) + 1;
   this.advantage = null; this.gkHands = -1; this._loosePass = null;
-  // cards held back while the referee played advantage are shown at the next stoppage (Law 5)
   if (this.pendingCards.length) { const pc = this.pendingCards; this.pendingCards = []; for (const c of pc) if (c.card) this._card(c.ti, c.card, c.why); }
   this.phase = 'dead'; this.ball.owner = -1; this.ball.flight = null; this.ball.z = 0;
   this.ball.x = clamp(x, 0, L); this.ball.y = clamp(y, 0, W);
   const taker = this._pickTaker(type, side, x, y);
-  // Real restarts take time: fetching the ball, setting a wall, players taking up positions (and a side protecting a
-  // late lead in no hurry). The delay passed in is a minimum.
   const rt = RESTART_TIME[type];
   let wasting = 0;
   if (rt) {
@@ -330,20 +333,17 @@ P._setRestart = function (type, side, x, y, delay, extra) {
   if (type === 'throwin') this.teams[side].stats.throwIns++; else if (type === 'goalkick') this.teams[side].stats.goalKicks++;
   this.restart = Object.assign({ type, side, x: this.ball.x, y: this.ball.y, timer: delay, taker }, extra || {});
   if (type === 'freekick') {
-    // Within range a direct free kick is often shot at goal; wide or further out in the attacking third it is
-    // crossed into a box loaded with the tallest players, like a corner.
     const d = this.dir(side), bx = this.ball.x, by = this.ball.y, fxa = d > 0 ? bx : L - bx, dd = dist(bx, by, d > 0 ? L : 0, W / 2);
     if (this.restart.direct && dd < 30 && Math.abs(by - W / 2) < 20 && this.rng() < TUNING.fkShoot) this.restart.shootable = true;
     else if (fxa > 68 && dd > 20 && this.rng() < TUNING.fkCross) this.restart.delivery = true;
   }
   if (wasting) {
-    // A side protecting a late lead takes its time. The referee may caution the taker for delaying the restart
-    // (Law 12), and at a throw-in or goal kick start a visible 5-second countdown (Laws 15 and 16).
     const r = this.rng;
     this.restart.wasting = { left: wasting, caution: r() < TUNING.delayCaution, countdown: (type === 'throwin' || type === 'goalkick') && r() < TUNING.countdownUse, beat: r() < TUNING.countdownBeat };
   }
   this._applyPending();
 };
+// Choose who takes a restart.
 P._pickTaker = function (type, side, x, y) {
   let taker = -1, best = 1e9;
   this.players.forEach((q, i) => {
@@ -358,7 +358,7 @@ P._pickTaker = function (type, side, x, y) {
   });
   return taker;
 };
-// The time-wasting part of a restart, once the normal time is up and the taker is on the ball.
+// Handle a team wasting time over a restart: the countdown, the caution and the penalty.
 P._delayedRestart = function (r) {
   const w = r.wasting, tk = this.players[r.taker], now = this.clockSec();
   if (!w.started) {
@@ -370,13 +370,11 @@ P._delayedRestart = function (r) {
     if (w.countdown) {
       r.countdown = { start: now, until: now + 5 };
       this._emit({ type: 'countdown', side: r.side, player: tk && tk.id, text: 'The referee starts a 5-second countdown on ' + this.teams[r.side].name + "'s " + (r.type === 'throwin' ? 'throw-in' : 'goal kick'), x: r.x, y: r.y });
-      // most takers beat the count; the rest let it run out
       if (w.beat) r.timer = Math.min(r.timer, 1.5 + this.rng() * 3);
       else r.timer = Math.max(r.timer, 5.5);
     }
   }
   if (r.countdown && now > r.countdown.until) {
-    // Law 15: the throw-in goes to the opponents. Law 16: a goal kick becomes a corner to the opponents.
     const opp = 1 - r.side;
     this._emit({ type: 'countdown', side: r.side, player: tk && tk.id, expired: true, text: r.type === 'throwin' ? 'Too slow: the throw-in goes to ' + this.teams[opp].name : 'Too slow: corner to ' + this.teams[opp].name, x: r.x, y: r.y });
     if (r.type === 'throwin') this._setRestart('throwin', opp, r.x, r.y, 3);
@@ -385,6 +383,7 @@ P._delayedRestart = function (r) {
   }
   return false;
 };
+// Take the restart and put the ball back in play.
 P._resume = function () {
   const r = this.restart; this.restart = null; this.phase = 'play';
   const q = this.players[r.taker];
@@ -402,39 +401,38 @@ P._resume = function () {
   this.restartType = r.type;
 };
 
-// ----- possession helpers -----
+// Give the ball to a player, who controls it or miscontrols it.
 P._give = function (i) {
   const q = this.players[i], b = this.ball;
   if (b.owner >= 0 && this.players[b.owner].side !== q.side) this.restartType = null;
-  // Receiving a pass from behind with a marker tight at his back, a player has to turn before he can shoot.
   const f = b.flight, d = this.dir(q.side);
   q.turned = true;
   if (f && f.passer >= 0 && this.players[f.passer].side === q.side && (q.x - f.sx) * d > 3) {
     const o = this._nearestOpp(q); if (o.i >= 0 && o.d < 2.5 && (this.players[o.i].x - q.x) * d > 0) q.turned = false;
   }
-  b.owner = i; b.flight = null; b.z = 0; b.lastSide = q.side; b.lastIdx = i; b.x = q.x; b.y = q.y;
-  // A player under pressure plays it early (a lay-off or a first-time pass); with space he takes a touch and looks up.
+  b.owner = i; b.flight = null; b.z = 0; b.lastSide = q.side; b.x = q.x; b.y = q.y;
   this.decisionT = (this._nearestOpp(q).d < 2.5 ? 0.5 + this.rng() * 0.6 : 0.9 + this.rng() * 1.2) * TUNING.think;
   this.gkHands = -1;
 };
-// Goalkeeper gains control of the ball. In his own penalty area he may use his hands unless the ball was
-// deliberately kicked to him by a team-mate (Law 12.2). Holding it for more than 8 seconds gives a corner.
+// Give the ball to a goalkeeper, who may use his hands in his own area.
 P._giveKeeper = function (i, fromTeammate) {
   const q = this.players[i];
   this._give(i);
   if (!this._inOwnBox(q.side, q.x, q.y)) return;
   if (fromTeammate) {
-    if (this.rng() < 0.002) this._foul(i, -1, 'backpass'); // picks up a deliberate back-pass
+    if (this.rng() < 0.002) this._foul(i, -1, 'backpass');
     return;
   }
   this.gkHands = i; this.gkHandsT = this.clockSec();
   const lead = this.teams[q.side].score - this.teams[1 - q.side].score, late = this.clockSec() > 75 * 60;
-  this.decisionT = lead > 0 && late ? 2.5 + this.rng() * 5.58 : 1.6 + this.rng() * 3.4; // time-wasting when protecting a lead
+  this.decisionT = lead > 0 && late ? 2.5 + this.rng() * 5.58 : 1.6 + this.rng() * 3.4;
 };
+// Whether a point is inside the penalty area a side defends.
 P._inOwnBox = function (side, x, y) { const d = this.dir(side); return Math.abs(y - W / 2) < BOX_HALF && (d > 0 ? x < BOX_D : x > L - BOX_D); };
+// Whether a point is inside the penalty area a side attacks.
 P._inBox = function (attSide, x, y) { return this._inOwnBox(1 - attSide, x, y); };
 
-// ----- shooting -----
+// Expected goals for a shot from a point, given the pressure on the shooter.
 P._xg = function (x, y, side, pressure) {
   const d = this.dir(side), gx = d > 0 ? L : 0;
   const dd = dist(x, y, gx, W / 2);
@@ -445,18 +443,19 @@ P._xg = function (x, y, side, pressure) {
   xg *= this._edge[side] * (Math.abs(y - W / 2) < 9 ? this._central[1 - side] : 1) * this._gameState(side);
   return clamp(xg, 0.005, 0.85);
 };
-// How the score and the clock change a side's chances (see TUNING): games open up late, and the side behind pushes.
-// Outfield opponents close enough to the line of a shot, between the shooter and goal, to block it.
+// Count the defenders standing in the line of a shot.
 P._blockers = function (q) {
   const d = this.dir(q.side), gx = d > 0 ? L : 0, opp = this._side[1 - q.side]; let n = 0;
   for (let k = 0; k < opp.length; k++) { const p = opp[k]; if (p.slot !== 0 && (p.x - q.x) * d > 0 && dist(p.x, p.y, q.x, q.y) < 7 && segDist(p.x, p.y, q.x, q.y, gx, W / 2) < 0.6 + this.eff(p, 'positioning') / 25) n++; }
   return n;
 };
+// How the score and the clock push a side to attack or sit back.
 P._gameState = function (side) {
   const lead = clamp(this.teams[side].score - this.teams[1 - side].score, -2, 2);
   const t = Math.min(this.clockSec() / 60, 120) / 90;
   return (1 + TUNING.lateOpenness * (t - 0.5)) * (lead < 0 ? 1 - TUNING.chasing * lead : 1 - TUNING.sittingOn * lead);
 };
+// Take a shot and decide whether it is blocked, off target, saved or scored.
 P._shoot = function (i, o) {
   o = o || {};
   const q = this.players[i], tm = this.teams[q.side], opp = this.teams[1 - q.side], d = this.dir(q.side), r = this.rng;
@@ -468,7 +467,6 @@ P._shoot = function (i, o) {
   tm.stats.shots++; tm.stats.xg += xg; q.st.shots++; q.st.xg += xg;
   this._addThreat(q.side, xg);
   this.xgTimeline.push([this.clockSec(), this.teams[0].stats.xg, this.teams[1].stats.xg]);
-  // blocked?
   let outcome, ty = W / 2;
   const blockers = o.penalty || o.freekick ? 0 : this._blockers(q);
   if (blockers && r() < 1 - Math.pow(1 - TUNING.blockChance, blockers)) outcome = 'blocked';
@@ -477,7 +475,6 @@ P._shoot = function (i, o) {
     if (r() < onT) {
       const gk = this.players.find(p => p.onPitch && p.side !== q.side && p.slot === 0);
       const keep = gk ? this.eff(gk, 'keeping') / 20 : 0;
-      // The chance's quality, then the finisher against the keeper as a change in the odds, so both always count
       const p0 = clamp((xg / onT) * TUNING.finishing, 0.02, 0.9), odds = p0 / (1 - p0) * Math.exp(TUNING.finishSkill * (shoot - 0.6) - TUNING.keepSkill * (keep - 0.55));
       let pg = odds / (1 + odds);
       if (o.penalty) pg = clamp(0.93 - keep * 0.12, 0.6, 0.95);
@@ -486,7 +483,7 @@ P._shoot = function (i, o) {
     } else { outcome = 'off'; ty = W / 2 + (r() < 0.5 ? -1 : 1) * (GOAL_HALF + 0.5 + r() * 5); }
   }
   if (outcome === 'goal' || outcome === 'saved') { tm.stats.onTarget++; }
-  const b = this.ball; b.owner = -1; b.lastSide = q.side; b.lastIdx = i;
+  const b = this.ball; b.owner = -1; b.lastSide = q.side;
   const tx = outcome === 'blocked' ? q.x + d * 2 : gx;
   const tyy = outcome === 'blocked' ? q.y : ty;
   const D = dist(q.x, q.y, tx, tyy);
@@ -494,11 +491,11 @@ P._shoot = function (i, o) {
   this.phase = 'play';
   if (o.penalty) this._emit({ type: 'penalty', side: q.side, player: q.id, text: 'Penalty taken by ' + q.p.name });
 };
+// Settle a shot when it arrives: goal, save, block or miss, and the restart.
 P._resolveShot = function (f) {
   const q = this.players[f.shooter], tm = this.teams[q.side], opp = 1 - q.side, r = this.rng, d = this.dir(q.side);
   const name = q.p.name, xgs = f.xg.toFixed(2);
   if (f.outcome === 'goal') {
-    // Law 12: a goal scored straight after the scorer's own handball (even accidental) is disallowed
     if (!f.penalty && r() < 0.006) {
       this._emit({ type: 'disallowed', side: q.side, player: q.id, x: f.sx, y: f.sy, text: 'Goal disallowed: handball by ' + name });
       this._setRestart('freekick', opp, f.sx, f.sy, 5, { direct: true });
@@ -509,7 +506,6 @@ P._resolveShot = function (f) {
     if (this.lastPasser >= 0 && this.lastPasser !== f.shooter && this.players[this.lastPasser].side === q.side && this.clockSec() - this.lastPasserT < 12) { assist = this.players[this.lastPasser]; assist.st.assists++; }
     this.goalsThisHalf = (this.goalsThisHalf || 0) + 1;
     this._emit({ type: 'goal', side: q.side, player: q.id, assist: assist && assist.id, xg: f.xg, header: f.header, penalty: f.penalty, x: f.sx, y: f.sy, text: 'GOAL! ' + name + (f.penalty ? ' (pen)' : f.header ? ' (header)' : '') + (assist ? ', assisted by ' + assist.p.name : '') + ' · ' + xgs + ' xG', score: [this.teams[0].score, this.teams[1].score] });
-    // a goal after advantage for denying a goal-scoring chance: no caution (Law 12, 2026/27)
     if (this.pendingCards.length) this.pendingCards = this.pendingCards.filter(c => !(c.dogso && c.for === q.side));
     this._setRestart('kickoff', opp, L / 2, W / 2, TUNING.goalRestart);
     return;
@@ -519,8 +515,8 @@ P._resolveShot = function (f) {
     const blk = this._nearestOpp(q, this.ball.x, this.ball.y).i;
     if (blk >= 0) {
       const u = r();
-      if (u < 0.013) { this._ownGoal(blk); return; }                       // deflected into his own net
-      if (u < 0.027) { this._foul(blk, -1, 'handball', { denyGoal: f.xg > 0.25 && r() < 0.5 }); return; } // blocked with an arm
+      if (u < 0.013) { this._ownGoal(blk); return; }
+      if (u < 0.027) { this._foul(blk, -1, 'handball', { denyGoal: f.xg > 0.25 && r() < 0.5 }); return; }
     }
     if (r() < TUNING.blockCorner) { this.teams[q.side].stats.corners++; this._emit({ type: 'corner', side: q.side, text: 'Corner to ' + tm.name }); this._setRestart('corner', q.side, d > 0 ? L - 0.3 : 0.3, r() < 0.5 ? 0.3 : W - 0.3, 6); }
     else this._loose(this.ball.x, this.ball.y, (r() - 0.5) * 8, (r() - 0.5) * 8);
@@ -540,6 +536,7 @@ P._resolveShot = function (f) {
   this._setRestart('goalkick', opp, d > 0 ? L - 5.5 : 5.5, W / 2 + (r() - 0.5) * 12, 5);
 };
 
+// Record an own goal and restart with a kick-off.
 P._ownGoal = function (di) {
   const q = this.players[di], scorer = 1 - q.side, tm = this.teams[scorer];
   tm.score++; q.st.ownGoals++; this.goalsThisHalf++;
@@ -547,19 +544,21 @@ P._ownGoal = function (di) {
   this._setRestart('kickoff', q.side, L / 2, W / 2, TUNING.goalRestart);
 };
 
-// ----- passing -----
+// The nearest opponent to a player or point, and the distance.
 P._nearestOpp = function (q, x, y) {
   x = x == null ? q.x : x; y = y == null ? q.y : y;
   let best = 1e9, bi = -1;
   for (let i = 0; i < this.players.length; i++) { const o = this.players[i]; if (!o.onPitch || o.side === q.side) continue; const dd = dist(o.x, o.y, x, y); if (dd < best) { best = dd; bi = i; } }
   return { d: best, i: bi };
 };
-P._offsideLine = function (side) { // x of second-last opponent (incl. GK) of `side`'s opponents
+// Position of the second-last defender that a side's attackers must stay behind.
+P._offsideLine = function (side) {
   const d = this.dir(side);
   let a = -1e9, b2 = -1e9;
   for (const o of this.players) { if (!o.onPitch || o.side === side) continue; const v = o.x * d; if (v > a) { b2 = a; a = v; } else if (v > b2) b2 = v; }
   return (b2 > -1e9 ? b2 : a) * d;
 };
+// Rough chance a pass is cut out by the opponents near its path.
 P._passRisk = function (q, tx, ty) {
   const D = dist(q.x, q.y, tx, ty); let risk = 0;
   for (const o of this.players) {
@@ -570,13 +569,11 @@ P._passRisk = function (q, tx, ty) {
   }
   return risk;
 };
-// What decides whether a pass arrives, in the terms the flight model resolves it (see _flight): who can reach the
-// landing point first, opponents standing in the lane, and the passer's error. Returns
-// [1, margin, short, lane, distance / 10, lofted, error, in behind the defence, into the box, defenders near the landing point].
+// The facts that decide whether a pass arrives, for the pass-odds model.
 P._passFeatures = function (q, m, tx, ty, D) {
   const pas = this.eff(q, 'passing'), T = this.teams[q.side].tactics;
   const lofted = D > 28, speed = clamp((9 + D * 0.45) * (0.8 + pas / 50), 10, 26) * (lofted ? 0.75 : 1), tf = D / speed;
-  const reach = 6.5 * tf; // how far a player can run while the ball travels
+  const reach = 6.5 * tf;
   const ra = Math.max(0, dist(m.x, m.y, tx, ty) - reach);
   const dx = tx - q.x, dy = ty - q.y, D2 = D * D || 1;
   let oa = 1e9, lane = 0, press = 1e9, crowd = 0;
@@ -596,23 +593,20 @@ P._passFeatures = function (q, m, tx, ty, D) {
 };
 // Chance a pass is completed, a logistic model fitted to the engine's own passes (tools: fit-pass-odds).
 const PASS_ODDS = [0.98, 0.476, 0.402, -1.659, 0.295, 0.099, -0.317, -0.417, -0.61, -0.103];
+// Chance a pass is completed.
 P._passOdds = function (q, m, tx, ty, D) {
   const f = this._passFeatures(q, m, tx, ty, D);
   let z = 0; for (let k = 0; k < f.length; k++) z += PASS_ODDS[k] * f[k];
   return 1 / (1 + Math.exp(-z));
 };
-// ----- decisions -----
-// Possession value: the chance a possession with the ball at (x, y) ends in a goal for `side`. Shaped like the
-// expected-threat grids fitted to real event data: under 1% in your own half, about 2% 30 m out, 5-7% at the edge
-// of the area and 10% or more around the penalty spot, with wide positions worth less than central ones.
+// Chance a possession with the ball at a point ends in a goal.
 P._possValue = function (side, x, y) {
   const d = this.dir(side), fx = d > 0 ? x : L - x;
-  // (on the same scale as xG, so keeping the ball and shooting are compared like for like)
   return (0.006 + 0.012 * fx / L + TUNING.threat * Math.exp(-dist(fx, y, L, W / 2) / 9.5)) * TUNING.xgScale / 0.95;
 };
-// How much of a position's value a player can use there: a tightly marked player can do little with the ball.
+// How much of a position's value a player can use, given how tightly he is marked.
 P._room = function (q, x, y) { return clamp(0.5 + TUNING.room * this._nearestOpp(q, x, y).d, 0.5, 1); };
-// Chance a carrier still has the ball after running with it toward (cx, cy) until his next decision.
+// Chance a player keeps the ball while running with it to a point.
 P._carryOdds = function (q, cx, cy) {
   const drib = this.eff(q, 'dribbling'), opp = this._side[1 - q.side];
   let keep = 1;
@@ -623,13 +617,11 @@ P._carryOdds = function (q, cx, cy) {
   }
   return keep;
 };
+// Choose what the player on the ball does: shoot, pass, cross, carry, clear or shield.
 P._decide = function (i) {
   const q = this.players[i], tm = this.teams[q.side], T = tm.tactics, r = this.rng, d = this.dir(q.side);
   const press = this._nearestOpp(q).d, fx = d > 0 ? q.x : L - q.x, slot = FORMATIONS[tm.formation][q.slot], wideFw = slot && slot[0] === 'FW' && Math.abs(slot[2] - 0.5) > 0.3;
-  const vis = this.eff(q, 'vision'), noise = TUNING.decisionNoise * clamp(2.2 - vis / 10, 0.3, 2); // a player who reads the game misjudges less
-  // Risk appetite: short passing and a slow tempo value the ball more; direct play values ground gained more.
-  // Losing the ball deep in your own half costs more than its position suggests: the opponent counter-attacks
-  // against a defence that is not set. Near the opponent's goal a loss costs little more than the position.
+  const vis = this.eff(q, 'vision'), noise = TUNING.decisionNoise * clamp(2.2 - vis / 10, 0.3, 2);
   const style = [1.6, 1, 0.65][T.passing] * [1.1, 1, 0.9][T.tempo];
   const lossAt = (x, y) => { const lx = d > 0 ? x : L - x; return this._possValue(1 - q.side, x, y) * style * (1 + (TUNING.lossWeight - 1) * clamp(1.5 * (1 - lx / L), 0, 1)); };
   const directW = [0.8, 1, 1.3][T.passing], maxLen = [30, 42, 55][T.passing];
@@ -637,25 +629,20 @@ P._decide = function (i) {
   const gain = (v) => v > curV ? curV + (v - curV) * directW : v;
   let best = { u: -1e9, kind: 'carry', tx: q.x, ty: q.y };
   const pick = (u, o) => { if (this._trace) this._trace.push([o, u]); u *= 1 + (r() - 0.5) * 2 * noise; if (u > best.u) { o.u = u; best = o; } };
-  // shoot (not with his back to goal: he has to turn first, see _give)
   if (q.slot !== 0 && q.turned) {
     const xg = this._xg(q.x, q.y, q.side, press);
-    // each defender in the line of the shot may block it
     const through = Math.pow(1 - TUNING.blockChance, this._blockers(q));
     if (xg > 0.01 * TUNING.xgScale) pick((xg + TUNING.shotAppetite) * through * TUNING.shotBias * (1 + TUNING.mentalityShoot * (T.mentality - 1)) * (0.9 + this.eff(q, 'shooting') / 100), { kind: 'shoot' });
   }
-  // carry: straight on, or angled in or out
   if (this.gkHands !== i) {
     for (let a = -1; a <= 2; a++) {
       let cx = clamp(q.x + d * (a ? 5 : 6.5), 1, L - 1), cy = clamp(q.y + a * 4.5, 2, W - 2);
-      if (a === 2) { if (fx < 60) break; const gx = d > 0 ? L : 0, gl = dist(q.x, q.y, gx, W / 2) || 1; cx = q.x + (gx - q.x) / gl * 6; cy = q.y + (W / 2 - q.y) / gl * 6; } // cut inside, towards goal
+      if (a === 2) { if (fx < 60) break; const gx = d > 0 ? L : 0, gl = dist(q.x, q.y, gx, W / 2) || 1; cx = q.x + (gx - q.x) / gl * 6; cy = q.y + (W / 2 - q.y) / gl * 6; }
       const pk = this._carryOdds(q, cx, cy) * (q.turned || (cx - q.x) * d <= 0 ? 1 : TUNING.turnKeep);
-      // wide forwards are coached to come inside onto goal
       const role = a === 2 && wideFw ? TUNING.cutInside : 1;
       pick((pk * gain(this._possValue(q.side, cx, cy)) * this._room(q, cx, cy) - (1 - pk) * lossHere) * role, { kind: 'carry', tx: cx, ty: cy });
     }
   }
-  // pass: to feet, or into space ahead of the receiver
   const lineX = this._offsideLine(q.side), mates = this._side[q.side];
   for (let k = 0; k < mates.length; k++) {
     const m = mates[k];
@@ -666,47 +653,43 @@ P._decide = function (i) {
       const D = dist(q.x, q.y, tx, ty);
       if (D < 5 || D > maxLen) continue;
       let p = this._passOdds(q, m, tx, ty, D);
-      if (offside && r() < 0.4 + vis / 40) p = 0; // a passer who sees it does not play an offside team-mate in
+      if (offside && r() < 0.4 + vis / 40) p = 0;
       const j = this.players.indexOf(m);
       pick(p * gain(this._possValue(q.side, tx, ty)) * this._room(m, tx, ty) - (1 - p) * lossAt(tx, ty), { kind: 'pass', j, tx, ty });
     }
   }
-  // cross from wide in the final third: worth the header it might set up
   if (fx > 76 && Math.abs(q.y - W / 2) > 12 && q.slot !== 0) {
     let att = 0, def = 0;
     for (const p of this.players) if (p.onPitch && p.slot !== 0 && this._inBox(q.side, p.x, p.y)) { if (p.side === q.side) att++; else def++; }
     const win = clamp(0.08 + 0.08 * att - 0.025 * def + (this.eff(q, 'passing') - 12) / 100, 0.04, 0.5);
     pick(win * TUNING.crossValue * [0.85, 1, 1.15][T.width], { kind: 'cross' });
   }
-  // clear it upfield: a 50-50 ball 40 m away
   if (fx < 30) {
     const cx = q.x + d * 40;
     pick(0.5 * this._possValue(q.side, cx, q.y) - 0.5 * lossAt(cx, q.y), { kind: 'clear' });
-    // or play it safe into touch: the opponent gets a throw-in, but the defence can set itself
     if (press < 3 && this.gkHands !== i) { const tx = clamp(q.x + d * 12, 1, L - 1), ty = q.y < W / 2 ? -4 : W + 4; pick(-TUNING.touchCost * lossAt(tx, q.y < W / 2 ? 1 : W - 1), { kind: 'touch', tx, ty }); }
   }
-  q.turned = true; // whatever he does, by his next decision he has turned
-  if (this.gkHands === i && best.kind !== 'pass') best = { kind: 'clear' }; // ball in hands: throw or kick it, never dribble
+  q.turned = true;
+  if (this.gkHands === i && best.kind !== 'pass') best = { kind: 'clear' };
   if (best.kind === 'shoot') this._shoot(i, { header: this.ball.z > 1.2 });
   else if (best.kind === 'pass') this._pass(i, best.j, best.tx, best.ty, false);
   else if (best.kind === 'cross') this._cross(i, true);
   else if (best.kind === 'touch') this._kick(i, best.tx, best.ty, 'clear', -1, 3 + r() * 4);
   else if (best.kind === 'clear') { const tx = clamp(q.x + d * (35 + r() * 20), 2, L - 2), ty = clamp(q.y + (r() - 0.5) * 40 + (q.y < W / 2 ? -1 : 1) * TUNING.clearWide, -8, W + 8); this._kick(i, tx, ty, 'clear', -1, 4 + r() * 6); }
   else {
-    // run at the defence when there is room in front, otherwise keep the ball moving at a jog
     let open = true;
     for (const o of this._side[1 - q.side]) if ((o.x - q.x) * d > 0 && dist(o.x, o.y, q.x, q.y) < 10) { open = false; break; }
-    q.carry = { tx: best.tx, ty: best.ty, pace: (open ? 0.85 : TUNING.carryPace) * (0.85 + this.eff(q, 'dribbling') / 80) }; // a good dribbler runs with it faster
+    q.carry = { tx: best.tx, ty: best.ty, pace: (open ? 0.85 : TUNING.carryPace) * (0.85 + this.eff(q, 'dribbling') / 80) };
   }
 };
+// Play a pass, checking offside first and adding the passer's error.
 P._pass = function (i, j, tx, ty, isThrow) {
   const q = this.players[i], m = this.players[j], tm = this.teams[q.side], r = this.rng, d = this.dir(q.side);
-  // offside at the moment the ball is played
   const rt = this.restartType;
   if (!(rt === 'throwin' || rt === 'goalkick' || rt === 'corner')) {
     const lineX = this._offsideLine(q.side);
     const inOppHalf = d > 0 ? m.x > L / 2 : m.x < L / 2;
-    const gap = (m.x - lineX) * d, timing = gap > -4 ? (r() - 0.5) * 2 * TUNING.offsideTiming * clamp(2 - this.eff(q, 'vision') / 10, 0.2, 1.9) : 0; // a run or a pass a fraction too early or late
+    const gap = (m.x - lineX) * d, timing = gap > -4 ? (r() - 0.5) * 2 * TUNING.offsideTiming * clamp(2 - this.eff(q, 'vision') / 10, 0.2, 1.9) : 0;
     if (inOppHalf && gap + timing > 0.3 && (m.x - this.ball.x) * d > 0) {
       tm.stats.offsides++;
       this._emit({ type: 'offside', side: q.side, player: m.id, text: m.p.name + ' is caught offside', x: m.x, y: m.y });
@@ -723,20 +706,19 @@ P._pass = function (i, j, tx, ty, isThrow) {
   tm.stats.passes++; q.st.passes++;
   this._kick(i, tx, ty, 'pass', j, lofted ? 2 + D * 0.08 : 0.15);
 };
+// Send the ball on its way: a pass, cross, clearance or long ball.
 P._kick = function (i, tx, ty, kind, j, h) {
   const q = this.players[i], b = this.ball, D = dist(q.x, q.y, tx, ty);
-  // a good passer zips it; a ball in the air travels more slowly over the ground
   const speed = kind === 'clear' ? 22 : clamp((9 + D * 0.45) * (0.8 + this.eff(q, 'passing') / 50), 10, 26) * (h > 1.5 ? 0.75 : 1);
-  b.owner = -1; b.lastSide = q.side; b.lastIdx = i; this.lastPasser = i; this.lastPasserT = this.clockSec();
+  b.owner = -1; b.lastSide = q.side; this.lastPasser = i; this.lastPasserT = this.clockSec();
   b.flight = { kind, sx: q.x, sy: q.y, tx, ty, dur: Math.max(0.2, D / speed), el: 0, h, passer: i, recv: j, speed,
-    // a good passer weights the ball so it is harder to cut out
     cutOut: kind === 'clear' ? 1 : Math.max(0.35, 1.85 - this.eff(q, 'passing') / 14) };
-  q.carry = null; this.kickT = this.clockSec();
+  q.carry = null;
 };
+// Cross the ball into the box towards the best-placed team-mate.
 P._cross = function (i, open, fk) {
   const q = this.players[i], d = this.dir(q.side), r = this.rng;
   const gx = d > 0 ? L : 0;
-  // an open-play cross into a defender standing in front of the crosser is blocked, often behind for a corner
   if (open) {
     const o = this._nearestOpp(q);
     if (o.i >= 0 && o.d < 2 && (this.players[o.i].x - q.x) * d > -0.5 && r() < TUNING.crossBlock) {
@@ -746,20 +728,17 @@ P._cross = function (i, open, fk) {
       return;
     }
   }
-  const acc = (1.5 - this.eff(q, 'passing') / 25) * (open ? 1 : 0.7); // a good crosser finds his man; a corner is a rehearsed delivery
-  // Aim for a team-mate attacking the box (near post, far post or penalty spot), preferring a good header of the
-  // ball with room around him; with no one there, put it into the danger area and hope.
+  const acc = (1.5 - this.eff(q, 'passing') / 25) * (open ? 1 : 0.7);
   let j = -1, best = -1e9;
   this.players.forEach((m, k) => {
     if (!m.onPitch || m.side !== q.side || k === i || m.slot === 0 || Math.abs(m.x - gx) > 16 || Math.abs(m.y - W / 2) > 16) return;
-    const sc = this.eff(m, 'heading') * (open ? 0.15 : 0.4) + Math.min(4, this._nearestOpp(m).d) + r() * 2; // set pieces are aimed at the best headers
+    const sc = this.eff(m, 'heading') * (open ? 0.15 : 0.4) + Math.min(4, this._nearestOpp(m).d) + r() * 2;
     if (sc > best) { best = sc; j = k; }
   });
   const aimX = j >= 0 ? this.players[j].x + d : gx - d * 9, aimY = j >= 0 ? this.players[j].y : W / 2;
   let tx = clamp(aimX + (r() - 0.5) * 8 * acc, gx > 0 ? L - 18 : 2, gx > 0 ? L - 2 : 18), ty = aimY + (r() - 0.5) * 10 * acc;
-  if (r() < TUNING.overhit * acc) { if (r() < 0.3) { ty = q.y < W / 2 ? W + 2 + r() * 4 : -2 - r() * 4; tx = clamp(tx + d * r() * 6, -3, L + 3); } else { tx = gx + d * (1 + r() * 3); ty = W / 2 + (q.y < W / 2 ? 1 : -1) * (5 + r() * 12); } } // over-hit: out beyond the far post, or over the bar's line
+  if (r() < TUNING.overhit * acc) { if (r() < 0.3) { ty = q.y < W / 2 ? W + 2 + r() * 4 : -2 - r() * 4; tx = clamp(tx + d * r() * 6, -3, L + 3); } else { tx = gx + d * (1 + r() * 3); ty = W / 2 + (q.y < W / 2 ? 1 : -1) * (5 + r() * 12); } }
   if (j < 0) { let bd = 1e9; this.players.forEach((m, k) => { if (m.onPitch && m.side === q.side && k !== i && m.slot !== 0) { const dd = dist(m.x, m.y, tx, ty) - this.eff(m, 'heading') * 0.2; if (dd < bd) { bd = dd; j = k; } } }); }
-  // a free kick into the box can be offside (a corner cannot, Law 11)
   if (fk && j >= 0) {
     const m = this.players[j], gap = (m.x - this._offsideLine(q.side)) * d;
     if (gap + (r() - 0.5) * 2 > 0.3 && (m.x - q.x) * d > 0) {
@@ -773,13 +752,12 @@ P._cross = function (i, open, fk) {
   this.teams[q.side].stats.passes++; q.st.passes++;
   this._kick(i, tx, ty, 'cross', j, 4.5);
 };
+// Leave the ball loose at a point, rolling with a given speed.
 P._loose = function (x, y, vx, vy) {
   const b = this.ball; b.owner = -1; b.flight = null; b.x = x; b.y = y; b.z = 0; b.vx = vx; b.vy = vy;
 };
 
-// ----- fouls, cards, injuries -----
-// Law 12. kind: 'challenge' (direct free kick or penalty), 'dangerous' (playing in a dangerous manner,
-// indirect free kick), 'handball' (direct free kick or penalty), 'backpass' (keeper handles a back-pass, indirect).
+// Penalise a foul or handball: advantage, card, free kick or penalty.
 P._foul = function (ti, oi, kind, o2) {
   kind = kind || 'challenge'; o2 = o2 || {};
   const t = this.players[ti], o = oi >= 0 ? this.players[oi] : null, r = this.rng, att = 1 - t.side, d = this.dir(att);
@@ -788,16 +766,12 @@ P._foul = function (ti, oi, kind, o2) {
   if (kind !== 'backpass') { tt.stats.fouls++; t.st.fouls++; }
   const inBox = this._inBox(att, fx, fy);
   let goalSide = 0; for (const q of this._side[t.side]) if (q.slot !== 0 && q !== t && (q.x - fx) * d > 0) goalSide++;
-  // Denying an obvious goal-scoring opportunity (Law 12): distance and direction to goal, the defenders goal-side, and
-  // (2026/27) the position and number of attackers: with one defender left, two team-mates in support still make it
-  // an obvious chance.
   const nearGoal = Math.abs(fx - (d > 0 ? L : 0)) < 22 && Math.abs(fy - W / 2) < 15;
   let support = 0;
   if (o && goalSide === 1 && nearGoal) for (const q of this._side[att]) if (q !== o && q.slot !== 0 && dist(q.x, q.y, fx, fy) < 15 && (q.x - fx) * d > -4) support++;
   const lastMan = kind === 'challenge' && nearGoal && (goalSide === 0 || support >= 2);
   const what = kind === 'handball' ? 'Handball by ' + t.p.name : kind === 'dangerous' ? 'Dangerous play by ' + t.p.name : kind === 'backpass' ? t.p.name + ' handles a back-pass' : 'Foul by ' + t.p.name + ' on ' + o.p.name;
   this._emit({ type: 'foul', offence: kind, side: t.side, player: t.id, victim: o ? o.id : undefined, text: what, x: fx, y: fy });
-  // misconduct
   let card = null, why = '';
   const agg = [0.85, 1, 1.25][tt.tactics.pressing];
   if (kind === 'challenge') {
@@ -809,36 +783,30 @@ P._foul = function (ti, oi, kind, o2) {
     else if (r() < 0.3) { card = 'yellow'; why = 'handball stopped a promising attack'; }
   } else if (kind === 'dangerous' && r() < 0.12 * (t.yellow ? 0.5 : 1)) { card = 'yellow'; why = 'reckless play'; }
   const hurt = kind === 'challenge' && o && !o.injured && r() < 0.015 && (this._injure(oi, false), !!o.injured);
-  // advantage: play on when the fouled side keeps the ball in a useful position (Law 5); not for serious foul play
   const keeps = o && this.ball.owner === oi && this.phase === 'play';
   const fxa = d > 0 ? fx : L - fx;
   const dogso = card === 'red' && why.startsWith('denied');
   if ((kind === 'challenge' || kind === 'dangerous') && keeps && !inBox && fxa > 45 && !(card === 'red' && !dogso) && r() < 0.4) {
-    // Law 12 (2026/27), with advantage played: denying an obvious goal-scoring opportunity is a caution, and no card
-    // at all if the goal follows; stopping a promising attack is not cautioned. If the advantage does not follow,
-    // the referee goes back to the original sanction.
     if (card) {
       const spa = card === 'yellow' && why === 'stopped a promising attack';
       this.pendingCards.push({ ti, card: dogso ? 'yellow' : spa ? null : card, why: dogso ? 'denied a goal-scoring chance, advantage played' : why, dogso, for: att, orig: { card, why } });
     }
     this.advantage = { side: att, x: fx, y: fy, until: this.clockSec() + 3, direct: kind === 'challenge' };
     this._emit({ type: 'advantage', side: att, player: o.id, text: 'Advantage played to ' + this.teams[att].name, x: fx, y: fy });
-    for (const q of this._side[t.side]) if (dist(q.x, q.y, o.x, o.y) < 4) q.tackleCd = Math.max(q.tackleCd, 1.5); // let the advantage develop
+    for (const q of this._side[t.side]) if (dist(q.x, q.y, o.x, o.y) < 4) q.tackleCd = Math.max(q.tackleCd, 1.5);
     return;
   }
   if (card) this._card(ti, card, why);
   if (this.abandoned) return;
-  // Law 5 (2026/27): a seriously hurt player leaves the field for treatment, unless the offender was cautioned or
-  // sent off for the challenge or the player is to take the penalty.
   if (hurt && o.injured.days >= 10) this._treat(o, !!card || inBox);
   const direct = kind === 'challenge' || kind === 'handball';
   if (inBox && direct) this._setRestart('penalty', att, d > 0 ? L - 11 : 11, W / 2, 7);
   else if (inBox) {
-    // indirect free kick in the area: from the spot, or from the goal-area line if inside it
     const gx = d > 0 ? L : 0, ix = Math.abs(fx - gx) < 5.5 ? gx - d * 5.5 : fx;
     this._setRestart('freekick', att, ix, fy, 5, { direct: false });
   } else this._setRestart('freekick', att, fx, fy, 4, { direct });
 };
+// Show a player a yellow or red card.
 P._card = function (ti, card, why) {
   const t = this.players[ti], tt = this.teams[t.side];
   if (!t.onPitch && !t.treat) return;
@@ -848,6 +816,7 @@ P._card = function (ti, card, why) {
     else this._emit({ type: 'yellow', side: t.side, player: t.id, text: 'Yellow card: ' + t.p.name + (why ? ' (' + why + ')' : '') });
   } else this._sendOff(ti, why || 'serious foul play');
 };
+// Send a player off.
 P._sendOff = function (ti, why) {
   const t = this.players[ti], tt = this.teams[t.side];
   if (t.treat) this._endTreatment(t, false);
@@ -857,8 +826,7 @@ P._sendOff = function (ti, why) {
   this._checkAbandon();
   if (t.slot === 0 && !this.finished) this._replaceKeeper(t.side);
 };
-// Law 3: a team must have a goalkeeper. After the keeper is sent off, an outfield player makes way for the
-// substitute keeper; with no keeper or substitutions left, an outfield player goes in goal.
+// Put a new goalkeeper in after the keeper is sent off.
 P._replaceKeeper = function (side) {
   const tm = this.teams[side];
   const gk = tm.bench.find(p => p.role === 'GK' && !tm.pending.some(c => c.inId === p.id));
@@ -866,9 +834,7 @@ P._replaceKeeper = function (side) {
   if (gk && out && this.substitute(side, out.id, gk.id, true).ok) return;
   this._reslot(side);
 };
-// Law 8 (2026/27): a dropped ball in a penalty area goes to the defending keeper; anywhere else, to the team that
-// would have kept or gained possession: the team in possession (or `winner`, the side that had just won it), else
-// the side whose player would get to the loose ball first.
+// Which side gets a dropped ball.
 P._droppedBallSide = function (winner) {
   const b = this.ball;
   for (const s of [0, 1]) if (this._inOwnBox(s, b.x, b.y)) return s;
@@ -883,6 +849,7 @@ P._droppedBallSide = function (winner) {
   }
   return side;
 };
+// Injure a player and stop play if it is serious.
 P._injure = function (i, canStop, winner) {
   const q = this.players[i]; if (q.injured || !q.onPitch) return false;
   const r = this.rng, kinds = ['hamstring strain', 'ankle knock', 'calf strain', 'knee sprain', 'groin strain', 'dead leg'];
@@ -899,8 +866,7 @@ P._injure = function (i, canStop, winner) {
   }
   return false;
 };
-// Law 5 (2026/27): a player assessed or treated on the field leaves it, and may come back only one minute after play
-// restarts. Goalkeepers are exempt. The team plays a player short meanwhile (or replaces him).
+// Take an injured player off the field for treatment.
 P._treat = function (q, exempt) {
   if (exempt || q.slot === 0 || !q.onPitch || this.phase === 'halftime') return;
   const i = this.players.indexOf(q);
@@ -910,12 +876,14 @@ P._treat = function (q, exempt) {
   if (this.ball.owner === i) this.ball.owner = -1;
   this._emit({ type: 'treatment', side: q.side, player: q.id, text: q.p.name + ' leaves the field for treatment' });
 };
+// End a player's treatment and let him back on.
 P._endTreatment = function (q, back) {
   q.treat = null; this.treating = this.treating.filter(x => x !== q);
   if (!back) return;
   q.onPitch = true;
   this._emit({ type: 'treatment', side: q.side, player: q.id, back: true, text: q.p.name + ' returns after treatment' });
 };
+// Abandon the match if a side has fewer than seven players.
 P._checkAbandon = function () {
   for (const s of [0, 1]) if (this.onPitch(s).length + this.treating.filter(q => q.side === s).length < 7) {
     this.abandoned = { reason: this.teams[s].name + ' have fewer than 7 players', minute: this.minute() };
@@ -924,8 +892,9 @@ P._checkAbandon = function () {
   }
 };
 
-// ----- manager commands (queued until the next stoppage) -----
+// Record a manager command so the match can be replayed exactly.
 P._cmd = function (c, fromReplay) { if (!fromReplay) this.commands.push(Object.assign({ tick: this.tick }, c)); };
+// Queue a substitution for the next stoppage, checking it is legal.
 P.substitute = function (side, outId, inId, _replay) {
   const tm = this.teams[side];
   const out = this.players.find(q => q.id === outId && q.side === side);
@@ -939,7 +908,6 @@ P.substitute = function (side, outId, inId, _replay) {
   const maxSubs = this._maxSubs();
   if (tm.subsUsed + queuedOut >= maxSubs) return { ok: false, error: 'No substitutions left (' + maxSubs + ' used)' };
   if (tm.pending.some(c => c.kind === 'sub' && (c.outId === outId || c.inId === inId))) return { ok: false, error: 'Already queued' };
-  // Substitutions made during the same stoppage share one window.
   const sameStoppage = this.phase === 'dead' && tm.windowStoppage === this.stoppage;
   const newWindow = !tm.pending.some(c => c.kind === 'sub') && this.phase !== 'halftime' && !sameStoppage;
   if (newWindow && tm.windowsUsed >= this._maxWindows()) return { ok: false, error: 'All ' + this._maxWindows() + ' substitution windows used' };
@@ -948,7 +916,9 @@ P.substitute = function (side, outId, inId, _replay) {
   if (this.phase === 'halftime' || this.phase === 'dead') this._applyPending();
   return { ok: true, queued: this.phase === 'play' };
 };
+// Cancel a queued manager change.
 P.cancelPending = function (side, idx) { this.teams[side].pending.splice(idx, 1); this._cmd({ kind: 'cancel', side, idx }); };
+// Queue a tactics change for the next stoppage.
 P.setTactics = function (side, t, _replay) {
   const tm = this.teams[side];
   tm.pending = tm.pending.filter(c => c.kind !== 'tactics');
@@ -957,6 +927,7 @@ P.setTactics = function (side, t, _replay) {
   if (this.phase !== 'play') this._applyPending();
   return { ok: true, queued: this.phase === 'play' };
 };
+// Queue a formation change for the next stoppage.
 P.setFormation = function (side, f, _replay) {
   if (!FORMATIONS[f]) return { ok: false, error: 'Unknown formation' };
   const tm = this.teams[side];
@@ -966,6 +937,7 @@ P.setFormation = function (side, f, _replay) {
   if (this.phase !== 'play') this._applyPending();
   return { ok: true, queued: this.phase === 'play' };
 };
+// Apply the queued substitutions and tactics changes at a stoppage.
 P._applyPending = function () {
   for (const tm of this.teams) {
     if (!tm.pending.length) continue;
@@ -984,8 +956,6 @@ P._applyPending = function () {
         out.onPitch = false; out.subOff = true; out.st.offAt = this.clockSec();
         const nq = this._mkRuntime(inn, tm.side, out.slot, true); nq.st.onAt = this.clockSec();
         if (this.phase === 'dead' && this.restart && !wasTreated) {
-          // Law 3 (2026/27): the substituted player leaves within 10 seconds, at the nearest point on the boundary;
-          // the substitute comes on at the halfway line once he is off, and play waits for the change.
           const ex = [[out.x, -3, out.y], [out.x, W + 3, W - out.y], [-3, out.y, out.x], [L + 3, out.y, L - out.x]].sort((a, b) => a[2] - b[2])[0];
           out.leaving = { x: ex[0], y: ex[1], until: this.clockSec() + 10, sp: Math.max(1.5, (dist(out.x, out.y, ex[0], ex[1]) - 2) / 8) };
           this.leaving.push(out);
@@ -999,11 +969,9 @@ P._applyPending = function () {
         if (this.restart && this.restart.taker === oi) this.restart.taker = this.players.length - 1;
         if (inn.role === 'GK' && !this.onPitch(tm.side).some(q => q.slot === 0)) this._reslot(tm.side);
         this._emit({ type: 'sub', side: tm.side, player: inn.id, off: out.p.id, text: 'Substitution ' + tm.name + ': ' + inn.name + ' on, ' + out.p.name + ' off' + (out.injured ? ' (injured)' : ''), cond: out.cond });
-        this.subTimes = (this.subTimes || []); this.subTimes.push({ side: tm.side, t: this.clockSec() });
       } else if (c.kind === 'tactics') {
         Object.assign(tm.tactics, c.tactics);
         this._emit({ type: 'tactic', side: tm.side, text: tm.name + ' change tactics: ' + TACTIC_KEYS.filter(k => c.tactics[k] != null).map(k => k + ' ' + TACTIC_LABELS[k][c.tactics[k]]).join(', ') });
-        this.subTimes = (this.subTimes || []); this.subTimes.push({ side: tm.side, t: this.clockSec(), tactic: true });
       } else if (c.kind === 'formation') {
         tm.formation = c.formation;
         this._reslot(tm.side);
@@ -1014,6 +982,7 @@ P._applyPending = function () {
   }
   this._updateEdges();
 };
+// Work out each side's tactical advantage from both sides' tactics and formations.
 P._updateEdges = function () {
   for (let s = 0; s < 2; s++) {
     const T = this.teams[s].tactics, O = this.teams[1 - s].tactics;
@@ -1024,9 +993,10 @@ P._updateEdges = function () {
     this._edge[s] = m;
     this._central[s] = TACTIC_EDGE.centralConcede[T.width];
     this._crossEdge[s] = TACTIC_EDGE.crossConcede[T.width];
-    this._cutOut[s] = [0.8, 1, 1.15][T.passing] * [0.85, 1, 1.15][T.tempo]; // how often our passes are intercepted
+    this._cutOut[s] = [0.8, 1, 1.15][T.passing] * [0.85, 1, 1.15][T.tempo];
   }
 };
+// Reassign players to formation slots after a change.
 P._reslot = function (side) {
   const tm = this.teams[side], f = FORMATIONS[tm.formation];
   const ps = this.onPitch(side);
@@ -1040,13 +1010,12 @@ P._reslot = function (side) {
   });
 };
 
-// ----- AI manager -----
+// Make the AI manager's tactics changes and substitutions.
 P._ai = function (side) {
   const tm = this.teams[side], m = this.clockSec() / 60;
   const diff = tm.score - this.teams[1 - side].score;
   if (m > 70 && diff < 0 && tm.tactics.mentality < 2 && !tm.aiChased) { tm.aiChased = true; this.setTactics(side, { mentality: 2, tempo: 2 }, true); }
   if (m > 80 && diff > 0 && tm.tactics.mentality > 0 && !tm.aiProtect) { tm.aiProtect = true; this.setTactics(side, { mentality: 0 }, true); }
-  // injured player first
   const inj = this.onPitch(side).find(q => q.injured) || this.treating.find(q => q.side === side);
   const maxSubs = this._maxSubs();
   if (inj && tm.subsUsed < maxSubs) this._aiSub(side, inj);
@@ -1057,6 +1026,7 @@ P._ai = function (side) {
   const n = Math.min(maxSubs - tm.subsUsed, tm.windowsUsed >= 2 && this.half <= 2 ? 5 : 2);
   tired.slice(0, n).forEach(q => this._aiSub(side, q));
 };
+// Make the AI manager's best substitution for a player.
 P._aiSub = function (side, out) {
   const tm = this.teams[side];
   if (tm.pending.some(c => c.outId === out.id)) return;
@@ -1066,23 +1036,20 @@ P._aiSub = function (side, out) {
   if (cand.length) this.substitute(side, out.id, cand[0].id, true);
 };
 
-// ----- positioning -----
 const LINE_BACK = [18, 26, 36], LINE_LEN = [26, 30, 34], MARK_RANGE = [15, 12, 9];
 // In possession: how far behind the ball the back line and the deepest midfielders stay (metres).
 const MARK_BALLSIDE = 0.45; // how far a marker leans from goal-side towards the ball
 const SHAPE = { backGap: 30, mfAhead: [-10, 9], boxRun: 0.35, lineDepth: 0.4, dropShort: 0.35, runPace: 0.85 };
-// Off the ball, a supporting player drifts to the nearby spot with the most room and a clear line to the ball,
-// never beyond `lim` (the offside line) and preferring the spot he chose last time, so he does not dither.
+// Off the ball, a supporting player drifts to the nearby spot with the most room and a clear line to the ball, never beyond `lim` (the offside line) and preferring the spot he chose last time, so he does not dither.
 const SPACE_OFFSETS = [[0, 0], [4, 0], [-4, 0], [0, 5], [0, -5], [3, 4], [3, -4], [-3, 4], [-3, -4]];
 const SPACE_COST = SPACE_OFFSETS.map(o => 0.3 * Math.hypot(o[0], o[1]));
+// Move an attacker to the nearby spot with the most room and a clear line to the ball.
 P._findSpace = function (q, lim) {
   const b = this.ball, opp = this._side[1 - q.side], d = this.dir(q.side), n0 = opp.length;
   let best = -1e9, bk = 0, bx = q.tx, by = q.ty;
   for (let k = 0; k < SPACE_OFFSETS.length; k++) {
     let cx = clamp(q.tx + d * SPACE_OFFSETS[k][0], 1, L - 1); const cy = clamp(q.ty + SPACE_OFFSETS[k][1], 2, W - 2);
     if (lim != null && (cx - lim) * d > 0) cx = lim;
-    // nearest opponent to the spot, and nearest to the line from the ball to it: compared squared, rooted once
-    // (the same numbers dist and segDist would give, since the square root keeps the order)
     const sx = cx - b.x, sy = cy - b.y, l2 = sx * sx + sy * sy;
     let room2 = Infinity, lane2 = Infinity;
     for (let n = 0; n < n0; n++) {
@@ -1097,10 +1064,12 @@ P._findSpace = function (q, lim) {
   }
   q.spaceK = bk; q.tx = bx; q.ty = by;
 };
-P._sides = function () { // on-pitch players per side, rebuilt each tick without allocating
+// Rebuild the list of on-field players for each side.
+P._sides = function () {
   const s0 = this._side[0], s1 = this._side[1]; s0.length = 0; s1.length = 0;
   for (let i = 0; i < this.players.length; i++) { const q = this.players[i]; if (q.onPitch) (q.side === 0 ? s0 : s1).push(q); }
 };
+// Send the nearest players of a side to a point.
 P._chase = function (side, n, x, y, urg) {
   const list = this._side[side], tick = this.tick;
   for (let k = 0; k < n; k++) {
@@ -1109,19 +1078,17 @@ P._chase = function (side, n, x, y, urg) {
     if (!best) return; best.tx = x; best.ty = y; best.urgent = urg; best.chased = tick;
   }
 };
+// Decide where every player should be running: shape, runs, marking and pressing.
 P._targets = function () {
-  // The side last in possession keeps its attacking shape through a loose or contested ball, until the other side wins it.
   const b = this.ball, ownerSide = b.owner >= 0 ? this.players[b.owner].side : (b.lastSide != null && b.lastSide >= 0 ? b.lastSide : -1);
   for (let s = 0; s < 2; s++) {
     const tm = this.teams[s], T = tm.tactics, d = this.dir(s), f = FORMATIONS[tm.formation];
     const attacking = ownerSide === s;
-    // Law 11: no one is offside level with or behind the ball, so the line attackers must stay behind is the
-    // second-last defender or the ball, whichever is nearer the goal.
     const ol0 = attacking ? this._offsideLine(s) : 0, ol = attacking ? (d > 0 ? Math.max(ol0, b.x) : Math.min(ol0, b.x)) : 0;
-    const bx = d > 0 ? b.x : L - b.x; // ball progress in team frame
+    const bx = d > 0 ? b.x : L - b.x;
     let back, len, wf;
     if (attacking) { back = clamp(bx - SHAPE.backGap + T.mentality * 3 + T.line * 3, 14, 58); len = 40 + T.mentality * 4; wf = 0.72 + T.width * 0.1; }
-    else { back = Math.min(clamp(Math.max(bx - 30, bx * SHAPE.lineDepth), 9, LINE_BACK[T.line] - (1 - T.mentality) * 3), Math.max(5, bx * 0.6 + 1)); /* drop towards goal once the ball is deep in the area */ len = LINE_LEN[T.line] - (2 - T.pressing) - (1 - T.mentality) * 3; wf = 0.5 + T.width * 0.04; }
+    else { back = Math.min(clamp(Math.max(bx - 30, bx * SHAPE.lineDepth), 9, LINE_BACK[T.line] - (1 - T.mentality) * 3), Math.max(5, bx * 0.6 + 1)); len = LINE_LEN[T.line] - (2 - T.pressing) - (1 - T.mentality) * 3; wf = 0.5 + T.width * 0.04; }
     const shiftY = (b.y - W / 2) * (attacking ? 0.25 : 0.42);
     const list = this._side[s];
     for (let i = 0; i < list.length; i++) {
@@ -1131,22 +1098,16 @@ P._targets = function () {
       if (q.slot === 0) { tx = attacking ? clamp(bx - 50, 4, 18) : clamp(2 + bx * 0.04, 2, 7); ty = W / 2 + (b.y - W / 2) * 0.12; }
       else if (!attacking) tx = back + sl[1] * len;
       else if (role === 'DF') {
-        // The back line steps up behind the play; full-backs push on, and overlap when the ball is on their wing.
         tx = back + (wide ? 4 + T.mentality * 3 : 0);
         if (wide && bx > 55 && T.mentality > 0 && (b.y - W / 2) * (sl[2] - 0.5) > 0) { tx = Math.min(bx + 2, L - 14); ty = sl[2] < 0.5 ? 4 : W - 4; }
       } else if (role === 'MF') {
-        // Midfielders offer a pass at different depths: the deep ones behind the ball, the attacking ones ahead of
-        // it, in the space between the opponent's midfield and back line; wide midfielders play as wingers.
         const lift = clamp((sl[1] - 0.3) / 0.15, 0, 1), olx = d > 0 ? ol : L - ol;
         tx = Math.max(bx + (wide ? 4 : SHAPE.mfAhead[0] + (SHAPE.mfAhead[1] - SHAPE.mfAhead[0]) * lift), back + 12 + 12 * sl[1]);
         tx = Math.min(tx, L - 21 + 9 * lift, olx - 3);
         if (q.boxRun && bx > 70 && !wide) { tx = L - 11; ty = W / 2 + (sl[2] - 0.5) * 18; }
-      } else tx = q.boxRun ? Math.max(bx + 7, back + 26) : L; // forwards play on the last defender (held onside below), now and then dropping short to link play
-      // In possession the widest attackers hold the width, close to the touchline.
+      } else tx = q.boxRun ? Math.max(bx + 7, back + 26) : L;
       if (attacking && role !== 'DF' && Math.abs(sl[2] - 0.5) > 0.33) {
         ty = sl[2] < 0.5 ? [6, 4, 2.5][T.width] : W - [6, 4, 2.5][T.width];
-        // with the ball on the far flank in the final third, the winger attacks the far post; on his own flank he
-        // comes inside into the half-space, leaving the touchline to the overlapping full-back
         if (bx > 72 && (b.y - W / 2) * (sl[2] - 0.5) < -3) { tx = L - 8; ty = W / 2 + (sl[2] < 0.5 ? -5 : 5); }
         else if (bx > 66 && (b.y - W / 2) * (sl[2] - 0.5) > 0 && q !== this.players[b.owner]) { tx = Math.max(tx, Math.min(bx + 4, L - 14)); ty = W / 2 + (sl[2] < 0.5 ? -15 : 15); }
       }
@@ -1155,25 +1116,20 @@ P._targets = function () {
       else if (attacking && role === 'MF') ax = d > 0 ? Math.min(ax, ol - 1) : Math.max(ax, ol + 1);
       q.tx = clamp(ax, 0.5, L - 0.5); q.ty = clamp(ty, 1, W - 1); q.urgent = 0;
       if (attacking && q.slot !== 0 && role !== 'DF' && b.owner >= 0 && q !== this.players[b.owner]) this._findSpace(q, role === 'FW' || role === 'MF' ? ol + (role === 'FW' ? -0.6 + q.runOff : -1) * d : null);
-      // A support run: a team-mate well behind the play when his side has the ball runs to join it; near the box,
-      // forwards and midfielders attack their spot at speed.
       if (attacking && q.slot !== 0) {
         const gain = (q.tx - q.x) * d;
         if (role !== 'DF' && bx > 70 && gain > 2.5) q.urgent = SHAPE.runPace; else if (gain > 16) q.urgent = 0.55;
       }
     }
   }
-  // marking: defenders pick up attackers in their own third, staying goal-side
   const tick = this.tick;
   for (let s = 0; s < 2; s++) {
     if (ownerSide === s) continue;
     const d = this.dir(s), ownGoal = d > 0 ? 0 : L, mine = this._side[s], theirs = this._side[1 - s];
     const range = MARK_RANGE[this.teams[s].tactics.mentality];
-    // the most dangerous attacker (nearest the goal) is picked up first
     const order = this._markOrder; order.length = 0;
     for (let k = 0; k < theirs.length; k++) order.push(theirs[k]);
     for (let k = 0; k < order.length; k++) order[k].gd = dist(order[k].x, order[k].y, ownGoal, W / 2);
-    // stable insertion sort: the same order Array.prototype.sort (also stable) gives, without allocating
     for (let k = 1; k < order.length; k++) { const a = order[k]; let j = k - 1; while (j >= 0 && order[j].gd > a.gd) { order[j + 1] = order[j]; j--; } order[j + 1] = a; }
     for (let k = 0; k < order.length; k++) {
       const a = order[k];
@@ -1181,27 +1137,22 @@ P._targets = function () {
       let best = null, bd = range * range;
       for (let i = 0; i < mine.length; i++) { const q = mine[i]; if (q.slot === 0 || q.marking === tick) continue; const dx = q.tx - a.x, dy = q.ty - a.y, dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = q; } }
       if (best) {
-        // Goal-side and ball-side of his man, closer the better he reads the game, so the pass into him is covered.
         best.marking = tick; const gap = 2.6 - this.eff(best, 'positioning') / 12;
         const gx = ownGoal - a.x, gy = W / 2 - a.y, gl = Math.hypot(gx, gy) || 1, kx = b.x - a.x, ky = b.y - a.y, kl = Math.hypot(kx, ky) || 1;
-        // (with his back to goal, between the ball and the goal, he is marked from behind)
         const w = MARK_BALLSIDE * clamp(1 + (gx * kx + gy * ky) / (gl * kl), 0, 1);
         const ux = (1 - w) * gx / gl + w * kx / kl, uy = (1 - w) * gy / gl + w * ky / kl, ul = Math.hypot(ux, uy) || 1;
         best.tx = a.x + ux / ul * gap; best.ty = a.y + uy / ul * gap; best.urgent = dist(a.x, a.y, b.x, b.y) < 22 ? 0.7 : 0;
       }
     }
   }
-  // pressing and ball chasing
   if (b.owner >= 0) {
     const o = this.players[b.owner], ds = 1 - o.side, tm = this.teams[ds];
     const ownHalf = (o.x - L / 2) * this.dir(o.side) < 0;
     const pr = tm.tactics.pressing;
     const n = pr === 2 ? 2 : pr === 1 ? (ownHalf ? 1 : 2) : 1;
-    // pressers close the carrier down to about a metre, goal-side, rather than standing on the ball
     const pd = this.dir(ds);
     this._chase(ds, n, o.x - pd * TUNING.jockey, o.y, pr === 0 && ownHalf ? 0.6 : 1);
     this._carrierTarget();
-    // defending side: nearest defenders goal-side track the carrier in their own third; keeper rushes out in the box
     const dd = this.dir(ds), fx = dd > 0 ? o.x : L - o.x;
     if (fx < 38) this._chase(ds, fx < 20 ? 2 : 1, o.x - dd * 1.2, o.y, 1);
     const gk = this._keeper(ds);
@@ -1211,13 +1162,9 @@ P._targets = function () {
     if (f.recv >= 0) { const m = this.players[f.recv]; m.tx = f.tx; m.ty = f.ty; m.urgent = 1; }
     else this._chase(f.kind === 'clear' ? this.players[f.passer].side : 0, 1, f.tx, f.ty, 1);
     const ds = 1 - this.players[f.passer].side;
-    // Defenders read a pass only once it is struck: they react after a moment, then the nearest goes for where
-    // it will land and the one best placed to cut out a ball along the ground steps into its path.
     if (f.el >= TUNING.reaction) {
-      // meet the ball a stride before it lands, in front of the receiver
       const fl = dist(f.sx, f.sy, f.tx, f.ty) || 1;
       this._chase(ds, 1, f.tx - (f.tx - f.sx) / fl * 1.5, f.ty - (f.ty - f.sy) / fl * 1.5, 1);
-      // the keeper comes off his line for a ball into his area that he can reach before it lands
       const gk = this._keeper(ds);
       if (gk && f.kind !== 'clear' && this._inOwnBox(ds, f.tx, f.ty) && Math.abs(f.tx - (this.dir(ds) > 0 ? 0 : L)) < 14 && dist(gk.x, gk.y, f.tx, f.ty) / 6 < f.dur - f.el + 0.4) { gk.tx = f.tx; gk.ty = f.ty; gk.urgent = 1; }
     }
@@ -1235,13 +1182,15 @@ P._targets = function () {
     }
   } else if (!b.flight) { this._chase(0, 1, b.x, b.y, 1); this._chase(1, 1, b.x, b.y, 1); }
 };
+// A side's goalkeeper on the field, or null.
 P._keeper = function (side) { const l = this._side[side]; for (let i = 0; i < l.length; i++) if (l[i].slot === 0) return l[i]; return null; };
-// The ball carrier follows the ball every tick, even on ticks where the rest of the team keeps its plan.
+// Keep the ball carrier heading where he chose to run.
 P._carrierTarget = function () {
   const b = this.ball; if (b.owner < 0) return;
   const o = this.players[b.owner];
   if (o.carry) { o.tx = o.carry.tx; o.ty = o.carry.ty; o.urgent = o.carry.pace; } else { o.tx = o.x; o.ty = o.y; }
 };
+// Move players to legal positions for the restart being taken.
 P._restartTargets = function () {
   const r = this.restart, b = this.ball;
   for (const q of this.players) {
@@ -1249,7 +1198,7 @@ P._restartTargets = function () {
     if (r.type === 'kickoff') { const d = this.dir(q.side), own = d > 0 ? Math.min(q.tx, L / 2 - 1) : Math.max(q.tx, L / 2 + 1); q.tx = own; }
     if (r.type === 'penalty' && q.slot !== 0) { const inBox = Math.abs(q.ty - W / 2) < BOX_HALF + 1 && Math.abs(q.tx - b.x) < 9; if (inBox) q.tx = b.x + (b.x > L / 2 ? -11 : 11); }
     if (q.side !== r.side) {
-      const keep = r.type === 'throwin' ? 2.2 : r.type === 'dropball' ? 4.2 : 9.6; // Laws 15, 8 and 13
+      const keep = r.type === 'throwin' ? 2.2 : r.type === 'dropball' ? 4.2 : 9.6;
       const dd = dist(q.tx, q.ty, b.x, b.y); if (dd < keep && q.slot !== 0) { const a = Math.atan2(q.ty - b.y, q.tx - b.x); q.tx = b.x + Math.cos(a) * keep; q.ty = b.y + Math.sin(a) * keep; }
       if (r.type === 'goalkick' && this._inOwnBox(r.side, q.tx, q.ty)) q.tx = this.dir(r.side) > 0 ? BOX_D + 1 : L - BOX_D - 1;
     }
@@ -1257,11 +1206,12 @@ P._restartTargets = function () {
       const d = this.dir(r.side), gx = d > 0 ? L : 0;
       if (q.slot !== 0 && (q.side === r.side ? q.p.role !== 'MF' || q.slot % 2 : true)) { if (Math.abs(q.tx - gx) > 18 && q.side !== r.side || q.side === r.side && q.p.role !== 'MF') { q.tx = gx - d * (r.delivery ? (q.side === r.side ? 9 + (q.slot % 4) * 2 : 8 + (q.slot % 4) * 1.5) : 5 + (q.slot % 4) * 3); q.ty = W / 2 + ((q.slot * 7) % 13 - 6); } }
     }
-    q.tx = clamp(q.tx, -0.5, L + 0.5); q.ty = clamp(q.ty, -0.5, W + 0.5); // never send anyone off the field
+    q.tx = clamp(q.tx, -0.5, L + 0.5); q.ty = clamp(q.ty, -0.5, W + 0.5);
     q.urgent = 0;
   }
   const t = this.players[r.taker]; if (t) { t.tx = b.x; t.ty = b.y; t.urgent = 1; }
 };
+// Move the referee and assistant referees.
 P._moveOfficials = function () {
   const b = this.ball, [ref, a1, a2] = this.officials;
   const step = (o, tx, ty, vmax) => {
@@ -1271,19 +1221,17 @@ P._moveOfficials = function () {
     if (d > 0.05) { const k = Math.min(1, v / d); o.x += dx * k; o.y += dy * k; }
   };
   if (this.phase === 'shootout') { step(ref, L - 13, W / 2 - 5, 3); step(a1, L, W / 2 - 3.66, 3); step(a2, L / 2, W + 1, 3); return; }
-  // Referee: on the diagonal from the bottom-left to the top-right corner of the field, near the ball's x,
-  // about 12 m from the ball and never on top of it.
   const diagY = x => W - 6 - (x / L) * (W - 12);
   let tx = clamp(b.x - 6, 8, L - 8), ty = 0.55 * diagY(tx) + 0.45 * b.y;
   const dbx = tx - b.x, dby = ty - b.y, db = Math.sqrt(dbx * dbx + dby * dby) || 1;
   if (db < 11) { tx = b.x + dbx / db * 11; ty = b.y + dby / db * 11; }
   step(ref, clamp(tx, 2, L - 2), clamp(ty, 2, W - 2), 6.5);
-  // Assistants: level with the second-last defender, or with the ball when it is nearer the goal line.
-  const leftAtt = this.dir(0) < 0 ? 0 : 1; // the side attacking the left-hand goal
+  const leftAtt = this.dir(0) < 0 ? 0 : 1;
   const lineL = this._offsideLine(leftAtt), lineR = this._offsideLine(1 - leftAtt);
   step(a1, clamp(Math.min(lineL, b.x), 0, L / 2), -1, 7);
   step(a2, clamp(Math.max(lineR, b.x), L / 2, L), W + 1, 7);
 };
+// Move every player one tick towards his target and drain his stamina.
 P._move = function () {
   if (this.officialsOn) this._moveOfficials();
   const ps = this.players, n = ps.length, owner = this.ball.owner >= 0 ? ps[this.ball.owner] : null, lastSide = this.ball.lastSide;
@@ -1294,14 +1242,12 @@ P._move = function () {
     const off = q.onPitch ? null : q.treat || q.leaving;
     if (!q.onPitch && !off) continue;
     if (off) { q.tx = off.x; q.ty = off.y; q.urgent = 0; }
-    if (q.waitFor) { if (q.waitFor.leaving) { q.speed = 0; continue; } q.waitFor = null; } // substitute waits at the halfway line
+    if (q.waitFor) { if (q.waitFor.leaving) { q.speed = 0; continue; } q.waitFor = null; }
     if (q.tackleCd > 0) q.tackleCd -= DT;
     const dx = q.tx - q.x, dy = q.ty - q.y, dd = Math.sqrt(dx * dx + dy * dy);
     if (q.leaving && (dd < 2.3 || this.clockSec() >= q.leaving.until)) { q.leaving = null; continue; }
     if (!q.ePace || (this.tick + q.slot) % 20 === 0) { q.ePace = this.eff(q, 'pace'); q.eStam = this.eff(q, 'stamina'); }
     const top = (5.2 + q.ePace * 0.17) * (q.injured ? 0.6 : 1);
-    // Off the ball: stand when roughly in position, walk or jog when a few metres out, run when far out of
-    // position (a support run, or getting back after losing the ball).
     if (!q.urgent && dd < 2) { q.speed = 0; continue; }
     let sp = q.leaving ? q.leaving.sp : q.urgent ? top * Math.max(0.55, q.urgent) : clamp(0.25 + dd * 0.18, 0.8, 3);
     if (owner === q) {
@@ -1317,7 +1263,7 @@ P._move = function () {
   }
 };
 
-// ----- the tick -----
+// Advance the match by one tick (0.25 seconds of game time).
 P.step = function () {
   if (this.finished) return;
   this.tick++;
@@ -1327,7 +1273,6 @@ P.step = function () {
   const plen = PERIOD_LEN[this.half];
   this.t += DT;
   this._sides();
-  // added time + half end
   if (this.t >= plen && !this.addedAnnounced) {
     this.addedAnnounced = true;
     const base = [0, 1, 3, 0, 1][this.half];
@@ -1336,7 +1281,6 @@ P.step = function () {
     this._emit({ type: 'addedtime', text: '+' + this.added[this.half - 1] + ' minutes added' });
   }
   if (this.t >= plen + this.added[this.half - 1] * 60 && !(b.flight && b.flight.kind === 'shot')) { this._endHalf(); return; }
-  // possession time + minutes
   const os = b.owner >= 0 ? this.players[b.owner].side : b.lastSide;
   if (this.phase === 'play') { this.teams[os].stats.possession += DT; this._edgeSum[0] += this._edge[0]; this._edgeSum[1] += this._edge[1]; this._edgeN++; }
   const mi = Math.floor(this.clockSec() / 60);
@@ -1346,7 +1290,6 @@ P.step = function () {
   if (b.owner >= 0) {
     const o = this.players[b.owner], d = this.dir(o.side); const fx = d > 0 ? o.x : L - o.x;
     if (fx > 70) this.momentum[mi][o.side] += 0.0035 * (fx - 70) / 35;
-    // entries are counted once per possession: a possession that reaches the final third / the box
     const zone = fx > L - BOX_D && Math.abs(o.y - W / 2) < BOX_HALF ? 2 : fx > 70 ? 1 : 0;
     if (this._possSide !== o.side) { this._possSide = o.side; this._zone = [0, 0]; this._zone[o.side] = zone; }
     const prev = this._zone[o.side];
@@ -1360,10 +1303,9 @@ P.step = function () {
     if (this.leaving.length) this.leaving = this.leaving.filter(q => q.leaving);
     const r = this.restart; if (!r) { this.phase = 'play'; return; }
     r.timer -= DT;
-    if (this.leaving.length) r.timer = Math.max(r.timer, DT); // play waits until substituted players are off
+    if (this.leaving.length) r.timer = Math.max(r.timer, DT);
     const t = this.players[r.taker];
     if (r.wasting && (r.wasting.started || (r.timer <= r.wasting.left && (!t || dist(t.x, t.y, r.x, r.y) < 1.5))) && this._delayedRestart(r)) return;
-    // Law 8: a kick-off waits until every player is in their own half (the taker may stand on the line).
     const set = r.type !== 'kickoff' || r.timer < -20 || this.players.every((q, k) => !q.onPitch || k === r.taker || (q.x - L / 2) * this.dir(q.side) <= 0.5);
     if (r.timer <= 0 && set && (!t || dist(t.x, t.y, r.x, r.y) < 1.5 || r.timer < -6)) this._resume();
     b.x = this.restart ? this.restart.x : b.x; b.y = this.restart ? this.restart.y : b.y;
@@ -1374,7 +1316,6 @@ P.step = function () {
   if (this.advantage) {
     const a = this.advantage;
     if (b.owner >= 0 && this.players[b.owner].side !== a.side && this.clockSec() <= a.until) {
-      // the expected advantage did not follow: go back and penalise the original offence
       this.advantage = null;
       for (const c of this.pendingCards) if (c.orig) { c.card = c.orig.card; c.why = c.orig.why; c.dogso = false; }
       this._emit({ type: 'advantage', side: a.side, text: 'No advantage; free kick to ' + this.teams[a.side].name, x: a.x, y: a.y });
@@ -1390,12 +1331,10 @@ P.step = function () {
     this._setRestart('corner', opp, gd > 0 ? 0.3 : L - 0.3, g.y < W / 2 ? 0.3 : W - 0.3, 6);
     return;
   }
-  // Off-ball targets are re-planned every other tick (0.5 s), or at once when the ball changes hands or is kicked.
   const ballKey = b.owner * 4 + (b.flight ? 1 : 0) + (b.flight ? 2 * (b.flight.passer || 0) : 0);
   if ((this.tick & 1) === 0 || ballKey !== this._ballKey) { this._ballKey = ballKey; this._targets(); }
   else this._carrierTarget();
   this._move();
-  // ball
   if (b.owner >= 0) {
     const o = this.players[b.owner];
     if (!o.onPitch) { b.owner = -1; }
@@ -1414,18 +1353,17 @@ P.step = function () {
     }
   } else if (b.flight) this._flight();
   else this._looseBall();
-  // out of play from loose ball
   if (this.phase === 'play' && b.owner < 0 && !b.flight) this._checkOut();
   if (this.tick % 40 === 0) this._aiAll();
   if (this.tick % 8 === 0) for (const q of this.players) {
     if (!q.onPitch) continue;
     if (q.p.role === 'FW') q.runOff = this.rng() < 0.18 ? 1.5 + this.rng() * 3 : q.runOff * 0.6 + (this.rng() - 0.5) * 1.6;
-    // midfielders decide every few seconds whether to make a run into the box
     const sl = FORMATIONS[this.teams[q.side].formation][q.slot];
     if (sl && sl[0] === 'MF' && this.rng() < 0.3) q.boxRun = this.rng() < SHAPE.boxRun * (0.4 + sl[1]) * [0.6, 1, 1.4][this.teams[q.side].tactics.mentality];
-    else if (sl && sl[0] === 'FW' && this.rng() < 0.3) q.boxRun = this.rng() < SHAPE.dropShort; // for a forward: coming short
+    else if (sl && sl[0] === 'FW' && this.rng() < 0.3) q.boxRun = this.rng() < SHAPE.dropShort;
   }
 };
+// Run the AI manager for the sides no human manages.
 P._aiAll = function () {
   for (const s of [0, 1]) {
     const human = this.control === 'both' || (this.control === 'home' && s === 0) || (this.control === 'away' && s === 1);
@@ -1433,9 +1371,10 @@ P._aiAll = function () {
     else { const inj = this.onPitch(s).concat(this.treating.filter(q => q.side === s)).find(q => q.injured && !this.teams[s].pending.some(c => c.outId === q.id)); if (inj && this.teams[s].subsUsed < this._maxSubs() && this.teams[s].windowsUsed < this._maxWindows()) this._aiSub(s, inj); }
   }
 };
+// Let nearby defenders challenge the ball carrier.
 P._tackles = function () {
   const b = this.ball, oi = b.owner, o = this.players[oi], r = this.rng;
-  if (this.gkHands === oi) return; // a keeper holding the ball cannot be challenged
+  if (this.gkHands === oi) return;
   const press = this.teams[1 - o.side].tactics.pressing;
   for (let i = 0; i < this.players.length; i++) {
     const t = this.players[i];
@@ -1443,7 +1382,6 @@ P._tackles = function () {
     if (dist(t.x, t.y, o.x, o.y) > TUNING.jockey + 0.3) continue;
     if (t.slot === 0) { t.tackleCd = 1.5; if (r() < 0.35 + this.eff(t, 'keeping') / 60) { t.st.claims++; this._giveKeeper(i, false); return; } continue; }
     const td = this.dir(t.side), ownThird = (td > 0 ? o.x : L - o.x) < 35;
-    // a defender standing in the carrier's path is engaged with him and gets more chances to win it
     const cd = o.carry ? dist(o.x, o.y, o.carry.tx, o.carry.ty) : 0, inPath = o.carry && cd > 0.5 && ((t.x - o.x) * (o.carry.tx - o.x) + (t.y - o.y) * (o.carry.ty - o.y)) / cd > 0.6;
     if (r() > [0.018, 0.025, 0.034][press] * (ownThird ? 2.3 : 1) * (inPath ? TUNING.engaged : 1)) continue;
     t.tackleCd = 2.4; this.teams[t.side].stats.challenges++;
@@ -1451,35 +1389,31 @@ P._tackles = function () {
     if (r() < pw) {
       t.st.tackles++; this.teams[t.side].stats.tackles++;
       const d = this.dir(t.side), fx = d > 0 ? t.x : L - t.x; if (fx > 70) this.teams[t.side].stats.finalThirdWins++;
-      if (r() < 0.0015 && this._injure(oi, true, t.side)) return; // the tackler had won the ball: his team gets the drop
+      if (r() < 0.0015 && this._injure(oi, true, t.side)) return;
       const edge = Math.min(b.y, W - b.y);
-      if (edge < 15 && r() < 0.55) { const v = 7 + r() * 6, a = (b.y < W / 2 ? -Math.PI / 2 : Math.PI / 2) + (r() - 0.5) * 1.2; this._loose(b.x, b.y, Math.cos(a) * v, Math.sin(a) * v); } // poked out for a throw-in
+      if (edge < 15 && r() < 0.55) { const v = 7 + r() * 6, a = (b.y < W / 2 ? -Math.PI / 2 : Math.PI / 2) + (r() - 0.5) * 1.2; this._loose(b.x, b.y, Math.cos(a) * v, Math.sin(a) * v); }
       else if (r() < 0.6) this._give(i); else { const a = r() * 2 * Math.PI, v = 4 + r() * 7; this._loose(b.x, b.y, Math.cos(a) * v, Math.sin(a) * v); }
       return;
     }
     const dd = this.dir(o.side), inBox = Math.abs(o.y - W / 2) < BOX_HALF && (dd > 0 ? o.x > L - BOX_D : o.x < BOX_D);
     if (r() < (TUNING.foulBase + TUNING.foulPress * press + (this.eff(t, 'tackling') < 9 ? 0.015 : 0)) * (inBox ? 0.028 : ownThird ? 0.5 : 1) * (t.yellow ? 0.35 : 1)) { this._foul(i, oi, r() < 0.06 ? 'dangerous' : 'challenge'); return; }
-    o.tackleImmune = 0.6;
   }
 };
+// Move the ball in the air or along the ground, and resolve who gets it.
 P._flight = function () {
   const b = this.ball, f = b.flight, r = this.rng;
   f.el += DT; const u = Math.min(1, f.el / f.dur);
   b.x = f.sx + (f.tx - f.sx) * u; b.y = f.sy + (f.ty - f.sy) * u; b.z = 4 * f.h * u * (1 - u);
   if (f.kind === 'shot') { if (u >= 1) { b.flight = null; this._resolveShot(f); } return; }
-  // interception
-  if (b.z < 2.2 && f.el > 0.15 && !(f.kind === 'cross' && u > 0.5)) { // a cross dropping into the box is contested in the air where it lands (below)
+  if (b.z < 2.2 && f.el > 0.15 && !(f.kind === 'cross' && u > 0.5)) {
     for (let i = 0; i < this.players.length; i++) {
       const q = this.players[i];
       if (!q.onPitch || q.side === this.players[f.passer].side) continue;
-      // swept along the ball's path this tick: a fast ball moves several metres a tick and must not skip a player
       const dd = segDist(q.x, q.y, b.px, b.py, b.x, b.y);
-      // the man closing down the passer can only get a foot to it now and then: the passer plays it round him
       const block = dist(q.x, q.y, f.sx, f.sy) < 2.2 ? TUNING.block : 1;
       if (dd < 1.5 && r() < (q.slot === 0 ? 0.7 : TUNING.intercept * block * (this.eff(q, 'tackling') + this.eff(q, 'positioning')) / 22 * this._cutOut[1 - q.side] * f.cutOut)) {
         if (q.slot === 0) { this._giveKeeper(i, false); return; }
-        if (b.z > 1 && r() < (f.kind === 'cross' ? 0.008 : 0.003)) { this._foul(i, -1, 'handball'); return; } // arm in an unnatural position
-        // often he only gets a touch and the ball runs loose off him
+        if (b.z > 1 && r() < (f.kind === 'cross' ? 0.008 : 0.003)) { this._foul(i, -1, 'handball'); return; }
         if (r() < TUNING.deflect) { const fl = dist(f.sx, f.sy, f.tx, f.ty) || 1, v = 5 + r() * 7, a = (r() - 0.5) * 2.4; const ux = (f.tx - f.sx) / fl, uy = (f.ty - f.sy) / fl; b.flight = null; b.lastSide = q.side; this._loose(b.x, b.y, (ux * Math.cos(a) - uy * Math.sin(a)) * v, (ux * Math.sin(a) + uy * Math.cos(a)) * v); return; }
         this.teams[q.side].stats.interceptions++; q.st.interceptions++;
         this._give(i); return;
@@ -1488,11 +1422,9 @@ P._flight = function () {
   }
   if (u >= 1) {
     const passer = this.players[f.passer], tm = this.teams[passer.side];
-    // receiver first, then anyone close
     let take = -1, bd = 2.2;
     for (let i = 0; i < this.players.length; i++) { const q = this.players[i]; if (!q.onPitch) continue; const dd = dist(q.x, q.y, b.x, b.y) - (i === f.recv ? TUNING.firstTouch : 0) + this.rng() * 0.5; if (dd < bd) { bd = dd; take = i; } }
     if (b.x < 0 || b.x > L || b.y < 0 || b.y > W) { b.flight = null; b.vx = 0; b.vy = 0; this._checkOut(); return; }
-    // A long ball dropping between the receiver and a defender is an aerial duel.
     if (f.kind === 'pass' && f.h > 1.5 && take >= 0 && f.recv >= 0) {
       const m = this.players[f.recv], c = this._nearestOpp(m, b.x, b.y);
       if (c.i >= 0 && c.d < 3 && dist(m.x, m.y, b.x, b.y) < 2.5) {
@@ -1507,7 +1439,6 @@ P._flight = function () {
       if (q.side === passer.side && f.kind !== 'clear') { tm.stats.passesOk++; passer.st.passesOk++; this._keyPass = { i: take, t: this.clockSec(), vis: this.eff(passer, 'vision') }; }
       if (q.slot === 0 && !(f.kind === 'cross' && q.side === passer.side)) { this._giveKeeper(take, q.side === passer.side); return; }
       if (f.kind === 'cross' && q.side === passer.side && Math.abs(q.x - (this.dir(q.side) > 0 ? L : 0)) < 17) {
-        // contested header
         const opp = this._nearestOpp(q);
         const win = opp.d > 2 ? 0.8 : clamp(TUNING.aerialWin + (this.eff(q, 'heading') - this.eff(this.players[opp.i], 'heading')) / 30, 0.15, 0.8);
         if (r() < win) { this.ball.owner = -1; this.ball.lastSide = q.side; q.x = b.x; q.y = b.y; this.ball.z = 1.8; this._shoot(take, { header: true }); return; }
@@ -1517,7 +1448,6 @@ P._flight = function () {
         const c = this.players[take]; const d = this.dir(c.side);
         this._give(take); this._kick(take, clamp(c.x + d * (20 + r() * 20), 2, L - 2), clamp(c.y + (r() - 0.5) * 50, -8, W + 8), 'clear', -1, 5); return;
       }
-      // A fast ball under pressure is harder to control: a heavy touch leaves it loose (and sometimes out of play).
       if (f.kind === 'pass' && q.side === passer.side && q.slot !== 0) {
         const pr = this._nearestOpp(q).d;
         if (r() < clamp(TUNING.heavyTouch + (f.speed > 18 ? 0.03 : 0) + (f.h > 1.5 ? TUNING.heavyLoft : 0) + (pr < 2 ? 0.04 : 0) - (this.eff(q, 'dribbling') - 10) / 150, 0.005, 0.2)) {
@@ -1527,23 +1457,23 @@ P._flight = function () {
       }
       this._give(take);
     } else {
-      // nobody there: it keeps rolling (a ball dropping from the air bounces on more slowly)
       const dx = f.tx - f.sx, dy = f.ty - f.sy, D = Math.sqrt(dx * dx + dy * dy) || 1, v = f.speed * (f.h > 1.5 ? 0.2 : 0.35) * TUNING.rollOn; this._loose(b.x, b.y, dx / D * v, dy / D * v);
-      if (f.kind === 'pass' && f.recv >= 0) this._loosePass = { recv: f.recv, t: this.clockSec() }; // he may still run onto it
+      if (f.kind === 'pass' && f.recv >= 0) this._loosePass = { recv: f.recv, t: this.clockSec() };
     }
   }
 };
+// Roll a loose ball and let the nearest player pick it up.
 P._looseBall = function () {
   const b = this.ball, fr = Math.pow(TUNING.ballFriction, DT);
   b.x += b.vx * DT; b.y += b.vy * DT; b.vx *= fr; b.vy *= fr;
   let take = -1, bd = 1e9;
   for (let i = 0; i < this.players.length; i++) { const q = this.players[i]; if (!q.onPitch || q.injured) continue; const dd = dist(q.x, q.y, b.x, b.y); if (dd >= 1.1) continue; const sc = dd + this.rng() * 0.8 - this.eff(q, 'pace') * 0.01; if (sc < bd) { bd = sc; take = i; } }
   if (take >= 0 && b.x >= 0 && b.x <= L && b.y >= 0 && b.y <= W) {
-    // a pass the receiver runs onto a moment after it lands still counts as completed
     const lp = this._loosePass; this._loosePass = null;
     if (lp && lp.recv === take && this.clockSec() - lp.t < 3) { const q = this.players[take]; this.teams[q.side].stats.passesOk++; if (this.lastPasser >= 0) this.players[this.lastPasser].st.passesOk++; }
     if (this.players[take].slot === 0) this._giveKeeper(take, b.lastSide === this.players[take].side); else this._give(take); }
 };
+// Give a throw-in, goal kick or corner when the ball leaves the field.
 P._checkOut = function () {
   const b = this.ball, r = this.rng;
   if (b.y < 0 || b.y > W) {
@@ -1554,7 +1484,6 @@ P._checkOut = function () {
   }
   if (b.x < 0 || b.x > L) {
     const goalEnd = b.x < 0 ? 0 : L;
-    // which team defends this end?
     const defSide = this.dir(0) > 0 ? (goalEnd === 0 ? 0 : 1) : (goalEnd === 0 ? 1 : 0);
     if (b.lastSide === defSide) { this.teams[1 - defSide].stats.corners++; this._emit({ type: 'corner', side: 1 - defSide, text: 'Corner to ' + this.teams[1 - defSide].name }); this._setRestart('corner', 1 - defSide, goalEnd === 0 ? 0.3 : L - 0.3, b.y < W / 2 ? 0.3 : W - 0.3, 6); }
     else this._setRestart('goalkick', defSide, goalEnd === 0 ? 5.5 : L - 5.5, W / 2 + (r() - 0.5) * 12, 5);
@@ -1564,10 +1493,10 @@ P._checkOut = function () {
 };
 // restarts that are not shots/crosses: taker plays a short or long pass
 const _origResume = P._resume;
+// After a restart, start the treatment minute and play throw-ins and goal kicks short or long.
 P._resume = function () {
   const r = this.restart;
   _origResume.call(this);
-  // the minute off for treatment counts from the restart
   for (const q of this.treating) if (q.treat.until === Infinity) q.treat.until = this.clockSec() + 60;
   if (!r || this.phase !== 'play') return;
   const rt = r.type;
@@ -1587,10 +1516,13 @@ P._resume = function () {
     if (best >= 0) { const m = this.players[best]; this._pass(r.taker, best, m.x, m.y, rt === 'throwin'); }
   }
 };
+// Substitutes allowed: five, or six in extra time.
 P._maxSubs = function () { return this.half > 2 ? 6 : 5; };
+// Substitution windows allowed: three, or four in extra time.
 P._maxWindows = function () { return this.half > 2 ? 4 : 3; };
-// Is a knockout tie still level (on aggregate over both legs, if there were two)?
+// Whether a knockout tie is still level on aggregate.
 P._tieLevel = function () { const a = this.knockout.aggregate; return this.teams[0].score + a[0] === this.teams[1].score + a[1]; };
+// End the current period and go to half-time, extra time, penalties or full time.
 P._endHalf = function () {
   const sc = this.teams[0].name + ' ' + this.teams[0].score + '–' + this.teams[1].score + ' ' + this.teams[1].name;
   this.ball.flight = null; this.ball.owner = -1;
@@ -1608,6 +1540,7 @@ P._endHalf = function () {
   if (this.half === 4 && this._tieLevel()) { this._startShootout(sc); return; }
   this._finish('Full time' + (this.half === 4 ? ' after extra time' : '') + ': ' + sc);
 };
+// End the match and decide the winner.
 P._finish = function (text) {
   this.finished = true; this.phase = 'fulltime';
   for (const q of this.players) if (q.onPitch && q.st.offAt == null) q.st.offAt = this.clockSec();
@@ -1617,38 +1550,33 @@ P._finish = function (text) {
   } else this.winner = this.teams[0].score > this.teams[1].score ? 0 : this.teams[1].score > this.teams[0].score ? 1 : null;
   this._emit({ type: 'fulltime', text });
 };
-P._startSecondHalf = function () { // starts the next period: second half, or either half of extra time
+// Start the next period: the second half or either half of extra time.
+P._startSecondHalf = function () {
   this._applyPending();
   const next = this.half + 1;
   const recover = next === 2 ? 0.07 : next === 3 ? 0.03 : 0.01;
   this.half = next; this.t = 0; this.addedAnnounced = false; this.goalsThisHalf = 0; this.injuries = 0;
-  // treated players are back for the new period; anyone still walking off after a substitution is off
   for (const q of this.treating.slice()) this._endTreatment(q, true);
   for (const q of this.leaving) q.leaving = null; this.leaving = [];
   for (const q of this.players) q.waitFor = null;
   for (const q of this.players) { if (q.onPitch) { q.cond = Math.min(1, q.cond + recover); q.x = L - q.x; q.y = W - q.y; q.px = q.x; q.py = q.y; } }
   for (const o of this.officials) { o.x = o.px = L - o.x; if (o.role === 'referee') o.y = o.py = W - o.y; }
-  if (next === 3) this.etFirstKick = this.rng() < 0.5 ? 0 : 1; // a new toss of the coin for extra time
+  if (next === 3) this.etFirstKick = this.rng() < 0.5 ? 0 : 1;
   const side = next === 2 ? 1 - this.firstKick : next === 3 ? this.etFirstKick : 1 - this.etFirstKick;
   this._emit({ type: 'kickoff', side, text: ['', '', 'Second half under way', 'Extra time under way', 'Second half of extra time under way'][next] });
   this._setRestart('kickoff', side, L / 2, W / 2, 2);
 };
 
-// ---------- penalty shootout (Law 10.3) ----------
-// Only players on the pitch at the end of extra time take part, both teams with the same number. Kicks alternate,
-// five each, stopping as soon as one side cannot catch up, then sudden death; nobody kicks twice before every
-// eligible team-mate (keeper included) has kicked once. One kick every 6 seconds so a live view can show it.
+// Set up a penalty shootout.
 P._startShootout = function (sc) {
   this.phase = 'shootout'; this.restart = null;
   const takers = [0, 1].map(s => this.onPitch(s).slice().sort((a, b) => (a.slot === 0) - (b.slot === 0) || this.eff(b, 'shooting') - this.eff(a, 'shooting')));
   const n = Math.min(takers[0].length, takers[1].length);
-  // the side with more players leaves out its weakest outfield takers (the list is best first, keeper last)
   for (const s of [0, 1]) while (takers[s].length > n) { let j = takers[s].length - 1; while (j > 0 && takers[s][j].slot === 0) j--; takers[s].splice(j, 1); }
   const first = this.rng() < 0.5 ? 0 : 1;
   this.shootout = { first, order: takers.map(l => l.map(q => q.id)), score: [0, 0], taken: [0, 0], kicks: [], timer: 4 };
   this._emit({ type: 'extratime', text: 'Level after extra time (' + sc + '): penalties. ' + this.teams[first].name + ' go first' });
   this.ball.x = L - 11; this.ball.y = W / 2;
-  // everyone except the two keepers lines up in the centre circle (they walk there during the break)
   for (const q of this.players) if (q.onPitch) {
     const k = q.side * 11 + q.slot, ang = (k / 22) * Math.PI * 2;
     if (q.slot === 0) { q.tx = q.side === 0 ? L - 0.5 : L - 14; q.ty = q.side === 0 ? W / 2 : W / 2 - 12; }
@@ -1656,6 +1584,7 @@ P._startShootout = function (sc) {
     q.x = q.px = q.tx; q.y = q.py = q.ty; q.urgent = 0;
   }
 };
+// Take the next kick of a penalty shootout and check whether it is decided.
 P._shootoutTick = function () {
   this._sides(); this._move();
   const so = this.shootout; so.timer -= DT;
@@ -1670,24 +1599,23 @@ P._shootoutTick = function () {
   const scored = this.rng() < p;
   so.taken[side]++; if (scored) so.score[side]++;
   so.kicks.push({ side, player: q.id, scored });
-  q.x = L - 12; q.y = W / 2; // the kicker steps up, then walks back to the circle
-  for (const k of this.players) if (k.onPitch && k.slot === 0) { // the defending keeper on the line, the other waits by the area
+  q.x = L - 12; q.y = W / 2;
+  for (const k of this.players) if (k.onPitch && k.slot === 0) {
     if (k === gk) { k.x = k.tx = L - 0.5; k.y = k.ty = W / 2; } else { k.tx = L - 14; k.ty = W / 2 - 12; }
   }
   this.ball.x = scored ? L + 0.5 : L - 1; this.ball.y = W / 2 + (this.rng() - 0.5) * 6;
   this._emit({ type: 'shootoutkick', side, player: q.id, scored, score: so.score.slice(), text: q.p.name + (scored ? ' scores' : this.rng() < 0.6 ? "'s penalty is saved" : ' misses') + ' (' + so.score[0] + '–' + so.score[1] + ' on penalties)' });
-  // decided? within the first five each: when one side cannot catch up; then after every pair in sudden death
   const left = s => Math.max(0, 5 - so.taken[s]);
   let done;
   if (so.taken[0] < 5 || so.taken[1] < 5) done = so.score[0] + left(0) < so.score[1] || so.score[1] + left(1) < so.score[0];
-  else done = so.taken[0] === so.taken[1] && so.score[0] !== so.score[1]; // sudden death: decided only after each pair
+  else done = so.taken[0] === so.taken[1] && so.score[0] !== so.score[1];
   if (done) {
     const w = so.score[0] > so.score[1] ? 0 : 1, sc = this.teams[0].name + ' ' + this.teams[0].score + '–' + this.teams[1].score + ' ' + this.teams[1].name;
     this._finish('Full time after extra time: ' + sc + '. ' + this.teams[w].name + ' win ' + Math.max(...so.score) + '–' + Math.min(...so.score) + ' on penalties');
   }
 };
 
-// ---------- running ----------
+// Run the match until a minute, an event or a number of ticks.
 P.runUntil = function (stop) {
   stop = stop || {};
   const out = [], start = this.events.length, maxTicks = stop.ticks || 1e6;
@@ -1703,19 +1631,21 @@ P.runUntil = function (stop) {
       if (hit) break;
     }
     if (stop.pauseAtHalftime && this.phase === 'halftime' && !wasHT) break;
-    if (n > 40000) break; // hard cap: never hang
+    if (n > 40000) break;
   }
   return this.events.slice(start);
 };
+// Run the match to the end and return the result.
 P.runToEnd = function () { let guard = 0; while (!this.finished && guard++ < 80000) this.step(); return this.result(); };
 
+// A frame of the match for drawing: clock, score, ball, players and officials.
 P.snapshot = function () {
   return { tick: this.tick, half: this.half, clock: this.clockLabel(), minute: this.minute(), phase: this.phase, score: [this.teams[0].score, this.teams[1].score],
     ball: Object.assign({}, this.ball), officials: this.officials.map(o => Object.assign({}, o)),
     keeperHolding: this.gkHands >= 0 && this.ball.owner === this.gkHands ? { player: this.players[this.gkHands].id, seconds: this.clockSec() - this.gkHandsT } : null, restartCountdown: this.restart && this.restart.countdown ? { type: this.restart.type, player: this.players[this.restart.taker] && this.players[this.restart.taker].id, seconds: this.clockSec() - this.restart.countdown.start } : null, players: this.players.filter(q => q.onPitch || q.treat || q.leaving).map(q => ({ id: q.id, side: q.side, num: q.p.num, x: q.x, y: q.y, px: q.px, py: q.py, cond: q.cond, off: q.treat ? 'treatment' : q.leaving ? 'substituted' : null })) };
 };
 
-// ---------- results ----------
+// The full result: score, events, team and player stats, carry-over and explanation.
 P.result = function () {
   const tsec = this.clockSec();
   const playerStats = this.players.map(q => {
@@ -1737,8 +1667,7 @@ P.result = function () {
     explanation: this.explain(), momentum: this.momentum, xgTimeline: this.xgTimeline.concat([[tsec, this.teams[0].stats.xg, this.teams[1].stats.xg]]), commands: this.commands,
   };
 };
-// Why the match went the way it did. Every factor says which side it concerns and whether it helped (good)
-// or hurt that side, so the verdict can name a factor that actually favoured the winner.
+// Explain the result as a verdict and the key factors that decided it.
 P.explain = function () {
   const ev = this.events, names = this.teams.map(t => t.name), out = [];
   const xgAt = (t0, t1, s) => ev.filter(e => (e.type === 'shot' || e.type === 'goal') && e.side === s && e.t >= t0 && e.t < t1).reduce((a, e) => a + (e.xg || 0), 0);
@@ -1755,7 +1684,6 @@ P.explain = function () {
   for (const s of [0, 1]) {
     const T = this.teams[s].tactics, O = this.teams[1 - s].tactics;
     const ups = MATCHUPS.filter(([k, v, ok, ov]) => T[k] === v && O[ok] === ov);
-    // time-averaged, because managers (and the AI) change tactics as the score changes
     const ratio = this._edgeN ? this._edgeSum[s] / this._edgeSum[1 - s] : this._edge[s] / this._edge[1 - s];
     if (ratio > 1.15) {
       const good = true;
@@ -1792,35 +1720,35 @@ P.explain = function () {
   return { verdict, factors: out.slice(0, 5) };
 };
 
-// Matches banned after a sending-off. Competitions set their own rules; these are common league defaults.
-// Yellow-card accumulation across matches is left to the game (each result reports every player's yellows).
+// Number of matches a player is banned for after a red card.
 function suspensionFor(reason) {
   if (!reason) return 0;
   if (reason === 'second yellow' || /goal-scoring|denied a goal/.test(reason)) return 1;
-  return 3; // serious foul play, violent conduct
+  return 3;
 }
 
-// ---------- save / load / replay ----------
-// A save records the engine version: the same inputs replay exactly only on the same version.
+// Save the match as its inputs and manager commands.
 P.save = function () { return JSON.stringify({ engineVersion: ENGINE_VERSION, config: this.config, commands: this.commands, tick: this.tick }); };
+// Load a saved match by replaying it.
 Match.load = function (s) {
   const o = JSON.parse(s), m = Match.replay(o.config, o.commands, o.tick);
-  // a save from another engine version still loads (never throws), but says it will not replay the same match
   m.savedEngineVersion = o.engineVersion || null; m.replayExact = o.engineVersion === ENGINE_VERSION;
   return m;
 };
+// Rebuild a match from its inputs and commands, optionally up to a tick.
 Match.replay = function (config, commands, untilTick) {
   const m = new Match(config); if (m.errors) return m;
   const cmds = (commands || []).slice().sort((a, b) => a.tick - b.tick);
   let k = 0;
   const apply = () => { while (k < cmds.length && cmds[k].tick <= m.tick) { const c = cmds[k++]; if (c.kind === 'sub') m.substitute(c.side, c.outId, c.inId); else if (c.kind === 'tactics') m.setTactics(c.side, c.tactics); else if (c.kind === 'formation') m.setFormation(c.side, c.formation); else if (c.kind === 'cancel') m.cancelPending(c.side, c.idx); } };
   while (!m.finished && (untilTick == null || m.tick < untilTick)) { apply(); m.step(); }
-  // commands given at the very tick the match was saved (a change made, then saved) still apply
   if (!m.finished) apply();
   return m;
 };
+// Add attacking threat to the momentum chart for this minute.
 P._addThreat = function (s, xg) { const mi = Math.floor(this.clockSec() / 60); while (this.momentum.length <= mi) this.momentum.push([0, 0]); this.momentum[mi][s] += xg; };
 
+// Play a whole match headless and return the result.
 function simulateMatch(config) { const m = new Match(Object.assign({ officials: false }, config)); if (m.errors) return { errors: m.errors }; return m.runToEnd(); }
 
 export {

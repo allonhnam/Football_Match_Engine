@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { breathe } from './breathe';
-import { describeStatistical, itStatistical } from './statistical';
+import { itStatistical } from './statistical';
 
+// Play knockout tie number i.
 const tie = (i: number, extra: object = {}) => E.simulateMatch({
   home: E.makeTeam({ name: 'H', seed: 2 * i + 1 }), away: E.makeTeam({ name: 'A', seed: 2 * i + 2 }),
   seed: i, control: 'none', knockout: true, ...extra,
 }) as any;
 
-/** Check a finished shootout against Law 10.3: alternate kicks, stop as soon as it is decided. */
+// Check a shootout followed the rules and stopped as soon as it was decided.
 function checkShootout(so: any) {
   const score = [0, 0], taken = [0, 0];
   so.kicks.forEach((k: any, j: number) => {
@@ -19,7 +20,7 @@ function checkShootout(so: any) {
     const decided = taken[0] < 5 || taken[1] < 5
       ? score[0] + left(0) < score[1] || score[1] + left(1) < score[0]
       : taken[0] === taken[1] && score[0] !== score[1];
-    expect(decided).toBe(last); // never decided early, never runs on after it is decided
+    expect(decided).toBe(last);
   });
   expect(score).toEqual(so.score);
 }
@@ -50,10 +51,8 @@ describe('knockout ties', () => {
   });
 
   itStatistical('decides a second leg on aggregate', async () => {
-    // the away side won the first leg 2-0: the home side needs to win by two to force extra time
     for (let i = 0; i < 30; i++) { await breathe();
       const r = tie(i, { knockout: { aggregate: [0, 2] } });
-      // extra time is played exactly when the aggregate is level after 90 minutes
       const at90 = [0, 1].map(side => r.events.filter((e: any) => e.type === 'goal' && e.side === side && e.half <= 2).length);
       expect(r.extraTime).toBe(at90[0] === at90[1] + 2);
       const agg = [r.score[0], r.score[1] + 2];

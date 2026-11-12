@@ -1,8 +1,7 @@
-// Play one match headless and print the result.
-//   npm run simulate -- --seed 42 --home-strength 14 --away-strength 12 --events
 import { makeTeam, simulateMatch } from '../src/engine/engine.js';
 
 const args = process.argv.slice(2);
+// A command-line option's value, or a default.
 const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : fallback;
@@ -26,6 +25,7 @@ const [h, a] = r.teamStats;
 console.log(`${home.name} ${r.score[0]} - ${r.score[1]} ${away.name}   (seed ${seed}, ${ms.toFixed(0)} ms)`);
 console.log(r.explanation.verdict);
 console.log('');
+// Print one statistic for both teams.
 const row = (label, x, y) => console.log(`${label.padEnd(20)}${String(x).padStart(8)}${String(y).padStart(8)}`);
 row('', home.short, away.short);
 row('Possession %', h.possessionPct, a.possessionPct);

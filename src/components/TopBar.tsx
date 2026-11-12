@@ -7,6 +7,7 @@ import { hexSeed } from '@/lib/util';
 import { Icon, Seg, Btn } from '@/components/ui';
 import { useApp } from '@/components/AppProvider';
 
+// The app logo.
 function Logo() {
   return (
     <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
@@ -15,13 +16,14 @@ function Logo() {
   );
 }
 
+// The navigation bar with the match seed, theme switch and settings.
 export function TopBar() {
   const app = useApp();
   const pathname = usePathname();
   const [copied, setCopied] = useState(false);
   const seed = app.session ? app.session.config.seed : app.seed;
   const copySeed = async () => {
-    try { await navigator.clipboard.writeText(String(seed)); } catch { /* clipboard may be unavailable */ }
+    try { await navigator.clipboard.writeText(String(seed)); } catch { }
     setCopied(true); setTimeout(() => setCopied(false), 1300);
   };
   const tabs: [string, React.ReactNode, boolean?][] = [
@@ -67,6 +69,7 @@ export function TopBar() {
   );
 }
 
+// The settings panel: live-match options, theme and saved history.
 export function SettingsPanel() {
   const { settings, setSettings, theme, setTheme, showSettings, setShowSettings, clearHistory, endMatch, session } = useApp();
   if (!showSettings) return null;

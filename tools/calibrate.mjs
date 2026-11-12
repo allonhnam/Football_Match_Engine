@@ -1,7 +1,3 @@
-// Run many headless matches and compare the engine with real league data.
-//   npm run calibrate -- 500          (needs src/data/reference.json: npm run fetch-data && npm run build-reference)
-//   npm run calibrate -- 500 --hist   (also print the distributions)
-//   npm run calibrate -- 500 --threads 4
 import os from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +7,7 @@ import { fitOrderedLogit, outcomeProbs, spreadOfD } from '../src/lib/predictabil
 import { leagueTeams } from '../src/lib/league.js';
 import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, lineFromEngine, matchFlow, compareFlow } from '../src/lib/metrics.js';
 
-// Worker side, for the odds check: matches at fixed strength gaps, to fit how results depend on the gap.
+// Play matches at fixed strength gaps, for the odds check.
 function simulateGaps(jobs) {
   return jobs.map(({ g, i }) => {
     const r = simulateMatch({ home: makeTeam({ name: 'H', seed: 7 + 2 * i, strength: 12 + g / 2 }), away: makeTeam({ name: 'A', seed: 8 + 2 * i, strength: 12 - g / 2 }), seed: 900 + i, control: 'none' });
@@ -19,7 +15,7 @@ function simulateGaps(jobs) {
   });
 }
 
-// Worker side: simulate matches number `from` up to (not including) `to` and send back what the comparison needs.
+// Play a range of league matches and return what the comparison needs.
 function simulateRange(from, to) {
   const out = [];
   for (let s = from; s < to; s++) {
@@ -31,6 +27,7 @@ function simulateRange(from, to) {
   return out;
 }
 
+// Run the calibration on all cores and print every statistic against real football.
 async function main() {
   const args = process.argv.slice(2);
   const N = Number(args.find(a => /^\d+$/.test(a))) || 200;
@@ -55,7 +52,6 @@ async function main() {
     worker.once('message', resolve);
     worker.once('error', reject);
   })))).flat();
-  // Fixed-gap matches for the odds check: 25 gaps from -6 to +6, at least 60 matches each.
   const per = Math.max(60, Math.round(N / 25)), gapJobs = [];
   for (let k = 0; k <= 24; k++) for (let i = 0; i < per; i++) gapJobs.push({ g: -6 + k * 0.5, i });
   const gc = Math.ceil(gapJobs.length / threads);
@@ -99,7 +95,6 @@ async function main() {
     row(m.label, 100 * c.mean, 100 * reference.ratios[m.key], 100 * c.tol, null, c.ok, 1);
   }
 
-  // How matches unfold: the half-time score against the final one, and the full scoreline distribution.
   console.log('\nHalves and scorelines:');
   for (const m of HALF_METRICS) {
     const c = compareHalf(m, reference.half[m.key], lines);
@@ -114,7 +109,6 @@ async function main() {
   console.log(`${'Offsides / match'.padEnd(26)}${pad(fmt(off, 2), 9)}${pad('~' + fmt(est.offsides.mean, 1), 9)}   expected range ${est.offsides.lo}-${est.offsides.hi}${off >= est.offsides.lo && off <= est.offsides.hi ? '  ok' : '  CHECK'}`);
   console.log(`${'Pass completion %'.padEnd(26)}${pad(fmt(100 * pc, 1), 9)}${pad('~' + fmt(100 * est.passCompletion.mean, 0), 9)}   expected range ${100 * est.passCompletion.lo}-${100 * est.passCompletion.hi}${pc >= est.passCompletion.lo && pc <= est.passCompletion.hi ? '  ok' : '  CHECK'}`);
 
-  // Who takes the shots, how far players run, how the match flows: published averages, not the dataset.
   const flowRows = compareFlow(est, results.map(r => r.flow));
   console.log('\nMatch flow and players (published averages, not in the dataset):');
   for (const m of flowRows) {
@@ -123,7 +117,6 @@ async function main() {
   }
   console.log(`${flowRows.filter(m => m.ok).length} of ${flowRows.length} within the published ranges`);
 
-  // How much squad quality decides results, against bookmaker odds for the same real matches.
   if (reference.odds) {
     const fit = fitOrderedLogit(gapResults);
     const sp = spreadOfD(fit, results.map(r => r.gap));

@@ -1,24 +1,26 @@
 'use client';
-/* eslint-disable */
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import * as E from '@/engine/engine';
-import { fx, pct, club, TACTIC_META, findLeague, randomSeed, LEAGUES } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr } from '@/components/ui';
+import { fx, pct, TACTIC_META, findLeague, randomSeed, LEAGUES } from '@/lib/util';
+import { Icon, Btn, Seg, Badge, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 import { playSeason, tallySeason } from '@/lib/season';
 import { leagueTeams } from '@/lib/league';
 import reference from '@/data/reference.json';
 import { COUNT_METRICS, RATE_METRICS, RATIO_METRICS, HALF_METRICS, SCORELINES, compareCount, compareRate, compareRatio, compareHalf, compareScorelines, histogram, lineFromEngine, compareFlow } from '@/lib/metrics';
 
+// A whole number with thousands separators.
 const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+// A fraction as a percentage with one decimal.
 const pctFmt = (v) => fx(v * 100, 1) + '%';
+// Average of a list of numbers.
 const mean = (a) => a.reduce((s, v) => s + v, 0) / (a.length || 1);
 const TILE_ORDER = ['goals', 'homeWin', 'draw', 'zeroZero', 'margin', 'shots', 'onTargetPct', 'goalsPerShot', 'corners', 'fouls', 'cards'];
 const HALF_TILES = ['secondHalfGoals', 'htLevel', 'leadHeld', 'leadLost'];
 
-/** Compare a batch of simulated matches with the real-data reference. */
-export function buildTiles(out) {
+// Compare a batch of simulated matches with the real-data reference, one tile per statistic.
+function buildTiles(out) {
   const lines = out.map(r => lineFromEngine(r.score, r.ts, r.ht));
   const tiles: any[] = TILE_ORDER.map((k): any => {
     const cm = COUNT_METRICS.find(m => m.key === k);
@@ -37,13 +39,11 @@ export function buildTiles(out) {
     const c = compareRatio(reference.ratios[k], lines.reduce((s, l) => s + tm.num(l), 0) / lines.reduce((s, l) => s + tm.den(l), 0));
     return { k, label: tm.label, kind: 'share', engine: c.mean, real: reference.ratios[k], tol: c.tol, ok: c.ok, fmt: k === 'goalsPerShot' ? v => fx(v, 3) : pctFmt };
   });
-  // How matches unfold between half-time and full time.
   for (const k of HALF_TILES) {
     const hm = HALF_METRICS.find(m => m.key === k);
     const c = compareHalf(hm, reference.half[k], lines);
     tiles.push({ k, label: hm.label, kind: 'share', engine: c.mean, real: reference.half[k], tol: c.tol, ok: c.ok, fmt: pctFmt });
   }
-  // The dataset has no offsides or passing data, so these two are checked against rough estimates and labelled as such.
   const est = reference.estimates;
   const offsides = mean(out.map(r => r.ts[0].offsides + r.ts[1].offsides));
   const passRate = out.reduce((s, r) => s + r.ts[0].passesOk + r.ts[1].passesOk, 0) / out.reduce((s, r) => s + r.ts[0].passes + r.ts[1].passes, 0);
@@ -51,12 +51,12 @@ export function buildTiles(out) {
     { k: 'offsides', label: 'Offsides / match', kind: 'estimate', engine: offsides, real: est.offsides.mean, lo: est.offsides.lo, hi: est.offsides.hi, ok: offsides >= est.offsides.lo && offsides <= est.offsides.hi, fmt: v => fx(v, 1) },
     { k: 'pass', label: 'Pass completion', kind: 'estimate', engine: passRate, real: est.passCompletion.mean, lo: est.passCompletion.lo, hi: est.passCompletion.hi, ok: passRate >= est.passCompletion.lo && passRate <= est.passCompletion.hi, fmt: pctFmt },
   );
-  // How matches flow and who takes the shots, against published league averages (also estimates, not the dataset).
   const flows = out.map(r => r.flow).filter(Boolean);
   if (flows.length) for (const f of compareFlow(est, flows)) tiles.push({ k: f.key, label: f.label, kind: 'estimate', engine: f.engine, real: f.real, lo: f.lo, hi: f.hi, ok: f.ok, fmt: f.pct ? pctFmt : (v: number) => fx(v, f.decimals) });
   return tiles;
 }
 
+// One statistic: the engine's value against real football, with its allowed range.
 function Tile({ t }: any) {
   const isEst = t.kind === 'estimate';
   const lo = t.lo ?? t.real - t.tol, hi = t.hi ?? t.real + t.tol;
@@ -100,7 +100,7 @@ function Tile({ t }: any) {
     </div>
   );
 }
-/** Every final score side by side with real football: how often each one happens. */
+// How often each final score happens, simulated against real football.
 function Scorelines({ s }: any) {
   const real = reference.scorelines.hist, mx = Math.max(...s.hist, ...real, 0.0001);
   return (
@@ -122,10 +122,11 @@ function Scorelines({ s }: any) {
     </div>
   );
 }
+// A score as H, D or A.
 const outcome = (s: number[]) => (s[0] > s[1] ? 'H' : s[0] < s[1] ? 'A' : 'D');
 const OUTCOME_LABEL = { H: 'Home wins', D: 'Draws', A: 'Away wins' };
 
-/** Home wins, draws and away wins as counts and shares, next to real football. */
+// Home wins, draws and away wins, simulated against real football.
 function ResultsSummary({ matches, seed }: any) {
   const n = matches.length, c = { H: 0, D: 0, A: 0 };
   let goals = 0;
@@ -155,7 +156,7 @@ function ResultsSummary({ matches, seed }: any) {
   );
 }
 
-/** Every final score that came up, how often, and how often real football ends that way. */
+// Every final score that came up and how often, against real football.
 function ScorelineTable({ matches, pick, onPick }: any) {
   const n = matches.length, counts = new Map<string, number>();
   for (const m of matches) { const k = `${m.score[0]}-${m.score[1]}`; counts.set(k, (counts.get(k) || 0) + 1); }
@@ -180,8 +181,7 @@ function ScorelineTable({ matches, pick, onPick }: any) {
   );
 }
 
-/** Every simulated match, one row each, filterable by result, scoreline or option. */
-/** One match's players: who played, scored, assisted, was booked or injured, and their ratings. */
+// One simulated match's player statistics.
 function MatchPlayers({ m }: any) {
   const sides = [m.job.home, m.job.away];
   return (
@@ -221,6 +221,7 @@ function MatchPlayers({ m }: any) {
   );
 }
 
+// Every simulated match in a batch, filterable by result, scoreline or option.
 function MatchList({ matches, pick, setPick, groups }: any) {
   const [res, setRes] = useState('all'), [grp, setGrp] = useState('all'), [open, setOpen] = useState(null);
   const shown = matches.filter(m => (res === 'all' || outcome(m.score) === res) && (!pick || `${m.score[0]}-${m.score[1]}` === pick) && (grp === 'all' || m.group === grp));
@@ -259,7 +260,7 @@ function MatchList({ matches, pick, setPick, groups }: any) {
   );
 }
 
-/** The simulated league table, with where each club really finished. */
+// The simulated league table, with where each club really finished.
 function SeasonTable({ table }: any) {
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
@@ -285,7 +286,7 @@ function SeasonTable({ table }: any) {
 
 const PLAYER_STATS = [['goals', 'Goals'], ['assists', 'Assists'], ['yellows', 'Yellow cards'], ['reds', 'Red cards'], ['injuries', 'Injuries']] as const;
 
-/** The top five in each player stat. */
+// The top five players in each season statistic.
 function SeasonLeaders({ players }: any) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -306,7 +307,7 @@ function SeasonLeaders({ players }: any) {
   );
 }
 
-/** Every player who played: search by name or club, sort by any column. */
+// Every player in a season, searchable and sortable.
 function PlayerTable({ players }: any) {
   const [sort, setSort] = useState('goals'), [q, setQ] = useState('');
   const cols = [['apps', 'Apps'], ['minutes', 'Mins'], ['goals', 'Goals'], ['assists', 'Ast'], ['yellows', 'Yel'], ['reds', 'Red'], ['injuries', 'Inj'], ['missedInjured', 'Out inj'], ['missedBanned', 'Banned'], ['rating', 'Avg rating']];
@@ -341,16 +342,15 @@ function PlayerTable({ players }: any) {
   );
 }
 
-// One row per simulated match, for the lists above.
+// One simulated match as a row for the match lists.
 const matchRow = (r: any, job: any, i: number, group?: string) => ({ i, group, job, players: r.players, seed: job.seed, str: [job.home.strength, job.away.strength], score: r.score, ht: r.ht, shots: [r.ts[0].shots, r.ts[1].shots], xg: [r.ts[0].xg, r.ts[1].xg] });
 
+// The Engine Lab: realism, balance, season and performance tests run in the browser.
 export function Lab() {
   const [tab, setTab] = useState('realism'), [n, setN] = useState(1000), [gap, setGap] = useState(0), [prog, setProg] = useState(0);
   const [res, setRes] = useState(null), [dim, setDim] = useState('pressing'), [bal, setBal] = useState(null), [perf, setPerf] = useState(null), [det, setDet] = useState(null);
-  const [pick, setPick] = useState(null); // a scoreline picked in the table, to filter the match list
+  const [pick, setPick] = useState(null);
   const [league, setLeague] = useState('E0'), [season, setSeason] = useState(null);
-  // Every run uses the seed shown, then a new one is drawn, so each run is a fresh batch; typing a seed repeats a run
-  // exactly. A run's matches use seeds spread out from it (seed × 4099 + match number), so two seeds never share a match.
   const [labSeed, setLabSeed] = useState(1);
   const newSeed = () => randomSeed(1e6);
   useEffect(() => { setLabSeed(newSeed()); }, []);
@@ -360,7 +360,6 @@ export function Lab() {
   useEffect(() => { const t = setTimeout(() => { const cfg = { ...teamsFor(0, 0), seed: 4242 }; const a = E.simulateMatch(cfg), b = E.simulateMatch(cfg); const m = new E.Match(cfg); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd(); setDet({ ok: hash(a) === hash(b) && hash(a) === hash(c), h: hash(a) }); }, 300); return () => clearTimeout(t); }, []);
   const realism = async () => {
     setRes(null); setProg(0.01);
-    // A fresh, varied pair of squads for every match, like the many teams of a real league.
     const sd = labSeed, base = spread(sd);
     const jobs = Array.from({ length: n }, (_, i) => ({ ...leagueTeams(base + i, gap), seed: base + i + 1, control: 'none' }));
     const raw = await runBatch(jobs, setProg);
@@ -386,7 +385,6 @@ export function Lab() {
     const a = E.simulateMatch({ ...t, seed: 4242 }), b = E.simulateMatch({ ...t, seed: 4242 }); const m = new E.Match({ ...t, seed: 4242 }); m.runUntil({ minute: 37 }); const c = E.Match.load(m.save()).runToEnd();
     setPerf({ ms: ms / k, mps: 1000 / (ms / k), par: 48 / (par / 1000), season: 380 / (48 / (par / 1000)), h1: hash(a), h2: hash(b), h3: hash(c), events: (a as any).events.length }); setProg(0);
   };
-  // A full season of a real league, matchday by matchday: injuries, bans and tiredness carry from one match to the next.
   const seasonRun = async () => {
     setSeason(null); setProg(0.01);
     const t0 = performance.now();

@@ -5,6 +5,7 @@ import { breathe } from './breathe';
 import { describeStatistical } from './statistical';
 
 const clubs = LEAGUES.flatMap(l => l.teams.map(t => ({ league: l.code, ...t })));
+// A real club's team sheet for the tests.
 const team = (name: string, formation = '4-3-3') => {
   const c = clubs.find(x => x.name === name)!;
   return realTeam(c.league, c.name, { formation }) as any;
@@ -40,11 +41,10 @@ describe('real squads', () => {
   it('plays the edited player: changing an attribute changes the match', () => {
     const home = team('Arsenal'), away = team('Liverpool');
     const fp = (h: any) => { const r: any = E.simulateMatch({ home: h, away, seed: 3, control: 'none' }); return JSON.stringify([r.score, r.events.map((e: any) => [e.tick, e.type])]); };
-    // pace is used every tick (a finishing edit only shows if that player happens to shoot)
     const striker = home.players.find((p: any) => p.id === home.xi[10]);
     const edited = setAttr(home, striker.id, 'pace', 1);
     expect(edited.players.find((p: any) => p.id === striker.id).attrs.pace).toBe(1);
-    expect(home.players.find((p: any) => p.id === striker.id).attrs.pace).not.toBe(1); // the original is untouched
+    expect(home.players.find((p: any) => p.id === striker.id).attrs.pace).not.toBe(1);
     expect(fp(edited)).not.toBe(fp(home));
   });
 
@@ -87,7 +87,6 @@ describeStatistical('real squads realism', () => {
       const r: any = E.simulateMatch({ home: realTeam(l.code, a.name), away: realTeam(l.code, b.name), seed: 500 + i, control: 'none' });
       goals += r.score[0] + r.score[1]; shots += r.teamStats[0].shots + r.teamStats[1].shots; n++;
     }
-    // real top-five leagues: about 2.8 goals and 25 shots a match
     expect(goals / n).toBeGreaterThan(2.2);
     expect(goals / n).toBeLessThan(3.4);
     expect(shots / n).toBeGreaterThan(19);
