@@ -1,9 +1,7 @@
-// Turn the downloaded league CSVs into src/data/reference.json: the real-football numbers (means, spreads and
-// distributions) that the calibrate script and the Engine Lab compare the engine against.
-//   npm run build-reference
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { parseCsv } from './csv.mjs';
 import { analyse } from '../src/lib/metrics.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -11,38 +9,15 @@ const DATA = path.join(root, 'data', 'football-data');
 const OUT = path.join(root, 'src', 'data', 'reference.json');
 
 // Minimal CSV reader: handles a byte-order mark, quoted fields and CRLF line endings.
-function parseCsv(text) {
-  const rows = [];
-  let row = [], field = '', quoted = false;
-  text = text.replace(/^﻿/, '');
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quoted) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') quoted = false;
-      else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ',') { row.push(field); field = ''; }
-    else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(field); field = '';
-      if (row.some(v => v !== '')) rows.push(row);
-      row = [];
-    } else field += c;
-  }
-  if (field !== '' || row.length) { row.push(field); if (row.some(v => v !== '')) rows.push(row); }
-  return rows;
-}
-
 const NEEDED = ['FTHG', 'FTAG', 'HS', 'AS', 'HST', 'AST', 'HF', 'AF', 'HC', 'AC', 'HY', 'AY', 'HR', 'AR'];
 const files = (await readdir(DATA).catch(() => [])).filter(f => f.endsWith('.csv')).sort();
 if (!files.length) { console.error('No CSV files in data/football-data/. Run `npm run fetch-data` first.'); process.exit(1); }
 
+// A half-time goal count from a CSV row, or NaN when missing.
 const halfTime = (r, i) => (i === undefined || r[i] === undefined || r[i].trim() === '' ? NaN : Number(r[i]));
 
 const lines = [];
-// Bookmaker odds (market average, else Bet365), turned into probabilities with the margin removed. They say how
-// predictable real matches are, which is what the engine's squad-quality effect is calibrated against.
+// Bookmaker odds (market average, else Bet365), turned into probabilities with the margin removed.
 const oddsRows = [];
 const seasons = new Set(), leagues = new Set();
 let skipped = 0;
@@ -53,12 +28,10 @@ for (const file of files) {
   if (NEEDED.some(k => col[k] === undefined)) { console.warn(`${file}: missing columns, skipped`); continue; }
   for (const r of body) {
     const v = Object.fromEntries(NEEDED.map(k => [k, Number(r[col[k]])]));
-    // Drop unplayed or incomplete rows rather than treating a blank as zero.
     if (NEEDED.some(k => r[col[k]] === undefined || r[col[k]].trim() === '' || !Number.isFinite(v[k]))) { skipped++; continue; }
     lines.push({
       goalsH: v.FTHG, goalsA: v.FTAG, shotsH: v.HS, shotsA: v.AS, onTargetH: v.HST, onTargetA: v.AST,
       cornersH: v.HC, cornersA: v.AC, foulsH: v.HF, foulsA: v.AF, yellowsH: v.HY, yellowsA: v.AY, redsH: v.HR, redsA: v.AR,
-      // Half-time goals: kept only when both are present, so a blank is never read as 0.
       htH: halfTime(r, col.HTHG), htA: halfTime(r, col.HTAG),
     });
     seasons.add(season); leagues.add(league);
@@ -83,12 +56,11 @@ const reference = {
   },
   ...analyse(lines),
   odds: summariseOdds(oddsRows),
-  // Not in the dataset. Rough top-league values kept so the Lab can still show them, clearly marked as estimates.
+  // Not in the dataset.
   estimates: {
     offsides: { mean: 4.0, lo: 3.2, hi: 4.8, note: 'Typical top-league offsides per match (both teams); not in the dataset' },
     passCompletion: { mean: 0.82, lo: 0.78, hi: 0.86, note: 'Typical top-league pass completion; not in the dataset' },
-    // How a match flows and who does what. Published top-league averages (Opta / FBref event data, league
-    // reports on ball-in-play time), rounded, with ranges wide enough to cover the five leagues and recent seasons.
+    // How a match flows and who does what.
     passesPerTeam: { mean: 470, lo: 400, hi: 560, note: 'Passes per team per match' },
     ballInPlay: { mean: 57, lo: 52, hi: 63, note: 'Minutes the ball is in play per match' },
     throwIns: { mean: 41, lo: 33, hi: 49, note: 'Throw-ins per match (both teams)' },
@@ -104,6 +76,7 @@ const reference = {
   },
 };
 
+// How predictable the real matches were, from the bookmaker odds.
 function summariseOdds(rows) {
   if (!rows.length) return null;
   const n = rows.length, d = rows.map(r => r.p[0] - r.p[2]);

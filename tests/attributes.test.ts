@@ -1,12 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { breathe } from './breathe';
-import { describeStatistical, itStatistical } from './statistical';
+import { describeStatistical } from './statistical';
 
-// Every attribute must change the thing it stands for. Both sides get the same squad at a neutral ground; one side
-// gets +6 in a single attribute and alternates home and away. `npm run attributes` runs the full-size version.
+// Every attribute must change the thing it stands for.
 const N = 60;
-/** Sums a [numerator, denominator] stat over n matches, for the boosted side and for its opponent. */
+// Sum a statistic over n matches for the boosted side and its opponent.
 async function play(attr: string, stat: (r: any, side: number) => [number, number], n: number) {
   const mine = [0, 0], theirs = [0, 0];
   for (let i = 0; i < n; i++) {
@@ -19,10 +18,9 @@ async function play(attr: string, stat: (r: any, side: number) => [number, numbe
   }
   return { mine: mine[0] / mine[1], theirs: theirs[0] / theirs[1] };
 }
-/** Average of a per-match stat. */
+// Average a per-match statistic for the boosted side and its opponent.
 const compare = (attr: string, stat: (r: any, side: number) => number, n = N) => play(attr, (r, s) => [stat(r, s), 1], n);
-/** The same 0.15 xG chance from 14 m taken 4,000 times, with the shooter's shooting and the defending keeper's
- * keeping set to the given values: goals per attempt, and per shot on target. */
+// Goals per attempt and per shot on target from the same chance taken many times.
 function scoringRate({ shooting, keeping }: { shooting: number; keeping: number }) {
   const m: any = new E.Match({ home: E.makeTeam({ name: 'H', seed: 7 }), away: E.makeTeam({ name: 'A', seed: 7 }), seed: 5, control: 'none', neutral: true });
   m.runUntil({ minute: 3 });
@@ -33,13 +31,14 @@ function scoringRate({ shooting, keeping }: { shooting: number; keeping: number 
   let goals = 0, onTarget = 0;
   for (let k = 0; k < 4000; k++) {
     q.x = m.dir(0) > 0 ? 105 - 14 : 14; q.y = 34;
-    m._shoot(i, { xg: 0.15, freekick: true }); // a free kick: no blockers, so every attempt reaches the keeper or misses
+    m._shoot(i, { xg: 0.15, freekick: true });
     const o = m.ball.flight.outcome;
     if (o === 'goal' || o === 'saved') onTarget++;
     if (o === 'goal') goals++;
   }
   return { perAttempt: goals / 4000, perOnTarget: goals / onTarget };
 }
+// Count one side's events that match a test.
 const events = (r: any, side: number, pred: (e: any) => boolean) => r.events.filter((e: any) => e.side === side && pred(e)).length;
 
 describeStatistical('player attributes', () => {
@@ -63,20 +62,14 @@ describeStatistical('player attributes', () => {
     const c = await compare('dribbling', (r, s) => r.teamStats[s].boxEntries);
     expect(c.mine).toBeGreaterThan(c.theirs * 1.3);
   });
-  // Finishing and keeping are checked on the same chance taken thousands of times: whether a single shot goes in
-  // is too random for a CI-sized sample of matches to show a 10% effect reliably. `npm run attributes` shows the
-  // effect on results over 2,000 matches.
   it('shooting: a better finisher scores more of the same chances', async () => {
-    // better finishers hit the target more often and beat the keeper more often
     expect(scoringRate({ shooting: 16, keeping: 13 }).perAttempt).toBeGreaterThan(scoringRate({ shooting: 10, keeping: 13 }).perAttempt * 1.25);
   });
   it('heading: better headers win more headers and get more headed attempts', async () => {
-    // headed goals are too rare (a few per hundred matches) to test directly; headed attempts follow won headers
     const c = await compare('heading', (r, s) => events(r, s, e => (e.type === 'shot' || e.type === 'goal') && e.header));
     expect(c.mine).toBeGreaterThan(c.theirs * 1.3);
   });
   it('tackling: better tacklers win more of their challenges', async () => {
-    // (not the raw count: a side that wins the ball sooner defends less, so it attempts fewer tackles)
     const c = await compare('tackling', (r, s) => r.teamStats[s].tackles / Math.max(1, r.teamStats[s].challenges));
     expect(c.mine).toBeGreaterThan(c.theirs * 1.1);
   });

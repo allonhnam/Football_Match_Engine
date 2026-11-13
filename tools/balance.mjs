@@ -1,6 +1,3 @@
-// Check that every tactic option matters and none dominates: each option plays the same balanced opponent
-// at a neutral venue, with fresh squads every match. Also checks formations and the style match-ups.
-//   npm run balance -- 300        (matches per option, default 200)
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
@@ -17,6 +14,7 @@ for (const [h, a] of [[{ passing: 2 }, { line: 2 }], [{ passing: 1 }, { line: 2 
   CASES.push({ group: 'match-up', label: `${L[hk][hv]} ${hk} v ${L[ak][av]} ${ak}`, home: h, away: a });
 }
 
+// Play this worker's share of the balance matches.
 function runJobs(jobs) {
   return jobs.map(({ c, i }) => {
     const cs = CASES[c];
@@ -31,6 +29,7 @@ function runJobs(jobs) {
   });
 }
 
+// Run the tactics and formation balance check on all cores and print the table.
 async function main() {
   const per = Number(process.argv.slice(2).find(a => /^\d+$/.test(a))) || 200;
   const jobs = [];
@@ -49,23 +48,26 @@ async function main() {
   console.log(`${jobs.length} matches in ${((performance.now() - t0) / 1000).toFixed(1)} s (${per} per option)\n`);
 
   console.log('Group'.padEnd(11) + 'Option'.padEnd(30) + 'Win'.padStart(5) + 'Draw'.padStart(6) + 'Loss'.padStart(6) + '   GF    GA    xG  Shots Poss Pass%  Fouls  Cond   Note');
-  let flagged = 0, group = null;
+  let flagged = 0, group = null, balanced = null;
+  const optionWins = [];
   CASES.forEach((cs, c) => {
     if (group !== null && cs.group !== group) console.log('');
     group = cs.group;
     const rs = results.filter(r => r.c === c), n = rs.length;
     const w = rs.filter(r => r.gf > r.ga).length / n, d = rs.filter(r => r.gf === r.ga).length / n;
     const avg = k => rs.reduce((s, r) => s + r[k], 0) / n;
-    // With a few hundred matches a win rate has a standard error of about 3 points, so flag only clear outliers.
     const note = cs.group === 'match-up' ? '' : w > 0.5 ? 'too strong' : w < 0.27 ? 'too weak' : '';
     if (note) flagged++;
+    if (cs.group !== 'match-up') optionWins.push(w);
+    if (cs.group === 'formation' && cs.label === '4-3-3') balanced = w;
     console.log(
       cs.group.padEnd(11) + cs.label.padEnd(30) + `${(100 * w).toFixed(0)}%`.padStart(5) + `${(100 * d).toFixed(0)}%`.padStart(6) + `${(100 * (1 - w - d)).toFixed(0)}%`.padStart(6) +
       avg('gf').toFixed(2).padStart(7) + avg('ga').toFixed(2).padStart(6) + avg('xg').toFixed(2).padStart(6) + avg('shots').toFixed(1).padStart(7) + avg('poss').toFixed(0).padStart(5) +
       avg('pass').toFixed(0).padStart(6) + avg('fouls').toFixed(1).padStart(7) + avg('cond').toFixed(2).padStart(6) + (note ? '   ' + note : ''),
     );
   });
-  console.log('\nA balanced side wins about 37% against another balanced side (the rest are draws and losses).');
+  const pctOf = v => `${(100 * v).toFixed(0)}%`;
+  console.log(`\nA balanced side wins ${pctOf(balanced)} against another balanced side (the rest are draws and losses); every option wins between ${pctOf(Math.min(...optionWins))} and ${pctOf(Math.max(...optionWins))}.`);
   console.log(flagged ? `${flagged} option(s) look out of balance (win rate above 50% or below 27% against a balanced side).` : 'No tactic or formation is clearly dominant or useless.');
 }
 

@@ -3,20 +3,16 @@ import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as E from '@/engine/engine';
-import { clone, store, defaultTeams, matchKits } from '@/lib/util';
+import { clone, store, defaultTeams, randomSeed, matchKits } from '@/lib/util';
 
 export type Settings = { insights: boolean; banners: boolean; htPause: boolean };
 
 type Ctx = any;
-const newSeed = () => Math.floor(Math.random() * 16777215);
 const AppContext = createContext<Ctx>(null);
+// Read the app-wide state from any component.
 export const useApp = () => useContext(AppContext) as Ctx;
 
-/**
- * Holds everything that must survive moving between routes: the two team sheets,
- * the match in progress (so the live view can be left and re-entered), the last report,
- * saved matches and the user's settings.
- */
+// Hold the state that survives moving between pages: teams, the match in progress, the report and settings.
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [theme, setThemeState] = useState<'dark' | 'light'>('dark');
@@ -33,12 +29,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [showSettings, setShowSettings] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Browser-only state is read after mount so server and client markup match.
   useEffect(() => {
     setThemeState(store.get('me-theme', 'dark'));
     setHistory(store.get('me-history', []));
     setSettings(s => ({ ...s, ...store.get('me-settings', {}) }));
-    setSeed(newSeed());
+    setSeed(randomSeed());
     setLoaded(true);
   }, []);
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
@@ -46,7 +41,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (t: 'dark' | 'light') => { setThemeState(t); store.set('me-theme', t); };
 
-  // Kits are settled at kick-off so the two sides (and the pitch) never look alike.
   const config = () => ({ ...matchKits(clone(teams.home), clone(teams.away)), seed, control: control as any, neutral: venue === 'neutral', knockout: competition === 'cup' || undefined });
   const saveHistory = (cfg: any, R: any, commands: any[]) => {
     const h = {
@@ -62,14 +56,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSession({ key: Date.now(), config: cfg, mode, commands, match: new E.Match(cfg), ui: { cmdPtr: 0, finishedSent: false } });
     router.push('/');
   };
-  // Every match uses the seed shown on Matchday, then a new one is drawn, so the next match is a different one.
-  // Type a seed to play a particular match again; each saved match keeps its own seed for exact replays.
-  const kickoff = () => { startSession(config(), 'live', []); setSeed(newSeed()); };
+  const kickoff = () => { startSession(config(), 'live', []); setSeed(randomSeed()); };
   const replay = (cfg: any, commands: any[]) => startSession(cfg, 'replay', commands);
   const simulate = () => {
     const cfg = config();
     const R = new E.Match(cfg).runToEnd();
-    setSeed(newSeed());
+    setSeed(randomSeed());
     saveHistory(cfg, R, []);
     setReport({ R, teams: [cfg.home, cfg.away], config: cfg, commands: [] });
     router.push('/report');

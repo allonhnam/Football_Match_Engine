@@ -1,16 +1,15 @@
 'use client';
-/* eslint-disable */
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Abbr } from '@/components/ui';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { fx, hexSeed, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar } from '@/lib/util';
+import { Icon, Btn, Seg, Badge, CondBar, CardIcon, Abbr } from '@/components/ui';
 import { drawPitch } from '@/lib/pitch';
 import { liveStats, eventTitle, DOT, buildInsight, whyItMatters } from '@/lib/liveHelpers';
 import { Momentum, StatRows } from '@/components/LiveParts';
 import { ManagerPanel } from '@/components/ManagerPanel';
+// The live match view: the animated pitch, clock, controls, feed and manager panel.
 export function LiveMatch({ session, control, settings, onFinished, onNewMatch }: any) {
-  const active = true; // the route unmounts this view when the user leaves it
+  const active = true;
   const mRef = useRef(null), canvasRef = useRef(null);
   const [, setVersion] = useState(0); const bump = useCallback(() => setVersion(v => v + 1), []);
   const [playing, setPlaying] = useState(false), [speed, setSpeed] = useState(0), [tab, setTab] = useState('events');
@@ -22,7 +21,7 @@ export function LiveMatch({ session, control, settings, onFinished, onNewMatch }
   const playingRef = useRef(playing), speedRef = useRef(speed), optsRef = useRef(opts), settingsRef = useRef(settings);
   playingRef.current = playing; speedRef.current = speed; optsRef.current = opts; settingsRef.current = settings;
   useEffect(() => { if (!active) setPlaying(false); }, [active]);
-  if (!mRef.current) mRef.current = session.match; // owned by the app so it survives route changes
+  if (!mRef.current) mRef.current = session.match;
   const m = mRef.current, replay = session.mode === 'replay', cmds = session.commands || [];
 
   const stepOnce = () => {

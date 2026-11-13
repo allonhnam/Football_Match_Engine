@@ -1,13 +1,9 @@
 'use client';
-/* eslint-disable */
-import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
+import { fx, pct } from '@/lib/util';
+// The momentum chart of each side's attacking threat minute by minute.
 export function Momentum({ m }: any) {
   const mom = m.momentum, n = Math.max(96, mom.length), W = 1000, H = 54, mid = H / 2, bw = W / n;
-  const vals = mom.map((v, i) => { let a = 0, b = 0, c = 0; for (let k = Math.max(0, i - 2); k <= Math.min(mom.length - 1, i + 2); k++) { a += mom[k][0]; b += mom[k][1]; c++; } return [a / c, b / c]; });
+  const vals = mom.map((_, i) => { let a = 0, b = 0, c = 0; for (let k = Math.max(0, i - 2); k <= Math.min(mom.length - 1, i + 2); k++) { a += mom[k][0]; b += mom[k][1]; c++; } return [a / c, b / c]; });
   const mx = Math.max(0.12, ...vals.map(v => Math.max(v[0], v[1])));
   const pts = k => vals.map((v, i) => `${(i + 0.5) * bw},${k === 0 ? mid - v[0] / mx * (mid - 4) : mid + v[1] / mx * (mid - 4)}`).join(' ');
   const evs = m.events.filter(e => e.type === 'goal' || e.type === 'red' || e.type === 'yellow' || e.type === 'sub');
@@ -22,6 +18,7 @@ export function Momentum({ m }: any) {
     </svg>
   );
 }
+// Side-by-side team statistics with bars.
 export function StatRows({ ts, teams, onPick, picked }: any) {
   const rows = [
     ['possessionPct', 'Possession', ts[0].possessionPct + '%', ts[1].possessionPct + '%', ts[0].possessionPct, ts[1].possessionPct],

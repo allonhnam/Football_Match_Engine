@@ -1,14 +1,10 @@
 'use client';
-/* eslint-disable */
-import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, LEAGUES, realTeam } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty } from '@/components/ui';
-import { runBatch } from '@/lib/batch';
+import { fx, hexSeed, ovr, TACTIC_META, rebuildSquad, LEAGUES, realTeam, findLeague, randomSeed } from '@/lib/util';
+import { Icon, Btn, Seg, Card, Badge, PageHead } from '@/components/ui';
 
-// The "use the engine in code" sample, written for the two teams picked on Matchday: a real club comes from
-// realTeam (its real 2025/26 squad), a custom squad from makeTeam. It runs as shown.
+// The 'use the engine in code' sample for the two teams picked.
 function codeSample(teams: any, seed: number) {
   const str = (s: string) => (s.includes("'") ? `"${s}"` : `'${s}'`);
   const team = (t: any) => t.league
@@ -31,6 +27,7 @@ const res = m.runToEnd();      // score, events, stats,
                                // carryOver, explanation`;
 }
 
+// The match setup screen: pick clubs, seed, venue and competition, then kick off.
 export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control, setControl, competition, setCompetition, onKickoff, onSimulate, history, onReplay, onEditTactics }: any) {
   const errs = { home: E.validateLineup(teams.home), away: E.validateLineup(teams.away) };
   const ok = !errs.home.length && !errs.away.length;
@@ -50,13 +47,13 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <select id={`league-${side}`} aria-label={`${side} league`} value={t.league || ''} onChange={e => { const l = LEAGUES.find(x => x.code === e.target.value); if (l) setTeams(tt => ({ ...tt, [side]: realTeam(l.code, l.teams[0].name, tt[side]) })); }} className="h-9 rounded-md border border-line bg-bg px-2 text-[12.5px] outline-none focus:border-accent">
+          <select id={`league-${side}`} aria-label={`${side} league`} value={t.league || ''} onChange={e => { const l = findLeague(e.target.value); if (l) setTeams(tt => ({ ...tt, [side]: realTeam(l.code, l.teams[0].name, tt[side]) })); }} className="h-9 rounded-md border border-line bg-bg px-2 text-[12.5px] outline-none focus:border-accent">
             {!t.league && <option value="">Custom</option>}
             {LEAGUES.map(l => <option key={l.code} value={l.code}>{l.name} {l.season}</option>)}
           </select>
           <select id={`club-${side}`} aria-label={`${side} club`} value={t.league ? t.name : ''} disabled={!t.league} onChange={e => setTeams(tt => ({ ...tt, [side]: realTeam(t.league, e.target.value, tt[side]) }))} className="h-9 rounded-md border border-line bg-bg px-2 text-[12.5px] outline-none focus:border-accent disabled:opacity-50">
             {!t.league && <option value="">Pick a league</option>}
-            {(LEAGUES.find(l => l.code === t.league)?.teams || []).map(c => <option key={c.name} value={c.name}>{c.name} ({c.strength})</option>)}
+            {(findLeague(t.league)?.teams || []).map(c => <option key={c.name} value={c.name}>{c.name} ({c.strength})</option>)}
           </select>
         </div>
         <div className="grid grid-cols-3 border border-line rounded-md divide-x divide-line">
@@ -66,7 +63,7 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
           <div className="flex justify-between"><span className="eyebrow">Squad strength</span><span className="font-mono text-[12px] tnum">{t.strength}</span></div>
           <input id={`str-${side}`} type="range" min="6" max="18" value={t.strength} onChange={e => setTeams(tt => ({ ...tt, [side]: rebuildSquad(tt[side], { strength: +e.target.value }) }))} className="w-full mt-1" />
         </div>
-        <div className="flex flex-wrap gap-2"><Btn onClick={() => onEditTactics(side)}>Edit squad & tactics</Btn><Btn kind="quiet" onClick={() => setTeams(tt => ({ ...tt, [side]: rebuildSquad(tt[side], { seed: Math.floor(Math.random() * 1e6) }) }))}>New random squad</Btn></div>
+        <div className="flex flex-wrap gap-2"><Btn onClick={() => onEditTactics(side)}>Edit squad & tactics</Btn><Btn kind="quiet" onClick={() => setTeams(tt => ({ ...tt, [side]: rebuildSquad(tt[side], { seed: randomSeed(1e6) }) }))}>New random squad</Btn></div>
         {errs[side].length > 0 && <ul className="rounded-md border border-bad/40 bg-bad/10 p-2.5 text-[12px] text-bad space-y-0.5">{errs[side].map((e, i) => <li key={i}>• {e.message}</li>)}</ul>}
       </div>
     );
@@ -77,7 +74,7 @@ export function Setup({ teams, setTeams, seed, setSeed, venue, setVenue, control
         <PageHead eyebrow="Match setup" title="Matchday" sub="Pick two squads and a seed, then kick off live or simulate instantly. The same seed and the same manager decisions always produce the same match; a new seed is drawn after every match." />
         <div className="flex flex-col md:flex-row items-stretch gap-3">{teamCard('home')}<div className="grid place-items-center"><span className="font-display font-bold text-dim text-[20px] px-1">VS</span></div>{teamCard('away')}</div>
         <div className="rounded-lg border border-line bg-surface p-4 grid gap-4 lg:grid-cols-[auto_1fr_1fr_1.4fr] xl:grid-cols-[auto_0.9fr_0.9fr_1.2fr_auto] items-end">
-          <div><div className="eyebrow mb-1.5">Seed</div><div className="flex gap-2"><input id="seed" type="number" value={seed} onChange={e => setSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full min-w-[13ch] h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setSeed(Math.floor(Math.random() * 16777215))} title="Random seed">Random</Btn></div></div>
+          <div><div className="eyebrow mb-1.5">Seed</div><div className="flex gap-2"><input id="seed" type="number" value={seed} onChange={e => setSeed(Math.max(0, Math.floor(+e.target.value || 0)))} className="w-full min-w-[13ch] h-9 rounded-md border border-line bg-bg px-3 font-mono tnum outline-none focus:border-accent" /><Btn onClick={() => setSeed(randomSeed())} title="Random seed">Random</Btn></div></div>
           <div><div className="eyebrow mb-1.5">Venue</div><Seg id="venue" value={venue === 'home' ? 0 : 1} options={['Home ground', 'Neutral']} onChange={i => setVenue(i ? 'neutral' : 'home')} /></div>
           <div><div className="eyebrow mb-1.5">Competition</div><Seg id="competition" value={competition === 'cup' ? 1 : 0} options={['League', 'Cup tie']} onChange={i => setCompetition(i ? 'cup' : 'league')} /></div>
           <div><div className="eyebrow mb-1.5">You manage</div><Seg id="control" value={['home', 'away', 'both', 'none'].indexOf(control)} options={['Home', 'Away', 'Both', 'Watch']} onChange={i => setControl(['home', 'away', 'both', 'none'][i])} /></div>

@@ -3,6 +3,7 @@ import { useApp } from '@/components/AppProvider';
 import { Setup } from '@/components/Setup';
 import { LiveMatch } from '@/components/LiveMatch';
 
+// The matchday page: match setup, or the live match once one is running.
 export default function MatchdayPage() {
   const app = useApp();
   if (app.session) {

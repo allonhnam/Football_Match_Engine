@@ -1,10 +1,3 @@
-// Download match results for the top five European leagues from football-data.co.uk.
-//   npm run fetch-data
-//
-// Files go into data/football-data/ (not committed). Run `npm run build-reference` afterwards to turn
-// them into src/data/reference.json, the numbers the calibration tools compare the engine against.
-// It also downloads the real squads (players and clubs, CC0, github.com/dcaribou/transfermarkt-datasets) into
-// data/transfermarkt/ for `npm run build-teams`.
 import { mkdir, writeFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -14,7 +7,9 @@ const LEAGUES = { E0: 'England Premier League', D1: 'Germany Bundesliga', SP1: '
 const SEASONS = ['2122', '2223', '2324', '2425', '2526'];
 const force = process.argv.includes('--force');
 
+// Whether a file exists.
 const exists = p => access(p).then(() => true, () => false);
+// Wait for a number of milliseconds.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 await mkdir(OUT, { recursive: true });
@@ -28,7 +23,6 @@ for (const season of SEASONS) {
     try {
       const res = await fetch(url, { redirect: 'follow' });
       const text = await res.text();
-      // Reject error pages: a real file starts with a header row naming the full-time goals column.
       if (!res.ok || !text.includes('FTHG')) throw new Error(`HTTP ${res.status}, not a results file`);
       await writeFile(file, text);
       const rows = text.split('\n').filter(l => l.trim()).length - 1;
@@ -38,7 +32,7 @@ for (const season of SEASONS) {
       console.warn(`${season} ${code} failed: ${err.message}`);
       failed++;
     }
-    await sleep(400); // be polite to the free service
+    await sleep(400);
   }
 }
 

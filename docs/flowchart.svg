@@ -1,165 +1,163 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 1310" width="1040" height="1310" font-family="'Segoe UI', Inter, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1250" width="1200" height="1250" font-family="'Segoe UI', Inter, Helvetica, Arial, sans-serif">
   <title>Match engine flowchart: the life of one match</title>
   <defs>
-    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#5B4F7A" flood-opacity="0.12"/>
-    </filter>
-    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#6E6585"/>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1 L9 5 L1 9 z" fill="#6E6A86"/>
     </marker>
     <style>
-      .h  { font-size:13px; font-weight:800; letter-spacing:1.6px; }
-      .t  { fill:#2E2A3A; font-size:15px; font-weight:700; text-anchor:middle; }
-      .tl { fill:#2E2A3A; font-size:14.5px; font-weight:700; }
-      .s  { fill:#5A5370; font-size:12.5px; text-anchor:middle; }
-      .sl { fill:#5A5370; font-size:12.5px; }
-      .xs { fill:#5A5370; font-size:11.5px; text-anchor:middle; }
-      .m  { font-family: Consolas, 'Cascadia Code', Menlo, monospace; fill:#4A4360; font-size:11.5px; text-anchor:middle; }
-      .ml { font-family: Consolas, 'Cascadia Code', Menlo, monospace; fill:#4A4360; font-size:11.5px; }
-      .ln { fill:none; stroke:#6E6585; stroke-width:2; }
-      .dl { fill:none; stroke:#6E6585; stroke-width:1.8; stroke-dasharray:6 5; }
-      .lab{ fill:#4A4360; font-size:12px; font-weight:700; }
-      .card { fill:#FFFFFF; stroke:#A893E0; stroke-width:1.5; }
-      .num { fill:#6A52B8; font-size:15px; font-weight:800; }
+      .t { font-size: 26px; font-weight: 700; fill: #2B2840; }
+      .s { font-size: 14px; fill: #6E6A86; }
+      .lab { font-size: 12px; font-weight: 700; letter-spacing: 1.6px; fill: #6A57C9; }
+      .labs { font-size: 12px; fill: #6E6A86; }
+      .h { font-size: 15px; font-weight: 700; fill: #2B2840; }
+      .hs { font-size: 13px; font-weight: 700; fill: #2B2840; }
+      .b { font-size: 12.5px; fill: #4A4763; }
+      .bs { font-size: 11.5px; fill: #4A4763; }
+      .m { font-size: 12px; fill: #4A4763; font-family: Menlo, Consolas, monospace; }
+      .ms { font-size: 11px; fill: #4A4763; font-family: Menlo, Consolas, monospace; }
+      .num { font-size: 15px; font-weight: 700; fill: #6A57C9; }
+      .yn { font-size: 12px; font-weight: 700; fill: #4A4763; }
+      .line { stroke: #6E6A86; stroke-width: 1.5; fill: none; }
+      .dash { stroke: #6E6A86; stroke-width: 1.5; fill: none; stroke-dasharray: 6 5; }
+      .step { fill: #FFFFFF; stroke: #A99BEA; stroke-width: 1.2; }
+      .q { fill: #FFE6D2; stroke: #F0A36B; stroke-width: 1.4; }
     </style>
   </defs>
 
-  <rect width="1040" height="1310" fill="#FBFAF7"/>
-  <text x="520" y="44" text-anchor="middle" font-size="26" font-weight="800" fill="#2E2A3A">The life of one match</text>
-  <text x="520" y="70" text-anchor="middle" font-size="14" fill="#6E6585">Check the line-ups, kick off, then repeat one tick every 0.25 s of play until the result.</text>
+  <rect width="1200" height="1250" fill="#FBFAF7"/>
 
-  <!-- start -->
-  <g filter="url(#sh)"><rect x="320" y="94" width="360" height="62" rx="31" fill="#C8EFD9" stroke="#84C8A2" stroke-width="2"/></g>
-  <text class="t" x="500" y="120">Start · new Match(config)</text>
-  <text class="s" x="500" y="141">two squads · tactics · formation · seed · league or cup</text>
-  <line class="ln" x1="500" y1="156" x2="500" y2="184" marker-end="url(#ar)"/>
+  <text x="600" y="48" text-anchor="middle" class="t">The life of one match</text>
+  <text x="600" y="76" text-anchor="middle" class="s">Check the line-ups, kick off, then repeat one tick every 0.25 s of play until the result.</text>
 
-  <!-- lineup legal -->
-  <g filter="url(#sh)"><polygon points="500,188 620,230 500,272 380,230" fill="#FFDCC2" stroke="#E7A77A" stroke-width="2"/></g>
-  <text class="t" x="500" y="228">Line-ups legal?</text>
-  <text class="m" x="500" y="246">validateLineup()</text>
-  <line class="ln" x1="380" y1="230" x2="254" y2="230" marker-end="url(#ar)"/>
-  <text class="lab" x="306" y="222">No</text>
-  <g filter="url(#sh)"><rect x="60" y="198" width="190" height="64" rx="12" fill="#FBD3E3" stroke="#DE93B4" stroke-width="1.8"/></g>
-  <text class="t" x="155" y="225">Return the errors</text>
-  <text class="s" x="155" y="245">typed, never thrown</text>
-  <line class="ln" x1="500" y1="272" x2="500" y2="298" marker-end="url(#ar)"/>
-  <text class="lab" x="510" y="290">Yes</text>
+  <!-- Start -->
+  <rect x="410" y="100" width="300" height="56" rx="28" fill="#DDF5E7" stroke="#6CC193" stroke-width="1.4"/>
+  <text x="560" y="124" text-anchor="middle" class="h">Start · new Match(config)</text>
+  <text x="560" y="143" text-anchor="middle" class="bs">two squads · tactics · formation · seed · league or cup</text>
+  <line x1="560" y1="156" x2="560" y2="169" class="line" marker-end="url(#ar)"/>
 
-  <!-- kick-off -->
-  <g filter="url(#sh)"><rect x="360" y="302" width="280" height="50" rx="12" fill="#FFF1B8" stroke="#D9BE5C" stroke-width="1.8"/></g>
-  <text class="t" x="500" y="324">Kick-off</text>
-  <text class="s" x="500" y="342">both teams in their own half</text>
-  <line class="ln" x1="500" y1="352" x2="500" y2="380" marker-end="url(#ar)"/>
+  <!-- Line-ups legal? -->
+  <polygon points="560,171 685,215 560,259 435,215" class="q"/>
+  <text x="560" y="211" text-anchor="middle" class="hs">Line-ups legal?</text>
+  <text x="560" y="228" text-anchor="middle" class="ms">validateLineup()</text>
+  <line x1="435" y1="215" x2="362" y2="215" class="line" marker-end="url(#ar)"/>
+  <text x="400" y="207" text-anchor="middle" class="yn">No</text>
+  <rect x="150" y="190" width="210" height="50" rx="10" fill="#FDE3EC" stroke="#E68AAB" stroke-width="1.4"/>
+  <text x="255" y="211" text-anchor="middle" class="hs">Return the errors</text>
+  <text x="255" y="229" text-anchor="middle" class="bs">typed, never thrown</text>
+  <line x1="560" y1="259" x2="560" y2="283" class="line" marker-end="url(#ar)"/>
+  <text x="574" y="276" class="yn">Yes</text>
 
-  <!-- ===== tick loop ===== -->
-  <rect x="240" y="384" width="520" height="458" rx="20" fill="#EEE8FD" stroke="#A893E0" stroke-width="2" stroke-dasharray="7 5"/>
-  <text class="h" x="262" y="410" fill="#6A52B8">EVERY TICK · 0.25 s OF PLAY</text>
-  <text class="sl" x="738" y="410" text-anchor="end">about 22,000 a match</text>
+  <!-- Kick-off -->
+  <rect x="440" y="285" width="240" height="50" rx="10" fill="#FFF4C9" stroke="#E7C34F" stroke-width="1.4"/>
+  <text x="560" y="306" text-anchor="middle" class="h">Kick-off</text>
+  <text x="560" y="324" text-anchor="middle" class="bs">both teams in their own half</text>
+  <line x1="560" y1="335" x2="560" y2="363" class="line" marker-end="url(#ar)"/>
 
-  <g filter="url(#sh)">
-    <rect class="card" x="264" y="424" width="472" height="56" rx="12"/>
-    <rect class="card" x="264" y="490" width="472" height="56" rx="12"/>
-    <rect class="card" x="264" y="556" width="472" height="56" rx="12"/>
-    <rect class="card" x="264" y="622" width="472" height="138" rx="12"/>
-    <rect class="card" x="264" y="770" width="472" height="56" rx="12"/>
-  </g>
-  <text class="num" x="282" y="448">1</text><text class="tl" x="302" y="448">Move the clock on 0.25 s</text>
-  <text class="sl" x="302" y="468"><tspan class="ml">step()</tspan>; <tspan class="ml">runUntil()</tspan> and <tspan class="ml">runToEnd()</tspan> call it in a loop</text>
+  <!-- Every tick loop -->
+  <rect x="330" y="365" width="460" height="400" rx="16" fill="#F2EFFD" stroke="#A99BEA" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <text x="350" y="391" class="lab">EVERY TICK · 0.25 s OF PLAY</text>
+  <text x="770" y="391" text-anchor="end" class="labs">about 22,000 a match</text>
 
-  <text class="num" x="282" y="514">2</text><text class="tl" x="302" y="514">Ball dead? Take the set piece</text>
-  <text class="sl" x="302" y="534">walk to the spots · a late leader wastes time · 5-second count</text>
+  <rect x="350" y="405" width="420" height="50" rx="10" class="step"/>
+  <text x="366" y="426" class="num">1</text><text x="386" y="426" class="hs">Move the clock on 0.25 s</text>
+  <text x="386" y="444" class="bs">step(); runUntil() and runToEnd() call it in a loop</text>
 
-  <text class="num" x="282" y="580">3</text><text class="tl" x="302" y="580">Move every player off the ball</text>
-  <text class="sl" x="302" y="600">formation shape · runs into space · marking · pressing · tiredness</text>
+  <rect x="350" y="465" width="420" height="50" rx="10" class="step"/>
+  <text x="366" y="486" class="num">2</text><text x="386" y="486" class="hs">Ball dead? Take the set piece</text>
+  <text x="386" y="504" class="bs">walk to the spots · a late leader wastes time · 5-second count</text>
 
-  <text class="num" x="282" y="646">4</text><text class="tl" x="302" y="646">Play the ball: where is it?</text>
-  <rect x="280" y="658" width="144" height="92" rx="10" fill="#E4F1FC" stroke="#8DBBE3"/>
-  <rect x="428" y="658" width="144" height="92" rx="10" fill="#E3F6EC" stroke="#84C8A2"/>
-  <rect x="576" y="658" width="144" height="92" rx="10" fill="#FFEBDD" stroke="#E7A77A"/>
-  <text class="t" x="352" y="678" style="font-size:13px">At a player's feet</text>
-  <text class="xs" x="352" y="697">he picks: shoot, pass,</text>
-  <text class="xs" x="352" y="713">cross, carry or clear</text>
-  <text class="m" x="352" y="736">_decide()</text>
-  <text class="t" x="500" y="678" style="font-size:13px">In the air</text>
-  <text class="xs" x="500" y="697">a pass lands or is cut out</text>
-  <text class="xs" x="500" y="713">shot: blocked, saved, goal</text>
-  <text class="m" x="500" y="736">_flight()</text>
-  <text class="t" x="648" y="678" style="font-size:13px">Loose</text>
-  <text class="xs" x="648" y="697">nearest players chase it</text>
-  <text class="xs" x="648" y="713">or it goes out of play</text>
-  <text class="m" x="648" y="736">_looseBall()</text>
+  <rect x="350" y="525" width="420" height="50" rx="10" class="step"/>
+  <text x="366" y="546" class="num">3</text><text x="386" y="546" class="hs">Move every player off the ball</text>
+  <text x="386" y="564" class="bs">formation shape · runs into space · marking · pressing · tiredness</text>
 
-  <text class="num" x="282" y="794">5</text><text class="tl" x="302" y="794">Referee, then record what happened</text>
-  <text class="sl" x="302" y="814">offside · fouls · cards · advantage → events, commentary, stats</text>
-  <line class="ln" x1="500" y1="842" x2="500" y2="862" marker-end="url(#ar)"/>
+  <rect x="350" y="585" width="420" height="105" rx="10" class="step"/>
+  <text x="366" y="606" class="num">4</text><text x="386" y="606" class="hs">Play the ball: where is it?</text>
+  <rect x="364" y="617" width="126" height="62" rx="8" fill="#E7F0FD" stroke="#8DB4F0"/>
+  <text x="427" y="637" text-anchor="middle" class="hs">At a player's feet</text>
+  <text x="427" y="653" text-anchor="middle" class="bs">he picks an option</text>
+  <text x="427" y="670" text-anchor="middle" class="ms">_decide()</text>
+  <rect x="497" y="617" width="126" height="62" rx="8" fill="#E3F5EA" stroke="#8FD1AA"/>
+  <text x="560" y="637" text-anchor="middle" class="hs">In the air</text>
+  <text x="560" y="653" text-anchor="middle" class="bs">pass, cross or shot</text>
+  <text x="560" y="670" text-anchor="middle" class="ms">_flight()</text>
+  <rect x="630" y="617" width="126" height="62" rx="8" fill="#FFF0E3" stroke="#F2B98A"/>
+  <text x="693" y="637" text-anchor="middle" class="hs">Loose</text>
+  <text x="693" y="653" text-anchor="middle" class="bs">first one to it wins</text>
+  <text x="693" y="670" text-anchor="middle" class="ms">_looseBall()</text>
 
-  <!-- period over -->
-  <g filter="url(#sh)"><polygon points="500,866 620,908 500,950 380,908" fill="#FFDCC2" stroke="#E7A77A" stroke-width="2"/></g>
-  <text class="t" x="500" y="906">Half over?</text>
-  <text class="xs" x="500" y="924">45′ + added time</text>
-  <path class="ln" d="M380,908 H214 V452 H260" marker-end="url(#ar)"/>
-  <text class="lab" x="228" y="900">No · next tick</text>
-  <line class="ln" x1="500" y1="950" x2="500" y2="976" marker-end="url(#ar)"/>
-  <text class="lab" x="510" y="968">Yes</text>
+  <rect x="350" y="700" width="420" height="50" rx="10" class="step"/>
+  <text x="366" y="721" class="num">5</text><text x="386" y="721" class="hs">Referee, then record what happened</text>
+  <text x="386" y="739" class="bs">offside · fouls · cards · advantage → events, stats</text>
 
-  <!-- another period -->
-  <g filter="url(#sh)"><polygon points="500,980 630,1022 500,1064 370,1022" fill="#FFDCC2" stroke="#E7A77A" stroke-width="2"/></g>
-  <text class="t" x="500" y="1018">Another period?</text>
-  <text class="xs" x="500" y="1036">2nd half, or extra time</text>
-  <path class="ln" d="M370,1022 H120 V327 H356" marker-end="url(#ar)"/>
-  <text class="lab" x="134" y="1014">Yes · change ends</text>
-  <line class="ln" x1="500" y1="1064" x2="500" y2="1090" marker-end="url(#ar)"/>
-  <text class="lab" x="510" y="1082">No</text>
+  <!-- Side: manager commands -->
+  <rect x="830" y="410" width="300" height="150" rx="14" fill="#EEF4FE" stroke="#8DB4F0" stroke-width="1.4"/>
+  <text x="850" y="438" class="h">Manager commands</text>
+  <text x="850" y="461" class="m">substitute()</text>
+  <text x="850" y="478" class="m">setTactics()</text>
+  <text x="850" y="495" class="m">setFormation()</text>
+  <text x="850" y="519" class="bs">applied at the next stoppage; logged, so</text>
+  <text x="850" y="535" class="bs">save() and load() replay the match exactly</text>
+  <text x="850" y="551" class="bs" fill="#6E6A86">Other side: AI manager, every 10 s</text>
+  <line x1="830" y1="485" x2="793" y2="485" class="dash" marker-end="url(#ar)"/>
 
-  <!-- cup tie level -->
-  <g filter="url(#sh)"><polygon points="500,1094 630,1134 500,1174 370,1134" fill="#FFDCC2" stroke="#E7A77A" stroke-width="2"/></g>
-  <text class="t" x="500" y="1131">Cup tie still level?</text>
-  <text class="xs" x="500" y="1149">after extra time</text>
-  <line class="ln" x1="630" y1="1134" x2="676" y2="1134" marker-end="url(#ar)"/>
-  <text class="lab" x="638" y="1126">Yes</text>
-  <g filter="url(#sh)"><rect x="680" y="1110" width="210" height="50" rx="12" fill="#FFF1B8" stroke="#D9BE5C" stroke-width="1.8"/></g>
-  <text class="t" x="785" y="1132">Penalty shootout</text>
-  <text class="s" x="785" y="1150">5 kicks each, then sudden death</text>
-  <path class="ln" d="M785,1160 V1236 H684" marker-end="url(#ar)"/>
-  <line class="ln" x1="500" y1="1174" x2="500" y2="1198" marker-end="url(#ar)"/>
-  <text class="lab" x="510" y="1192">No</text>
+  <!-- Side: off the field -->
+  <rect x="830" y="590" width="300" height="150" rx="14" fill="#EDF8F1" stroke="#8FD1AA" stroke-width="1.4"/>
+  <text x="850" y="618" class="h">Off the field (2026/27)</text>
+  <text x="850" y="641" class="bs">treated player stays off until a minute</text>
+  <text x="850" y="657" class="bs">after the restart</text>
+  <text x="850" y="677" class="bs">substituted player walks off within 10 s</text>
+  <text x="850" y="697" class="bs">dropped ball: to the keeper, or the team</text>
+  <text x="850" y="713" class="bs">that had the ball</text>
+  <text x="850" y="731" class="ms">_treat() · _droppedBallSide()</text>
+  <line x1="830" y1="665" x2="793" y2="665" class="dash" marker-end="url(#ar)"/>
 
-  <!-- result -->
-  <g filter="url(#sh)"><rect x="320" y="1202" width="360" height="68" rx="34" fill="#C8EFD9" stroke="#84C8A2" stroke-width="2"/></g>
-  <text class="t" x="500" y="1228">Result · result() + explain()</text>
-  <text class="s" x="500" y="1248">score · events · team and player stats · why</text>
-  <text class="s" x="500" y="1264">carryOver: minutes, fatigue, injuries, cards</text>
+  <line x1="560" y1="765" x2="560" y2="789" class="line" marker-end="url(#ar)"/>
 
-  <!-- ===== side column ===== -->
-  <g filter="url(#sh)"><rect x="790" y="424" width="220" height="190" rx="16" fill="#E4F1FC" stroke="#8DBBE3" stroke-width="1.8"/></g>
-  <text class="tl" x="808" y="450">Manager commands</text>
-  <text class="ml" x="808" y="474">substitute()</text>
-  <text class="ml" x="808" y="491">setTactics()</text>
-  <text class="ml" x="808" y="508">setFormation()</text>
-  <text class="sl" x="808" y="534">applied at the next stoppage;</text>
-  <text class="sl" x="808" y="551">logged, so save() and load()</text>
-  <text class="sl" x="808" y="568">replay the match exactly.</text>
-  <text class="sl" x="808" y="594">Other side: AI manager, every 10 s</text>
-  <line class="dl" x1="790" y1="519" x2="764" y2="519" marker-end="url(#ar)"/>
+  <!-- Half over? -->
+  <polygon points="560,791 680,833 560,875 440,833" class="q"/>
+  <text x="560" y="830" text-anchor="middle" class="hs">Half over?</text>
+  <text x="560" y="847" text-anchor="middle" class="bs">45′ + added time</text>
+  <path d="M440 833 H300 V420 H327" class="line" marker-end="url(#ar)"/>
+  <text x="372" y="825" text-anchor="middle" class="yn">No · next tick</text>
+  <line x1="560" y1="875" x2="560" y2="899" class="line" marker-end="url(#ar)"/>
+  <text x="574" y="892" class="yn">Yes</text>
 
-  <g filter="url(#sh)"><rect x="790" y="640" width="220" height="186" rx="16" fill="#E3F6EC" stroke="#84C8A2" stroke-width="1.8"/></g>
-  <text class="tl" x="808" y="666">Off the field (2026/27)</text>
-  <text class="sl" x="808" y="692">treated player stays off until</text>
-  <text class="sl" x="808" y="709">a minute after the restart</text>
-  <text class="sl" x="808" y="735">substituted player walks off</text>
-  <text class="sl" x="808" y="752">within 10 seconds</text>
-  <text class="sl" x="808" y="778">dropped ball: to the keeper,</text>
-  <text class="sl" x="808" y="795">or the team that had the ball</text>
-  <text class="m" x="900" y="815">_treat() · _droppedBallSide()</text>
-  <line class="dl" x1="790" y1="733" x2="764" y2="733" marker-end="url(#ar)"/>
+  <!-- Another period? -->
+  <polygon points="560,901 685,945 560,989 435,945" class="q"/>
+  <text x="560" y="941" text-anchor="middle" class="hs">Another period?</text>
+  <text x="560" y="958" text-anchor="middle" class="bs">2nd half, or extra time</text>
+  <path d="M435 945 H250 V310 H437" class="line" marker-end="url(#ar)"/>
+  <text x="342" y="937" text-anchor="middle" class="yn">Yes · change ends</text>
+  <line x1="560" y1="989" x2="560" y2="1013" class="line" marker-end="url(#ar)"/>
+  <text x="574" y="1006" class="yn">No</text>
 
-  <!-- key -->
-  <g font-size="12" fill="#5A5370">
-    <rect x="60" y="1286" width="16" height="12" rx="6" fill="#C8EFD9" stroke="#84C8A2"/><text x="82" y="1297">start and end</text>
-    <polygon points="186,1292 196,1286 206,1292 196,1298" fill="#FFDCC2" stroke="#E7A77A"/><text x="212" y="1297">a question</text>
-    <rect x="290" y="1286" width="16" height="12" rx="3" fill="#EEE8FD" stroke="#A893E0" stroke-dasharray="3 2"/><text x="312" y="1297">repeats every tick</text>
-    <line class="dl" x1="440" y1="1292" x2="476" y2="1292" marker-end="url(#ar)"/><text x="484" y="1297">feeds into the loop</text>
-    <text class="ml" x="620" y="1297">monospace</text><text x="700" y="1297">= a name in the code</text>
-  </g>
+  <!-- Cup tie still level? -->
+  <polygon points="560,1015 690,1059 560,1103 430,1059" class="q"/>
+  <text x="560" y="1055" text-anchor="middle" class="hs">Cup tie still level?</text>
+  <text x="560" y="1072" text-anchor="middle" class="bs">after extra time</text>
+  <line x1="690" y1="1059" x2="758" y2="1059" class="line" marker-end="url(#ar)"/>
+  <text x="724" y="1051" text-anchor="middle" class="yn">Yes</text>
+  <rect x="760" y="1034" width="230" height="50" rx="10" fill="#FFF4C9" stroke="#E7C34F" stroke-width="1.4"/>
+  <text x="875" y="1055" text-anchor="middle" class="hs">Penalty shootout</text>
+  <text x="875" y="1073" text-anchor="middle" class="bs">5 kicks each, then sudden death</text>
+  <path d="M875 1084 V1155 H712" class="line" marker-end="url(#ar)"/>
+  <line x1="560" y1="1103" x2="560" y2="1125" class="line" marker-end="url(#ar)"/>
+  <text x="574" y="1119" class="yn">No</text>
+
+  <!-- Result -->
+  <rect x="410" y="1127" width="300" height="56" rx="28" fill="#DDF5E7" stroke="#6CC193" stroke-width="1.4"/>
+  <text x="560" y="1151" text-anchor="middle" class="h">Result · result() + explain()</text>
+  <text x="560" y="1170" text-anchor="middle" class="bs">score · events · stats · why · carryOver</text>
+
+  <!-- Legend -->
+  <rect x="40" y="1210" width="22" height="14" rx="7" fill="#DDF5E7" stroke="#6CC193"/>
+  <text x="70" y="1222" class="labs">start and end</text>
+  <polygon points="190,1210 200,1217 190,1224 180,1217" class="q"/>
+  <text x="208" y="1222" class="labs">a question</text>
+  <rect x="300" y="1210" width="22" height="14" rx="3" fill="#F2EFFD" stroke="#A99BEA" stroke-dasharray="3 2"/>
+  <text x="330" y="1222" class="labs">repeats every tick</text>
+  <line x1="460" y1="1217" x2="505" y2="1217" class="dash" marker-end="url(#ar)"/>
+  <text x="514" y="1222" class="labs">feeds into the loop</text>
+  <text x="650" y="1222" class="m">monospace</text>
+  <text x="728" y="1222" class="labs">= a name in the code</text>
 </svg>

@@ -1,13 +1,7 @@
-// How predictable matches are, so the engine's squad-quality effect can be checked against bookmaker odds.
-//
-// Real side: the odds give each match's home-win and away-win probability (margin removed). Their difference d
-// says how one-sided the match was expected to be; its spread over a league says how much quality decides results.
-// Engine side: the engine has no odds, so we fit how results depend on the squad-strength gap g (an ordered
-// logit: P(away) = s(t1 - b g), P(away or draw) = s(t2 - b g)), then read off d for every league matchup.
-
+// The logistic function.
 const sig = x => 1 / (1 + Math.exp(-x));
 
-/** samples: [{ g, res }] with res 0 = away win, 1 = draw, 2 = home win. Returns { t1, t2, b }. */
+// Fit how home win, draw and away win depend on the squad-strength gap.
 export function fitOrderedLogit(samples) {
   let t1 = -0.6, t2 = 0.5, b = 0.4;
   const n = samples.length;
@@ -24,13 +18,13 @@ export function fitOrderedLogit(samples) {
   return { t1, t2, b };
 }
 
-/** [home win, draw, away win] probabilities for a strength gap under a fitted model. */
+// Home win, draw and away win chances for a strength gap.
 export function outcomeProbs(fit, g) {
   const pA = sig(fit.t1 - fit.b * g), pH = 1 - sig(fit.t2 - fit.b * g);
   return [pH, 1 - pH - pA, pA];
 }
 
-/** Spread of home-minus-away win probability over a list of gaps, and the mean. */
+// Spread of home-minus-away win chance over a league's matchups.
 export function spreadOfD(fit, gaps) {
   const d = gaps.map(g => { const p = outcomeProbs(fit, g); return p[0] - p[2]; });
   const mean = d.reduce((a, b) => a + b, 0) / d.length;

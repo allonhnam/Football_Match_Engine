@@ -13,6 +13,7 @@ export const viewport: Viewport = { width: 'device-width', initialScale: 1, view
 // Applies the saved theme before first paint so the page does not flash the wrong colours.
 const themeScript = `try{var t=JSON.parse(localStorage.getItem('me-theme')||'null');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}`;
 
+// The page shell shared by every route: fonts, theme and top bar.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>

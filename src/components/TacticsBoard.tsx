@@ -1,15 +1,13 @@
 'use client';
-/* eslint-disable */
-import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, setAttr, realAttrs, ageOf, pickXI } from '@/lib/util';
-import { I, Icon, Btn, Seg, Card, Badge, CondBar, CardIcon, Progress, PageHead, Tabs, Empty, Flag, Abbr, GLOSSARY } from '@/components/ui';
+import { fx, pct, lastName, ovr, ATTR_LABEL, TACTIC_META, posLabel, textOn, setAttr, realAttrs, ageOf, pickXI } from '@/lib/util';
+import { Icon, Btn, Seg, Card, Badge, Progress, PageHead, Flag, Abbr, GLOSSARY } from '@/components/ui';
 import { runBatch } from '@/lib/batch';
 
 const ROLE_NAME = { GK: 'Goalkeeper', DF: 'Defender', MF: 'Midfielder', FW: 'Forward' };
 
-// Edit one player's ten attributes (1 to 20). Every change goes straight into the team sheet the engine plays.
+// Edit one player's ten attributes.
 function PlayerEditor({ p, team, onSet, onReset, onClose }: any) {
   const base = realAttrs(team.league, team.name, p.id);
   const changed = base && E.ATTRS.some(k => base[k] !== p.attrs[k]);
@@ -44,6 +42,10 @@ function PlayerEditor({ p, team, onSet, onReset, onClose }: any) {
   );
 }
 
+// A formation slot's caption as one string.
+const slotTitle = (pos: string, p: any) => `${pos}${GLOSSARY[pos] ? ` · ${GLOSSARY[pos]}` : ''}${p ? `: ${p.name}` : ': empty, click to pick a player'}`;
+
+// The squad and tactics board: formation, lineup, bench and tactic settings.
 export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
   const t = teams[side];
   const [sel, setSel] = useState(null), [sort, setSort] = useState('role'), [hover, setHover] = useState(null), [editId, setEditId] = useState(null);
@@ -121,7 +123,7 @@ export function TacticsBoard({ teams, setTeams, side, setSide }: any) {
                   const fill = p ? (s[0] === 'GK' ? '#FFD23C' : t.color) : 'rgba(0,0,0,.3)';
                   return (
                     <g key={i} style={{ cursor: 'pointer' }} onClick={() => setSel(sel === i ? null : i)} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) place(i, id); setSel(null); }}>
-                      <title>{posLabel(t.formation, i)}{GLOSSARY[posLabel(t.formation, i)] ? ` · ${GLOSSARY[posLabel(t.formation, i)]}` : ''}{p ? `: ${p.name}` : ': empty, click to pick a player'}</title>
+                      <title>{slotTitle(posLabel(t.formation, i), p)}</title>
                       {sel === i && <circle cx={x} cy={y} r="22" fill="none" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" />}
                       <circle cx={x} cy={y} r="15" fill={fill} stroke={ring} strokeWidth="3" />
                       <text x={x} y={y + 4.5} textAnchor="middle" fontSize="12" fontWeight="700" fill={p ? textOn(fill) : '#fff'} fontFamily="Inter">{p ? p.num : '+'}</text>

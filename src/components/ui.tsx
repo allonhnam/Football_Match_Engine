@@ -1,9 +1,6 @@
 'use client';
-/* eslint-disable */
 import * as React from 'react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import * as E from '@/engine/engine';
-import { clone, fx, pct, lastName, club, hexSeed, store, ovr, ATTR_LABEL, TACTIC_META, SPEEDS, BANNER_TYPES, RESTART_LABEL, posLabel, textOn, cssVar, defaultTeams, rebuildSquad, crestUrl } from '@/lib/util';
+import { pct, textOn, crestUrl } from '@/lib/util';
 
 export const I = {
   play: <path d="M7 5l12 7-12 7z" fill="currentColor" />, pause: <g fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></g>,
@@ -18,7 +15,9 @@ export const I = {
   up: <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" />, copy: <g fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3" /></g>,
   back: <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" strokeWidth="2" />, x: <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" />,
 };
+// An icon from the built-in set.
 export const Icon = ({ n, s = 16, className = '' }: any) => <svg width={s} height={s} viewBox="0 0 24 24" aria-hidden="true" className={className}>{I[n]}</svg>;
+// A button in one of the app's styles.
 export function Btn({ children, kind = 'ghost', className = '', size = 'md', ...p }: any) {
   const k = {
     primary: 'bg-accent text-accentink hover:brightness-110 font-bold uppercase tracking-[.08em]',
@@ -29,6 +28,7 @@ export function Btn({ children, kind = 'ghost', className = '', size = 'md', ...
   const sz = size === 'lg' ? 'h-11 px-6 text-[12.5px]' : size === 'sm' ? 'h-7 px-2.5 text-[11.5px]' : 'h-9 px-4 text-[12px]';
   return <button {...p} className={`inline-flex items-center justify-center gap-2 rounded-md transition disabled:opacity-40 disabled:cursor-not-allowed ${sz} ${k} ${className}`}>{children}</button>;
 }
+// A segmented control for picking one of a few options.
 export function Seg({ value, options, onChange, pendingFrom, size = 'md', id, upper }: any) {
   return (
     <div role="radiogroup" id={id} className="grid rounded-md border border-line bg-bg/60 p-0.5" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0,1fr))` }}>
@@ -40,6 +40,7 @@ export function Seg({ value, options, onChange, pendingFrom, size = 'md', id, up
     </div>
   );
 }
+// A card with an optional title.
 export function Card({ title, eyebrow, right, children, className = '', pad = 'p-4' }: any) {
   return (
     <section className={`min-w-0 rounded-lg border border-line bg-surface ${className}`}>
@@ -50,29 +51,34 @@ export function Card({ title, eyebrow, right, children, className = '', pad = 'p
     </section>
   );
 }
-// A club badge: the real crest when the club has one (loaded from transfermarkt at runtime), otherwise, or when the
-// image cannot load (offline), a disc in the kit colour with the club's short name.
+// A club badge: the real crest, or a coloured badge with the club's code.
 export function Badge({ color, label, size = 36, crest }: any) {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [crest]);
   if (crest && !failed) return <img src={crestUrl(crest)} alt={label} title={label} width={size} height={size} referrerPolicy="no-referrer" onError={() => setFailed(true)} className="shrink-0 object-contain" style={{ width: size, height: size }} />;
   return <ColourBadge color={color} label={label} size={size} />;
 }
+// A round badge in the club's colour with its code.
 function ColourBadge({ color, label, size = 36 }: any) { return <span className="inline-grid place-items-center rounded-full font-display font-bold shrink-0 border-2 border-black/30" style={{ width: size, height: size, background: color, color: textOn(color), fontSize: size * 0.34, letterSpacing: '.02em' }}>{label}</span>; }
+// A small bar showing a player's condition.
 export function CondBar({ v, w = 'w-14' }: any) { const c = v > 0.75 ? 'bg-good' : v > 0.58 ? 'bg-warn' : 'bg-bad'; return <span className={`inline-block h-1 rounded-full bg-surface2 ${w} overflow-hidden align-middle`}><span className={`block h-full ${c}`} style={{ width: pct(Math.max(0, Math.min(1, v))) }} /></span>; }
+// Yellow or red card icons.
 export function CardIcon({ red, n = 1 }: any) { return <span className="inline-flex gap-0.5 align-middle">{Array.from({ length: n }).map((_, i) => <span key={i} className={`inline-block w-[7px] h-[10px] rounded-[1.5px] ${red ? 'bg-bad' : 'bg-card'}`} />)}</span>; }
+// A thin progress bar.
 export function Progress({ v }: any) { return <div className="h-1 rounded-full bg-surface2 overflow-hidden"><div className="h-full bg-accent transition-all" style={{ width: pct(v) }} /></div>; }
+// A page heading with an optional subtitle and actions.
 export function PageHead({ eyebrow, title, sub, right }: any) {
   return <div className="flex flex-wrap items-end justify-between gap-4"><div className="min-w-0"><div className="eyebrow-accent">{eyebrow}</div><h1 className="font-display font-bold text-[44px] md:text-[54px] leading-[.95] mt-2">{title}</h1>{sub && <p className="text-dim mt-2.5 max-w-[68ch] text-[13.5px]">{sub}</p>}</div>{right}</div>;
 }
+// A row of tabs.
 export function Tabs({ value, onChange, items }: any) {
   return <div role="tablist" className="flex gap-6 border-b border-line">{items.map(([k, l]) => <button key={k} role="tab" aria-selected={value === k} onClick={() => onChange(k)} className={`relative pb-2.5 text-[13px] ${value === k ? 'text-ink font-semibold' : 'text-dim hover:text-ink'}`}>{l}{value === k && <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent" />}</button>)}</div>;
 }
 
-
+// A placeholder shown when there is nothing to list.
 export function Empty({ text }: any) { return <div className="rounded-lg border border-dashed border-line p-12 text-center text-dim text-[13px]">{text}</div>; }
 
-// A national flag (flag-icons SVGs, so it looks the same on every OS). `code` is ISO 3166, gb-eng for England.
+// A national flag.
 export function Flag({ code, title, h = 12 }: { code?: string | null; title?: string; h?: number }) {
   if (!code) return null;
   return <span className={`fi fi-${code} shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.25)]`} title={title} aria-label={title} role="img" style={{ width: h * 4 / 3, height: h, lineHeight: h + 'px', backgroundSize: 'cover' }} />;
@@ -94,7 +100,7 @@ export const GLOSSARY: Record<string, string> = {
   LW: 'Left winger', RW: 'Right winger', ST: 'Striker',
 };
 
-/** A short label with a caption saying what it means, on hover or keyboard focus. Unknown labels show as they are. */
+// A short label that explains itself on hover or focus.
 export function Abbr({ children, t, up = false }: { children: React.ReactNode; t?: string; up?: boolean }) {
   const text = t || (typeof children === 'string' ? GLOSSARY[children] : undefined);
   if (!text) return <>{children}</>;

@@ -1,165 +1,171 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" width="1200" height="860" font-family="'Segoe UI', Inter, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 850" width="1200" height="850" font-family="'Segoe UI', Inter, Helvetica, Arial, sans-serif">
   <title>Match engine system design</title>
   <defs>
-    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#5B4F7A" flood-opacity="0.12"/>
-    </filter>
-    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#6E6585"/>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1 L9 5 L1 9 z" fill="#6E6A86"/>
     </marker>
     <style>
-      .h  { font-size:13px; font-weight:800; letter-spacing:1.6px; }
-      .hs { font-size:12.5px; fill:#6E6585; }
-      .t  { fill:#2E2A3A; font-size:15px; font-weight:700; text-anchor:middle; }
-      .tl { fill:#2E2A3A; font-size:14.5px; font-weight:700; }
-      .s  { fill:#5A5370; font-size:12.5px; text-anchor:middle; }
-      .sl { fill:#5A5370; font-size:12.5px; }
-      .m  { font-family: Consolas, 'Cascadia Code', Menlo, monospace; fill:#4A4360; font-size:11.5px; text-anchor:middle; }
-      .ml { font-family: Consolas, 'Cascadia Code', Menlo, monospace; fill:#4A4360; font-size:11.5px; }
-      .ln { fill:none; stroke:#6E6585; stroke-width:2; }
-      .lab{ fill:#4A4360; font-size:12px; font-weight:700; }
-      .card { fill:#FFFFFF; stroke-width:1.5; }
-      .pill { fill:#FBFAF7; stroke:#D8D2E4; }
+      .t { font-size: 26px; font-weight: 700; fill: #2B2840; }
+      .s { font-size: 14px; fill: #6E6A86; }
+      .lab { font-size: 12px; font-weight: 700; letter-spacing: 1.6px; }
+      .labs { font-size: 12px; fill: #6E6A86; }
+      .h { font-size: 15px; font-weight: 700; fill: #2B2840; }
+      .b { font-size: 12.5px; fill: #4A4763; }
+      .m { font-size: 12px; fill: #4A4763; font-family: Menlo, Consolas, monospace; }
+      .pill { font-size: 12px; font-weight: 600; fill: #4A4763; }
+      .card { fill: #FFFFFF; stroke-width: 1.2; }
+      .line { stroke: #6E6A86; stroke-width: 1.5; fill: none; }
+      .dash { stroke: #6E6A86; stroke-width: 1.5; fill: none; stroke-dasharray: 6 5; }
     </style>
   </defs>
 
-  <rect width="1200" height="860" fill="#FBFAF7"/>
+  <rect width="1200" height="850" fill="#FBFAF7"/>
 
-  <text x="600" y="44" text-anchor="middle" font-size="26" font-weight="800" fill="#2E2A3A">Match engine · system design</text>
-  <text x="600" y="70" text-anchor="middle" font-size="14" fill="#6E6585">One engine in the middle. The web app, the tools and the tests all call it; real football data sets its targets and squads.</text>
+  <text x="600" y="48" text-anchor="middle" class="t">Match engine · system design</text>
+  <text x="600" y="76" text-anchor="middle" class="s">One engine in the middle. The web app, the tools and the tests all call it; real football data sets its targets and squads.</text>
 
-  <!-- ===== WEB APP ===== -->
-  <g filter="url(#sh)"><rect x="40" y="96" width="760" height="214" rx="20" fill="#E4F1FC" stroke="#8DBBE3" stroke-width="2"/></g>
-  <text class="h" x="64" y="124" fill="#3E7DB3">WEB APP</text>
-  <text class="hs" x="146" y="124">Next.js · runs in the browser · live on Vercel</text>
-  <g filter="url(#sh)">
-    <rect class="card" stroke="#8DBBE3" x="60"  y="140" width="172" height="112" rx="14"/>
-    <rect class="card" stroke="#8DBBE3" x="244" y="140" width="172" height="112" rx="14"/>
-    <rect class="card" stroke="#8DBBE3" x="428" y="140" width="172" height="112" rx="14"/>
-    <rect class="card" stroke="#8DBBE3" x="612" y="140" width="172" height="112" rx="14"/>
+  <!-- Web app -->
+  <rect x="40" y="105" width="780" height="195" rx="16" fill="#EEF4FE" stroke="#8DB4F0" stroke-width="1.5"/>
+  <text x="62" y="135" class="lab" fill="#3D72C4">WEB APP</text>
+  <text x="140" y="135" class="labs">Next.js · runs in the browser · live on Vercel</text>
+  <g>
+    <rect x="60" y="152" width="178" height="100" rx="10" class="card" stroke="#8DB4F0"/>
+    <text x="149" y="180" text-anchor="middle" class="h">Matchday</text>
+    <text x="149" y="203" text-anchor="middle" class="b">pick 2 of 96 real clubs</text>
+    <text x="149" y="221" text-anchor="middle" class="b">seed · venue · league or cup</text>
+    <text x="149" y="239" text-anchor="middle" class="b">kick off or simulate</text>
+
+    <rect x="252" y="152" width="178" height="100" rx="10" class="card" stroke="#8DB4F0"/>
+    <text x="341" y="180" text-anchor="middle" class="h">Squad &amp; tactics</text>
+    <text x="341" y="203" text-anchor="middle" class="b">formation · 6 tactics</text>
+    <text x="341" y="221" text-anchor="middle" class="b">edit any player's</text>
+    <text x="341" y="239" text-anchor="middle" class="b">10 ratings</text>
+
+    <rect x="444" y="152" width="178" height="100" rx="10" class="card" stroke="#8DB4F0"/>
+    <text x="533" y="180" text-anchor="middle" class="h">Live match + report</text>
+    <text x="533" y="203" text-anchor="middle" class="b">2D pitch · 4 speeds</text>
+    <text x="533" y="221" text-anchor="middle" class="b">subs and tactic changes</text>
+    <text x="533" y="239" text-anchor="middle" class="b">"why this result"</text>
+
+    <rect x="636" y="152" width="164" height="100" rx="10" class="card" stroke="#8DB4F0"/>
+    <text x="718" y="180" text-anchor="middle" class="h">Engine Lab</text>
+    <text x="718" y="203" text-anchor="middle" class="b">realism · balance · speed</text>
+    <text x="718" y="221" text-anchor="middle" class="b">a full real-league season</text>
+    <text x="718" y="239" text-anchor="middle" class="b">new random seed each run</text>
   </g>
-  <text class="t" x="146" y="168">Matchday</text>
-  <text class="s" x="146" y="192">pick 2 of 96 real clubs</text>
-  <text class="s" x="146" y="210">seed · venue · league or cup</text>
-  <text class="s" x="146" y="228">kick off or simulate</text>
-  <text class="t" x="330" y="168">Squad &amp; tactics</text>
-  <text class="s" x="330" y="192">formation · 6 tactics</text>
-  <text class="s" x="330" y="210">edit any player's</text>
-  <text class="s" x="330" y="228">10 ratings</text>
-  <text class="t" x="514" y="168">Live match + report</text>
-  <text class="s" x="514" y="192">2D pitch · 4 speeds</text>
-  <text class="s" x="514" y="210">subs and tactic changes</text>
-  <text class="s" x="514" y="228">"why this result"</text>
-  <text class="t" x="698" y="168">Engine Lab</text>
-  <text class="s" x="698" y="192">realism · balance · speed</text>
-  <text class="s" x="698" y="210">a full real-league season</text>
-  <text class="s" x="698" y="228">new random seed each run</text>
-  <text class="sl" x="60" y="284">Batches (Lab runs, a season) run on up to 6 Web Workers, about 18 matches a second. Saves and history live in the browser.</text>
+  <text x="62" y="281" class="labs">Batches (Lab runs, a season) run on up to 6 Web Workers, about 18 matches a second. Saves and history stay in the browser.</text>
 
-  <!-- ===== TOOLS ===== -->
-  <g filter="url(#sh)"><rect x="830" y="96" width="330" height="214" rx="20" fill="#FFEBDD" stroke="#E7A77A" stroke-width="2"/></g>
-  <text class="h" x="854" y="124" fill="#B9682F">COMMAND-LINE TOOLS</text>
-  <text class="hs" x="854" y="144">Node · tools/*.mjs · worker threads</text>
-  <text class="ml" x="854" y="174">simulate</text><text class="sl" x="976" y="174">one match, printed</text>
-  <text class="ml" x="854" y="196">calibrate</text><text class="sl" x="976" y="196">engine vs real data</text>
-  <text class="ml" x="854" y="218">balance</text><text class="sl" x="976" y="218">tactic win rates</text>
-  <text class="ml" x="854" y="240">attributes</text><text class="sl" x="976" y="240">+3 in one rating</text>
-  <text class="ml" x="854" y="262">fetch-data</text><text class="sl" x="976" y="262">download the data</text>
-  <text class="ml" x="854" y="284">build-*</text><text class="sl" x="976" y="284">data → JSON files</text>
+  <!-- Command-line tools -->
+  <rect x="850" y="105" width="310" height="195" rx="16" fill="#FFF4EB" stroke="#F2B98A" stroke-width="1.5"/>
+  <text x="872" y="135" class="lab" fill="#C46A2A">COMMAND-LINE TOOLS</text>
+  <text x="872" y="155" class="labs">Node · tools/*.mjs · worker threads</text>
+  <text x="872" y="185" class="m">simulate</text><text x="985" y="185" class="b">one match, printed</text>
+  <text x="872" y="204" class="m">calibrate</text><text x="985" y="204" class="b">engine vs real data</text>
+  <text x="872" y="223" class="m">balance</text><text x="985" y="223" class="b">tactic win rates</text>
+  <text x="872" y="242" class="m">attributes</text><text x="985" y="242" class="b">+3 in one rating</text>
+  <text x="872" y="261" class="m">fetch-data</text><text x="985" y="261" class="b">download the data</text>
+  <text x="872" y="280" class="m">build-*</text><text x="985" y="280" class="b">data → JSON files</text>
 
-  <!-- ===== SHARED LIBRARY ===== -->
-  <g filter="url(#sh)"><rect x="40" y="370" width="250" height="230" rx="20" fill="#E3F6EC" stroke="#84C8A2" stroke-width="2"/></g>
-  <text class="h" x="62" y="398" fill="#3E8A62">SHARED LIBRARY</text>
-  <text class="hs" x="62" y="416">src/lib</text>
-  <text class="ml" x="62" y="444">util.ts</text>
-  <text class="sl" x="62" y="461">real clubs, line-ups, kit clashes</text>
-  <text class="ml" x="62" y="489">season.ts</text>
-  <text class="sl" x="62" y="506">fixtures, injuries, bans, table</text>
-  <text class="ml" x="62" y="534">metrics.js</text>
-  <text class="sl" x="62" y="551">same stats for real and simulated</text>
-  <text class="ml" x="62" y="579">league.js</text>
-  <text class="sl" x="140" y="579">league-like squads</text>
+  <!-- Shared library -->
+  <rect x="40" y="345" width="250" height="255" rx="16" fill="#EDF8F1" stroke="#8FD1AA" stroke-width="1.5"/>
+  <text x="62" y="375" class="lab" fill="#2F8A57">SHARED LIBRARY</text>
+  <text x="62" y="393" class="labs">src/lib</text>
+  <text x="62" y="425" class="m">util.ts</text>
+  <text x="62" y="443" class="b">real clubs, line-ups, kit clashes</text>
+  <text x="62" y="473" class="m">season.ts</text>
+  <text x="62" y="491" class="b">fixtures, injuries, bans, table</text>
+  <text x="62" y="521" class="m">metrics.js</text>
+  <text x="62" y="539" class="b">same stats for real and simulated</text>
+  <text x="62" y="569" class="m">batch.ts</text>
+  <text x="62" y="587" class="b">the Web Worker pool</text>
 
-  <!-- ===== ENGINE ===== -->
-  <g filter="url(#sh)"><rect x="330" y="350" width="540" height="270" rx="22" fill="#EEE8FD" stroke="#A893E0" stroke-width="2.4"/></g>
-  <text class="h" x="356" y="380" fill="#6A52B8">MATCH ENGINE · v0.6.0</text>
-  <text class="hs" x="356" y="400">src/engine/engine.js · about 1,830 lines · no dependencies · typed by engine.d.ts</text>
-  <g filter="url(#sh)">
-    <rect class="card" stroke="#A893E0" x="352" y="416" width="120" height="122" rx="14"/>
-    <rect class="card" stroke="#A893E0" x="482" y="416" width="120" height="122" rx="14"/>
-    <rect class="card" stroke="#A893E0" x="612" y="416" width="120" height="122" rx="14"/>
-    <rect class="card" stroke="#A893E0" x="742" y="416" width="106" height="122" rx="14"/>
+  <!-- Match engine -->
+  <rect x="320" y="345" width="560" height="255" rx="16" fill="#F2EFFD" stroke="#A99BEA" stroke-width="1.8"/>
+  <text x="342" y="375" class="lab" fill="#6A57C9">MATCH ENGINE · v0.6.1</text>
+  <text x="342" y="394" class="labs">src/engine/engine.js · about 1,760 lines · no dependencies · typed by engine.d.ts</text>
+  <g>
+    <rect x="338" y="408" width="124" height="108" rx="10" class="card" stroke="#A99BEA"/>
+    <text x="400" y="434" text-anchor="middle" class="h">Tick loop</text>
+    <text x="400" y="457" text-anchor="middle" class="b">0.25 s steps</text>
+    <text x="400" y="475" text-anchor="middle" class="b">22,000 a match</text>
+    <text x="400" y="493" text-anchor="middle" class="b">move · tire · press</text>
+
+    <rect x="473" y="408" width="124" height="108" rx="10" class="card" stroke="#A99BEA"/>
+    <text x="535" y="434" text-anchor="middle" class="h">Decisions</text>
+    <text x="535" y="457" text-anchor="middle" class="b">picks the option</text>
+    <text x="535" y="475" text-anchor="middle" class="b">worth the most</text>
+    <text x="535" y="495" text-anchor="middle" class="m">_decide()</text>
+
+    <rect x="608" y="408" width="124" height="108" rx="10" class="card" stroke="#A99BEA"/>
+    <text x="670" y="434" text-anchor="middle" class="h">Laws 2026/27</text>
+    <text x="670" y="457" text-anchor="middle" class="b">offside · fouls</text>
+    <text x="670" y="475" text-anchor="middle" class="b">cards · advantage</text>
+    <text x="670" y="493" text-anchor="middle" class="b">restarts · subs</text>
+    <text x="670" y="511" text-anchor="middle" class="b">extra time · pens</text>
+
+    <rect x="743" y="408" width="124" height="108" rx="10" class="card" stroke="#A99BEA"/>
+    <text x="805" y="434" text-anchor="middle" class="h">Tuning</text>
+    <text x="805" y="456" text-anchor="middle" class="m">TUNING</text>
+    <text x="805" y="473" text-anchor="middle" class="m">TACTIC_EDGE</text>
+    <text x="805" y="490" text-anchor="middle" class="m">MATCHUPS</text>
+    <text x="805" y="507" text-anchor="middle" class="m">FORMATION_EDGE</text>
   </g>
-  <text class="t" x="412" y="444">Tick loop</text>
-  <text class="s" x="412" y="466">0.25 s steps</text>
-  <text class="s" x="412" y="484">22,000 a match</text>
-  <text class="s" x="412" y="502">players move,</text>
-  <text class="s" x="412" y="520">tire, press</text>
-  <text class="t" x="542" y="444">Decisions</text>
-  <text class="s" x="542" y="466">shoot · pass · cross</text>
-  <text class="s" x="542" y="484">carry · clear</text>
-  <text class="s" x="542" y="502">best value wins</text>
-  <text class="m" x="542" y="522">_decide()</text>
-  <text class="t" x="672" y="444">Laws 2026/27</text>
-  <text class="s" x="672" y="466">offside · fouls</text>
-  <text class="s" x="672" y="484">cards · advantage</text>
-  <text class="s" x="672" y="502">restarts · subs</text>
-  <text class="s" x="672" y="520">extra time · pens</text>
-  <text class="t" x="795" y="444">Tuning</text>
-  <text class="m" x="795" y="466">TUNING</text>
-  <text class="m" x="795" y="484">TACTIC_EDGE</text>
-  <text class="m" x="795" y="502">FORMATION_</text>
-  <text class="m" x="795" y="520">EDGE</text>
-  <rect x="352" y="552" width="496" height="52" rx="12" fill="#FFFFFF" stroke="#A893E0" stroke-dasharray="5 4"/>
-  <text class="lab" x="370" y="573">Public API</text>
-  <text class="ml" x="452" y="573">makeTeam · validateLineup · new Match · simulateMatch</text>
-  <text class="ml" x="452" y="592">step · runUntil · substitute · save/load · result · explain</text>
+  <rect x="338" y="528" width="529" height="58" rx="10" fill="#FFFFFF" stroke="#A99BEA" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="354" y="562" class="h">Public API</text>
+  <text x="440" y="552" class="m" style="font-size:11px">makeTeam · validateLineup · new Match · simulateMatch</text>
+  <text x="440" y="571" class="m" style="font-size:11px">step · runUntil · substitute · save/load · result · explain</text>
 
-  <!-- ===== DATA ===== -->
-  <g filter="url(#sh)"><rect x="910" y="370" width="250" height="230" rx="20" fill="#FFF6D6" stroke="#D9BE5C" stroke-width="2"/></g>
-  <text class="h" x="932" y="398" fill="#9A7B12">REAL FOOTBALL DATA</text>
-  <text class="tl" x="932" y="428">football-data.co.uk</text>
-  <text class="sl" x="932" y="447">8,907 matches + odds, top 5</text>
-  <text class="sl" x="932" y="464">leagues, 2021/22 to 2025/26</text>
-  <text class="ml" x="932" y="483">→ reference.json (targets)</text>
-  <text class="tl" x="932" y="518">transfermarkt-datasets</text>
-  <text class="sl" x="932" y="537">96 clubs, 1,920 players</text>
-  <text class="sl" x="932" y="554">(open data, July 2026)</text>
-  <text class="ml" x="932" y="573">→ teams.json (squads)</text>
+  <!-- Real football data -->
+  <rect x="910" y="345" width="250" height="255" rx="16" fill="#FFF9E6" stroke="#EBCB6B" stroke-width="1.5"/>
+  <text x="932" y="375" class="lab" fill="#A7841B">REAL FOOTBALL DATA</text>
+  <text x="932" y="408" class="h">football-data.co.uk</text>
+  <text x="932" y="428" class="b">8,907 matches + odds, top 5</text>
+  <text x="932" y="446" class="b">leagues, 2021/22 to 2025/26</text>
+  <text x="932" y="466" class="m">→ reference.json (targets)</text>
+  <text x="932" y="505" class="h">transfermarkt-datasets</text>
+  <text x="932" y="525" class="b">96 clubs × 20 players</text>
+  <text x="932" y="543" class="b">open data (CC0)</text>
+  <text x="932" y="563" class="m">→ teams.json (squads)</text>
 
-  <!-- ===== CHECKS ===== -->
-  <g filter="url(#sh)"><rect x="40" y="680" width="1120" height="128" rx="20" fill="#FDE7F0" stroke="#DE93B4" stroke-width="2"/></g>
-  <text class="h" x="64" y="708" fill="#B85C86">CHECKS</text>
-  <g filter="url(#sh)">
-    <rect class="card" stroke="#DE93B4" x="64"  y="722" width="344" height="68" rx="14"/>
-    <rect class="card" stroke="#DE93B4" x="428" y="722" width="344" height="68" rx="14"/>
-    <rect class="card" stroke="#DE93B4" x="792" y="722" width="344" height="68" rx="14"/>
+  <!-- Checks -->
+  <rect x="40" y="645" width="1120" height="120" rx="16" fill="#FDEFF4" stroke="#EDA1BB" stroke-width="1.5"/>
+  <text x="62" y="675" class="lab" fill="#C2487A">CHECKS</text>
+  <g>
+    <rect x="60" y="690" width="350" height="58" rx="10" class="card" stroke="#EDA1BB"/>
+    <text x="235" y="714" text-anchor="middle" class="h">103 tests in 9 files</text>
+    <text x="235" y="734" text-anchor="middle" class="b">84 quick · 19 statistical (skipped in quick mode)</text>
+
+    <rect x="425" y="690" width="350" height="58" rx="10" class="card" stroke="#EDA1BB"/>
+    <text x="600" y="714" text-anchor="middle" class="h">24 of 24 checks against real football</text>
+    <text x="600" y="734" text-anchor="middle" class="b">npm run calibrate · 3,000 matches</text>
+
+    <rect x="790" y="690" width="350" height="58" rx="10" class="card" stroke="#EDA1BB"/>
+    <text x="965" y="714" text-anchor="middle" class="h">CI: 4 jobs on Linux, Windows, macOS</text>
+    <text x="965" y="734" text-anchor="middle" class="b">typecheck · tests · a headless match · build</text>
   </g>
-  <text class="t" x="236" y="748">103 tests in 9 files</text>
-  <text class="s" x="236" y="770">40 on the laws · 84 quick ones in about 10 s</text>
-  <text class="t" x="600" y="748">24 of 24 checks against real football</text>
-  <text class="s" x="600" y="770">npm run calibrate · 3,000 matches</text>
-  <text class="t" x="964" y="748">CI: 4 jobs on Linux, Windows, macOS</text>
-  <text class="s" x="964" y="770">no Actions minutes: every change checked locally</text>
 
-  <!-- ===== ARROWS ===== -->
-  <line class="ln" x1="600" y1="310" x2="600" y2="346" marker-end="url(#ar)"/>
-  <rect class="pill" x="612" y="316" width="232" height="24" rx="12"/>
-  <text class="lab" x="728" y="332" text-anchor="middle">step() · snapshot() · simulateMatch()</text>
-  <path class="ln" d="M995,310 V334 H860 V346" marker-end="url(#ar)"/>
-  <path class="ln" d="M1110,370 V316" marker-end="url(#ar)" stroke-dasharray="6 5"/>
-  <rect class="pill" x="1060" y="330" width="94" height="22" rx="11"/>
-  <text class="lab" x="1107" y="345" text-anchor="middle">built once</text>
-  <line class="ln" x1="910" y1="485" x2="874" y2="485" marker-end="url(#ar)"/>
-  <line class="ln" x1="290" y1="485" x2="326" y2="485" marker-start="url(#ar)" marker-end="url(#ar)"/>
-  <line class="ln" x1="600" y1="680" x2="600" y2="624" marker-end="url(#ar)"/>
-  <rect class="pill" x="612" y="640" width="236" height="24" rx="12"/>
-  <text class="lab" x="730" y="656" text-anchor="middle">fail if a law breaks or numbers drift</text>
+  <!-- Arrows -->
+  <line x1="600" y1="300" x2="600" y2="342" class="line" marker-end="url(#ar)"/>
+  <rect x="612" y="310" width="226" height="22" rx="11" fill="#FFFFFF" stroke="#D9D5E6"/>
+  <text x="725" y="325" text-anchor="middle" class="pill">step() · snapshot() · simulateMatch()</text>
 
-  <!-- ===== KEY ===== -->
-  <g font-size="12" fill="#5A5370">
-    <line class="ln" x1="64" y1="836" x2="104" y2="836" marker-end="url(#ar)"/><text x="112" y="840">calls or feeds</text>
-    <line class="ln" x1="230" y1="836" x2="270" y2="836" stroke-dasharray="6 5" marker-end="url(#ar)"/><text x="278" y="840">run by hand when the data changes</text>
-    <text class="ml" x="560" y="840">monospace</text><text x="640" y="840">= a name in the code</text>
-  </g>
+  <path d="M1000 300 V322 H860 V342" class="line" marker-end="url(#ar)"/>
+  <path d="M1110 300 V342" class="dash" marker-end="url(#ar)"/>
+  <rect x="1050" y="310" width="76" height="22" rx="11" fill="#FFFFFF" stroke="#D9D5E6"/>
+  <text x="1088" y="325" text-anchor="middle" class="pill">built once</text>
+
+  <line x1="290" y1="470" x2="317" y2="470" class="line" marker-end="url(#ar)"/>
+  <line x1="910" y1="470" x2="883" y2="470" class="line" marker-end="url(#ar)"/>
+
+  <line x1="600" y1="645" x2="600" y2="603" class="line" marker-end="url(#ar)"/>
+  <rect x="612" y="613" width="214" height="22" rx="11" fill="#FFFFFF" stroke="#D9D5E6"/>
+  <text x="719" y="628" text-anchor="middle" class="pill">fail if a law breaks or numbers drift</text>
+
+  <!-- Legend -->
+  <line x1="40" y1="805" x2="90" y2="805" class="line" marker-end="url(#ar)"/>
+  <text x="100" y="809" class="labs">calls or feeds</text>
+  <line x1="220" y1="805" x2="270" y2="805" class="dash" marker-end="url(#ar)"/>
+  <text x="280" y="809" class="labs">run by hand when the data changes</text>
+  <text x="530" y="809" class="m">monospace</text>
+  <text x="608" y="809" class="labs">= a name in the code</text>
 </svg>

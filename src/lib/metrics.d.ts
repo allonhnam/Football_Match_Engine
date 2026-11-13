@@ -22,7 +22,6 @@ export const RATIO_METRICS: RatioMetric[];
 export const HALF_METRICS: HalfMetric[];
 export const SCORELINES: string[];
 export function scorelineKey(l: MatchLine): string;
-export function scorelineHist(lines: MatchLine[]): number[];
 
 export interface CountStats {
   mean: number; sd: number; p10: number; p50: number; p90: number; edges: number[]; hist: number[];
@@ -59,7 +58,6 @@ export interface MatchFlow {
   byPos: Record<'FW' | 'MF' | 'DF' | 'GK', number>; top: number[]; hatTricks: number; km: number[];
 }
 export interface FlowMetric { key: string; label: string; value: (flows: MatchFlow[]) => number; pct: boolean; decimals: number }
-export const FLOW_METRICS: FlowMetric[];
 export function matchFlow(r: import('@/engine/engine').MatchResult): MatchFlow;
 export function compareFlow(estimates: Record<string, { mean: number; lo: number; hi: number }>, flows: MatchFlow[]):
   (FlowMetric & { engine: number; real: number; lo: number; hi: number; ok: boolean })[];

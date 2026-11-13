@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as E from '@/engine/engine';
 import { drawPitch } from '@/lib/pitch';
 
-// A canvas context that records what is drawn, so the pitch view can be checked without a browser.
+// A canvas that records what is drawn, so the pitch view can be tested without a browser.
 function recorder() {
   const calls: { fn: string; args: any[]; style: any }[] = [];
   const ctx: any = new Proxy({ fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1, font: '', textAlign: '', textBaseline: '', lineCap: '', shadowColor: '', shadowBlur: 0 }, {
@@ -26,11 +26,10 @@ describe('pitch view', () => {
   it('draws the referee and both assistants', () => {
     const { ctx, calls } = recorder();
     drawPitch(ctx, 800, 520, m, 1, opts, col, 0, { cx: null, cy: null });
-    const officials = calls.filter(c => c.fn === 'stroke' && c.style.stroke === '#F5D90A'); // each official is outlined in yellow
+    const officials = calls.filter(c => c.fn === 'stroke' && c.style.stroke === '#F5D90A');
     expect(m.officials.length).toBe(3);
     expect(officials.length).toBeGreaterThanOrEqual(3);
     for (const o of m.officials) { expect(Number.isFinite(o.x) && Number.isFinite(o.y)).toBe(true); }
-    // assistants stay on their touchlines and halves
     expect(m.officials[1].y).toBeLessThan(0); expect(m.officials[1].x).toBeLessThanOrEqual(52.5);
     expect(m.officials[2].y).toBeGreaterThan(68); expect(m.officials[2].x).toBeGreaterThanOrEqual(52.5);
   });
@@ -40,7 +39,7 @@ describe('pitch view', () => {
     const gk = m.players.findIndex((q: any) => q.onPitch && q.side === 0 && q.slot === 0), g = m.players[gk];
     g.x = m.dir(0) > 0 ? 6 : 99; g.y = 34;
     m._giveKeeper(gk, false);
-    m.gkHandsT = m.clockSec() - 5; // held for 5 seconds: the ring is past half and turns red
+    m.gkHandsT = m.clockSec() - 5;
     const { ctx, calls } = recorder();
     drawPitch(ctx, 800, 520, m, 1, opts, col, 0, { cx: null, cy: null });
     const ring = calls.find(c => c.fn === 'arc' && c.style.stroke === col.bad);
@@ -52,6 +51,6 @@ describe('pitch view', () => {
     const r: any = E.simulateMatch({ home: E.makeTeam({ name: 'H', seed: 1 }), away: E.makeTeam({ name: 'A', seed: 2 }), seed: 3, control: 'none' });
     expect(r.score.length).toBe(2);
     const live: any = new E.Match({ home: E.makeTeam({ name: 'H', seed: 1 }), away: E.makeTeam({ name: 'A', seed: 2 }), seed: 3, control: 'none' });
-    expect(live.runToEnd().score).toEqual(r.score); // same result with or without officials
+    expect(live.runToEnd().score).toEqual(r.score);
   });
 });

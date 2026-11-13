@@ -1,17 +1,8 @@
-// Turn the downloaded data into src/data/teams.json: the real clubs from the latest season of each league, each
-// with its real squad.
-//   npm run fetch-data      (once: league results and the transfermarkt squads)
-//   npm run build-teams
-//
-// Club strength comes from how each club actually did (goal difference and points per game, football-data.co.uk).
-// Squads come from transfermarkt-datasets (CC0, github.com/dcaribou/transfermarkt-datasets): name, position,
-// nationality, foot, height, date of birth and market value. Nobody publishes 1-20 attributes, so they are derived:
-// the club's strength sets the level, a player's market value within the squad sets how far above or below it he is,
-// and his exact position, height and age shape the profile. Every attribute can be edited in the app.
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { parseCsv, csvTable } from './csv.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(root, 'data', 'football-data');
@@ -110,20 +101,7 @@ const SUB_BIAS = {
 const SIDE = { 'Left-Back': 'L', 'Left Midfield': 'L', 'Left Winger': 'L', 'Right-Back': 'R', 'Right Midfield': 'R', 'Right Winger': 'R' };
 const QUOTA = { GK: 2, DF: 7, MF: 6, FW: 5 }; // 20 players: an XI and a bench of nine
 
-function parseCsv(text) {
-  const rows = []; let row = [], f = '', q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) { if (c === '"' && text[i + 1] === '"') { f += '"'; i++; } else if (c === '"') q = false; else f += c; }
-    else if (c === '"') q = true; else if (c === ',') { row.push(f); f = ''; }
-    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; } else if (c !== '\r') f += c;
-  }
-  if (f || row.length) { row.push(f); rows.push(row); }
-  return rows.filter(r => r.some(x => x.trim()));
-}
-const table = rows => { const [h, ...b] = rows; return b.map(r => Object.fromEntries(h.map((k, i) => [k.trim(), r[i]]))); };
-
-// Three-letter code: "Man City" → MCI, "Nott'm Forest" → NFO, "Arsenal" → ARS.
+// A club's three-letter code.
 function shortCode(name, taken) {
   const words = name.replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(Boolean);
   const tries = words.length > 1
@@ -133,11 +111,12 @@ function shortCode(name, taken) {
   for (let i = 2; ; i++) { const c = words[0].slice(0, 2).toUpperCase() + i; if (!taken.has(c)) { taken.add(c); return c; } }
 }
 
-// Small stable variation per player, so two players with the same profile still differ a little.
+// A small, stable random variation for a player.
 function jitter(id, k) { let h = (id * 2654435761 + k * 40503) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822507) >>> 0; h ^= h >>> 13; return (h % 1000) / 1000 - 0.5; }
+// Limit a value to the range a to b.
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// 20 players: the most valuable at each position up to the quota, topped up from the rest if a position is short.
+// Pick a club's 20-player squad from its players.
 function pickSquad(list) {
   const byRole = { GK: [], DF: [], MF: [], FW: [] };
   for (const p of list) byRole[p.role].push(p);
@@ -149,6 +128,7 @@ function pickSquad(list) {
   return squad;
 }
 
+// Turn a real player's data into the engine's ten attributes.
 function attributes(p, level) {
   const a = {};
   const age = p.born ? (SEASON_DAY - Date.parse(p.born)) / (365.25 * 864e5) : 26;
@@ -165,14 +145,13 @@ function attributes(p, level) {
   return ATTRS.map(k => a[k]);
 }
 
-// ---------- Clubs and their strength, from the latest season of results ----------
 const files = (await readdir(DATA).catch(() => [])).filter(f => f.endsWith('.csv')).sort();
 if (!files.length) { console.error('No CSV files in data/football-data/. Run `npm run fetch-data` first.'); process.exit(1); }
 const latest = {};
 for (const f of files) { const [season, league] = f.replace('.csv', '').split('-'); if (!latest[league] || season > latest[league]) latest[league] = season; }
 
-// ---------- Players ----------
-const readGz = f => readFile(path.join(TM, f)).then(b => table(parseCsv(gunzipSync(b).toString('utf8')))).catch(() => null);
+// Read a gzipped CSV file into rows.
+const readGz = f => readFile(path.join(TM, f)).then(b => csvTable(parseCsv(gunzipSync(b).toString('utf8')))).catch(() => null);
 const players = await readGz('players.csv.gz');
 if (!players) { console.error('No squads in data/transfermarkt/. Run `npm run fetch-data` first.'); process.exit(1); }
 const lastSeason = Math.max(...players.map(p => +p.last_season || 0));
@@ -205,10 +184,6 @@ for (const code of Object.keys(LEAGUE_NAMES).filter(c => latest[c])) {
     H.pts += hg > ag ? 3 : hg === ag ? 1 : 0; A.pts += ag > hg ? 3 : hg === ag ? 1 : 0;
   }
   const taken = new Set();
-  // Strength: how each club did (goal difference and points per game), standardised within the league and put on the
-  // scale the engine is calibrated on: centred on 12 with a standard deviation of about 0.6 points, the spread of
-  // squad quality that makes engine results as predictable as real ones (src/lib/league.js, `npm run calibrate`).
-  // A wider spread makes every match a mismatch: far too many goals and too few upsets.
   const rated = [...tab.values()].filter(t => t.p).map(t => ({ ...t, form: (t.gf - t.ga) / t.p + 1.5 * (t.pts / t.p) }));
   const mu = rated.reduce((s, t) => s + t.form, 0) / rated.length;
   const sd = Math.sqrt(rated.reduce((s, t) => s + (t.form - mu) ** 2, 0) / rated.length) || 1;
@@ -221,11 +196,6 @@ for (const code of Object.keys(LEAGUE_NAMES).filter(c => latest[c])) {
     const [tmId, color, color2] = meta;
     const squad = pickSquad(byClub.get(tmId) || []);
     if (squad.filter(p => p.role === 'GK').length < 1 || squad.length < 18) throw new Error(`Too few players for ${t.name} (club ${tmId}): ${squad.length}`);
-    // Market value sets the level within the squad: ten times the value is about three points. Value falls with age
-    // and rises with youth faster than ability does, so it is corrected for age first. Forwards cost more than
-    // defenders and keepers of the same standing, so each player is compared with his own position group: the
-    // group's likely starters (the keeper, four defenders, three midfielders, three forwards) average the club's
-    // strength, as a generated squad's XI does.
     const ageOf = p => p.born ? (SEASON_DAY - Date.parse(p.born)) / (365.25 * 864e5) : 26;
     const worth = p => Math.log10(Math.max(p.value, 1e5)) + 0.07 * Math.max(0, ageOf(p) - 27) - 0.08 * Math.max(0, 23 - ageOf(p));
     const STARTERS = { GK: 1, DF: 4, MF: 3, FW: 3 }, centre = {};
@@ -238,11 +208,8 @@ for (const code of Object.keys(LEAGUE_NAMES).filter(c => latest[c])) {
       const flag = FLAGS[p.nation] || null;
       if (p.nation && !flag) missingFlags.add(p.nation);
       const level = t.strength + 0.5 + clamp(3 * (logv(p) - mean), -5, 2.5);
-      // compact row: [id, name, role, side, flag, nation, born, height, foot, attrs]
       return [p.id, p.name, p.role, p.side, flag, p.nation, p.born, p.height, p.foot, attributes(p, level)];
     });
-    // crest: the transfermarkt club id; the app loads the crest image from transfermarkt at runtime (the crests are
-    // the clubs' trademarks, so they are not stored in this repository)
     return { ...t, short: shortCode(t.name, taken), color, color2, crest: tmId, players: out };
   });
   leagues.push({ code, name: LEAGUE_NAMES[code], season: `20${season.slice(0, 2)}/${season.slice(2)}`, teams });
