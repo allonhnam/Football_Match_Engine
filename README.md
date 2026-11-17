@@ -2,7 +2,7 @@
 
 This is a football match engine for a management game. Give it two squads and it plays a full match, following the Laws of the Game, and tells you everything that happened: the score, every event, the statistics for each team and player, and what carries over to the next match. You can watch a match live in your browser, or play thousands of matches in the background.
 
-**Try it online:** https://mainline-markets-interview.vercel.app
+**Try it online:** https://football-match-engine.vercel.app
 
 Made by Hyun.
 

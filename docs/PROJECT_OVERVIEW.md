@@ -2,7 +2,7 @@
 
 > **In short:** a football match engine for a management game. It plays a full 11 v 11 match on a 2D pitch in 0.25-second steps, follows the IFAB Laws of the Game 2026/27, and is tuned so its numbers match 8,907 real top-flight matches. A Next.js visualizer plays the 96 real clubs of the five top European leagues live, with their real 2025/26 squads, and command-line tools and tests check the engine.
 >
-> Version **0.6.1** · `main` · author Hyun · 10 November 2026 · live demo: https://mainline-markets-interview.vercel.app
+> Version **0.6.1** · `main` · author Hyun · 10 November 2026 · live demo: https://football-match-engine.vercel.app
 
 | Part | At a glance |
 | :-- | :-- |
