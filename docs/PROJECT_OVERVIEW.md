@@ -153,7 +153,7 @@ Each option gets one value: **chance it works × value of the new position − c
 | 27 | Season tab: a real league's full season matchday by matchday, with injuries, bans and fatigue carried over, the league table and every player's goals, assists, cards and injuries (PR #26) |
 | 28 | Captions for every short label; each Lab match opens its players (PR #27) |
 | 29 | Every Lab run uses a new random seed, shown with its results (PR #28) |
-| 30 | 4-4-2 bonus trimmed to match the other formations; the attribute check gives keepers near the cap a real +3; the balance tool measures its summary; engine 0.6.1 (PR #15) |
+| 30 | 4-4-2 bonus trimmed to match the other formations; the attribute check gives keepers near the cap a real +3; the balance tool measures its summary; engine 0.6.1 (PR #29, replacing #15) |
 
 ### How close it is to real football (3,000 simulated matches)
 
@@ -180,6 +180,22 @@ Nobody publishes 1–20 ratings, so `npm run build-teams` derives them: each clu
 | Shots per match | 23.4 | 23.6 | ~25 |
 | Stronger side wins | 56% | 52% | – |
 
+### A full season (Engine Lab, Season tab)
+
+`src/lib/season.ts` plays a real league's 380 matches matchday by matchday. Between matchdays players recover 20% condition, injured players miss matches (an injury of 10 days misses 2), red cards are served, and 5, 10 and 15 yellows bring 1, 2 and 3-match bans. One Premier League season (seed 2026), against the real 2025/26 season:
+
+| Metric | Simulated | Real 2025/26 |
+| :-- | --: | --: |
+| Goals per match | 2.83 | 2.75 |
+| Yellow cards per match | 4.2 | 3.7 |
+| Champions' points | 97 (Arsenal) | 85 (Arsenal) |
+| Bottom club's points | 15 (Wolves) | 20 (Wolves) |
+| Top scorer | 42 (Haaland); 32 with another seed | record is 36 |
+| Most yellows for one player | 14 | about 12-14 |
+| Matches missed injured / banned | 489 / 313 | - |
+
+The order is close to real (the top three and bottom two match), but the best and worst clubs finish too far apart. That comes from the top-shooter limit in section 6 and how far apart the derived ratings put the best and worst squads.
+
 ### Decisions matter (`npm run balance -- 400`, `npm run attributes -- 300`, 9 November 2026)
 
 A balanced side wins 40% against another balanced side in this run. Every tactic setting lands between 35% and 42%; nothing is flagged.
@@ -192,9 +208,9 @@ A balanced side wins 40% against another balanced side in this run. Every tactic
 | Short passing | 87% pass completion, 55% possession | fewer goals (1.20 instead of 1.42) |
 | Direct passing | more goals (1.47) | 76% completion, 47% possession |
 
-**Formations:** 4-4-2 43%, 4-3-3 40%, 4-2-3-1 40%, 5-3-2 39%, 3-5-2 37%. With every formation bonus switched off they land at 35-40%, so 4-4-2's lead comes from its `FORMATION_EDGE` entry; PR #15 trims it to `[1.03, 0.98]` (41%).
+**Formations:** 4-4-2 43%, 4-3-3 40%, 4-2-3-1 40%, 5-3-2 39%, 3-5-2 37%. With every formation bonus switched off they land at 35-40%, so 4-4-2's lead comes from its `FORMATION_EDGE` entry; PR #29 trimmed it to `[1.03, 0.98]` (41%).
 
-**Attributes (+3 for every player, win rate against 33% with no boost):** pace 54%, passing 47%, tackling 46%, stamina 42%, dribbling 42%, heading 42%, positioning 39%, shooting 38%, keeping 36%, vision 34%. Vision and keeping sit near the tool's DEAD line, and which one gets flagged changes from run to run. Most keepers start at 18-20, so the +3 is mostly lost to the cap of 20; PR #15 makes the tool always compare a real 3-point gap, after which keeping wins 39% and vision 36%, and nothing is flagged.
+**Attributes (+3 for every player, win rate against 33% with no boost):** pace 54%, passing 47%, tackling 46%, stamina 42%, dribbling 42%, heading 42%, positioning 39%, shooting 38%, keeping 36%, vision 34%. Vision and keeping sit near the tool's DEAD line, and which one gets flagged changes from run to run. Most keepers start at 18-20, so the +3 is mostly lost to the cap of 20; PR #29 made the tool always compare a real 3-point gap, after which keeping wins 39% and vision 36%, and nothing is flagged.
 
 ### Match flow (published averages; not in the dataset)
 
@@ -230,7 +246,7 @@ Each job runs typecheck, tests, `simulate --seed 42` and the build. CI runs on p
 
 ## 6. What's left
 
-- [ ] Merge PR #15: trims the 4-4-2 bonus (43% to 41% wins) and makes `npm run attributes` compare a real 3-point gap at the cap of 20 (engine 0.6.1).
+- [ ] A season spreads the table too wide: champions 97 points and a 42-goal top scorer, against 85 and a record of 36.
 - [ ] The leading shooter takes 39% of his team's shots (real: about 32%). Hat-tricks and goal kicks are also near the edges of their ranges.
 - [ ] Offsides and pass completion are only checked against rough estimates, because the dataset has none.
 - [ ] Goal timing is checked by half only; the dataset has no goal minutes.
